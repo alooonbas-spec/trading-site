@@ -1,50 +1,123 @@
 export default function Home() {
   return (
-    <main style={{fontFamily: "system-ui", padding: "40px", maxWidth: "900px", margin: "0 auto"}}>
+    <main style={styles.page}>
       
-      {/* ИДЕЯ */}
-      <section>
-        <h1>Investment Platform</h1>
-        <p>
-          Мы создаём системную платформу управления капиталом с фокусом на стабильную доходность
-          и контролируемые риски.
+      {/* HERO / ИДЕЯ */}
+      <section style={styles.hero}>
+        <h1 style={styles.h1}>Alpha Capital Platform</h1>
+        <p style={styles.sub}>
+          Системная инвестиционная платформа с фокусом на риск-менеджмент, алгоритмы и устойчивую доходность.
         </p>
-      </section>
 
-      <hr />
+        <div style={styles.stats}>
+          <div style={styles.card}>
+            <h3>AUM</h3>
+            <p>$12.4M</p>
+          </div>
+          <div style={styles.card}>
+            <h3>YTD</h3>
+            <p>+18.7%</p>
+          </div>
+          <div style={styles.card}>
+            <h3>Markets</h3>
+            <p>FX / Crypto / Metals</p>
+          </div>
+        </div>
+      </section>
 
       {/* ПЛАТФОРМА */}
-      <section>
+      <section style={styles.section}>
         <h2>Платформа</h2>
         <ul>
-          <li>Алгоритмическая торговля</li>
-          <li>Ручное управление позициями</li>
-          <li>Аналитика рынков</li>
+          <li>Алгоритмическая торговля + ручной контроль</li>
+          <li>Макро-анализ и data-driven решения</li>
+          <li>Риск-менеджмент в реальном времени</li>
         </ul>
       </section>
-
-      <hr />
 
       {/* ПОДРАЗДЕЛЕНИЯ */}
-      <section>
+      <section style={styles.section}>
         <h2>Подразделения</h2>
-        <ul>
-          <li>Trading Desk</li>
-          <li>Risk Management</li>
-          <li>Research</li>
-        </ul>
+        <div style={styles.grid}>
+          <div style={styles.box}>Trading Desk</div>
+          <div style={styles.box}>Risk Management</div>
+          <div style={styles.box}>Research</div>
+        </div>
       </section>
 
-      <hr />
-
       {/* КОМАНДА */}
-      <section>
+      <section style={styles.section}>
         <h2>Команда</h2>
         <p>
-          Небольшая команда специалистов в области трейдинга, аналитики и управления капиталом.
+          Небольшая высокоэффективная команда трейдеров, аналитиков и инженеров.
         </p>
+      </section>
+
+      {/* CTA */}
+      <section style={styles.cta}>
+        <h2>Стать инвестором</h2>
+        <p>Оставьте заявку для доступа к платформе</p>
+        <button style={styles.button}>Оставить заявку</button>
       </section>
 
     </main>
-  )
+  );
 }
+
+const styles = {
+  page: {
+    fontFamily: "system-ui",
+    background: "#0b0f19",
+    color: "white",
+    padding: "40px",
+  },
+  hero: {
+    marginBottom: "60px",
+  },
+  h1: {
+    fontSize: "48px",
+    marginBottom: "10px",
+  },
+  sub: {
+    color: "#aab3c5",
+    maxWidth: "600px",
+  },
+  stats: {
+    display: "flex",
+    gap: "15px",
+    marginTop: "30px",
+  },
+  card: {
+    background: "#111827",
+    padding: "20px",
+    borderRadius: "12px",
+    flex: 1,
+  },
+  section: {
+    marginBottom: "50px",
+  },
+  grid: {
+    display: "flex",
+    gap: "15px",
+  },
+  box: {
+    background: "#111827",
+    padding: "20px",
+    borderRadius: "12px",
+    flex: 1,
+    textAlign: "center",
+  },
+  cta: {
+    background: "#111827",
+    padding: "30px",
+    borderRadius: "16px",
+    textAlign: "center",
+  },
+  button: {
+    marginTop: "10px",
+    padding: "10px 20px",
+    borderRadius: "8px",
+    border: "none",
+    cursor: "pointer",
+  },
+};
