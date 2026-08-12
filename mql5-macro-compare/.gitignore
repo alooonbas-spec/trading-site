@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Env / secrets
+.env
+
+# Local data (runtime-generated, never shipped in the repo)
+data/macro.db
+data/macro.backup.*.db
+data/exports/*
+!data/exports/.gitkeep
+data/raw/*
+!data/raw/.gitkeep
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Pytest
+.pytest_cache/
+.pytest_cache/**

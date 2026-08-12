@@ -1,0 +1,14 @@
+[project]
+name = "mql5-macro-compare"
+version = "0.1.0"
+description = "Local app for comparing MQL5 economic calendar indicator history"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
