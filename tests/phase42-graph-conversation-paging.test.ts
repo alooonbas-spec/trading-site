@@ -49,6 +49,9 @@ describe("PHASE 42 Graph conversation after paging", () => {
       if (target.includes("/555/feed")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
+      if (target.includes("/555/tagged")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/conversations`);
       expect(target).toContain("platform=MESSENGER");
       if (target.includes("after=page-2")) {
@@ -102,7 +105,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|messages:2026-08-21T12:00:00+0000|posts:done|replies:done|threadmsgs:done|threads:${encodeGraphAfter("page-2")}`,
+      `creplies:done|messages:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|threadmsgs:done|threads:${encodeGraphAfter("page-2")}`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -111,7 +114,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-thread-m"]);
-    expect(second.cursor).toBe("creplies:done|messages:2026-08-21T12:00:00+0000|posts:done|replies:done|threadmsgs:done|threads:done");
+    expect(second.cursor).toBe("creplies:done|messages:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/conversations")),
     ).toHaveLength(3);
@@ -121,6 +124,9 @@ describe("PHASE 42 Graph conversation after paging", () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.includes("/ig-1/media")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
+      if (target.includes("/ig-1/tags")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain(`${INSTAGRAM_GRAPH_ORIGIN}/ig-1/conversations`);
@@ -159,7 +165,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
       cursor: "creplies:done|messages:2026-08-21T08:00:00+0000|threads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-m"]);
-    expect(result.cursor).toBe("creplies:done|messages:2026-08-21T09:00:00+0000|posts:done|replies:done|threadmsgs:done|threads:done");
+    expect(result.cursor).toBe("creplies:done|messages:2026-08-21T09:00:00+0000|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes("/ig-1/conversations")),
     ).toHaveLength(1);

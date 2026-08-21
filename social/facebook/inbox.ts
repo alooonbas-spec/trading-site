@@ -430,6 +430,64 @@ async function collectFacebookThreadMessages(
   return { messages, nextAfters, fetchedIds: ids };
 }
 
+const facebookTaggedSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        message: z.string().optional(),
+        created_time: z.string().optional(),
+        permalink_url: z.string().optional(),
+        from: z
+          .object({
+            id: z.union([z.string(), z.number()]).optional(),
+            name: z.string().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+  paging: graphPagingSchema,
+});
+
+async function collectFacebookTagged(
+  page: FacebookPageAuth,
+  after?: string | null,
+): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
+  const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/tagged`);
+  url.searchParams.set("fields", "id,from,message,created_time,permalink_url");
+  url.searchParams.set("limit", "10");
+  url.searchParams.set("access_token", page.accessToken);
+  if (after) {
+    url.searchParams.set("after", after);
+  }
+  const response = await socialFetch(url.toString());
+  const payload = await readJson<unknown>(response);
+  throwIfGraphError(payload);
+  const parsed = facebookTaggedSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("Facebook Page tagged posts returned an unexpected payload");
+  }
+  const messages: InboxMessage[] = [];
+  for (const post of parsed.data.data ?? []) {
+    const fromId = post.from?.id !== undefined ? String(post.from.id) : "";
+    const text = post.message?.trim();
+    if (!fromId || !text || fromId === page.id) {
+      continue;
+    }
+    messages.push({
+      externalId: post.id,
+      externalProfileId: fromId,
+      username: post.from?.name ?? null,
+      body: text,
+      url: post.permalink_url?.trim() || `https://www.facebook.com/${post.id}`,
+      receivedAt: post.created_time ?? null,
+      replyKind: "mention",
+    });
+  }
+  return { messages, nextAfter: graphPagingAfter(payload) };
+}
+
 export async function collectFacebookInbox(
   userAccessToken: string,
   metadata: Record<string, unknown> | undefined,
@@ -442,6 +500,7 @@ export async function collectFacebookInbox(
   const storedReplies = decodeGraphReplies(cursor.replies);
   const storedCreplies = decodeGraphReplies(cursor.creplies);
   const storedThreadMsgs = decodeGraphReplies(cursor.threadmsgs);
+  const olderTaggedAfter = decodeGraphAfter(cursor.tagged);
   const emptyPage = {
     messages: [] as InboxMessage[],
     nextAfter: null,
@@ -460,8 +519,18 @@ export async function collectFacebookInbox(
     nextAfters: {} as GraphRepliesMap,
     fetchedIds: [] as string[],
   };
-  const [latestComments, olderComments, extraReplies, extraCreplies, latestDirect, olderDirect, extraThreadMsgs] =
-    await Promise.all([
+  const emptyTagged = { messages: [] as InboxMessage[], nextAfter: null };
+  const [
+    latestComments,
+    olderComments,
+    extraReplies,
+    extraCreplies,
+    latestDirect,
+    olderDirect,
+    extraThreadMsgs,
+    latestTagged,
+    olderTagged,
+  ] = await Promise.all([
       collectFacebookComments(page),
       olderPostsAfter ? collectFacebookComments(page, olderPostsAfter) : Promise.resolve(emptyPage),
       storedReplies ? collectFacebookCommentReplies(page, storedReplies) : Promise.resolve(emptyReplies),
@@ -471,6 +540,8 @@ export async function collectFacebookInbox(
       storedThreadMsgs
         ? collectFacebookThreadMessages(page, storedThreadMsgs)
         : Promise.resolve(emptyNested),
+      collectFacebookTagged(page),
+      olderTaggedAfter ? collectFacebookTagged(page, olderTaggedAfter) : Promise.resolve(emptyTagged),
     ]);
   const comments = uniqueInboxMessages([
     ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
@@ -483,6 +554,10 @@ export async function collectFacebookInbox(
   return {
     messages: [
       ...comments,
+      ...uniqueInboxMessages([
+        ...filterMessagesAfterCursor(latestTagged.messages, cursor.mentions),
+        ...olderTagged.messages,
+      ]),
       ...uniqueInboxMessages([
         ...filterMessagesAfterCursor(latestMessages, cursor.messages),
         ...olderMessages,
@@ -526,6 +601,17 @@ export async function collectFacebookInbox(
         },
         fetchedNextAfters: extraCreplies.nextAfters,
         fetchedIds: extraCreplies.fetchedIds,
+      }),
+      mentions:
+        laterTimestampString(
+          cursor.mentions,
+          newestReceivedAt([...latestTagged.messages, ...olderTagged.messages]),
+        ) ?? "",
+      tagged: nextGraphAfterCursor({
+        stored: cursor.tagged,
+        firstPageAfter: latestTagged.nextAfter,
+        olderPageAfter: olderTagged.nextAfter,
+        fetchedOlder: Boolean(olderTaggedAfter),
       }),
       threadmsgs: nextGraphRepliesCursor({
         stored: cursor.threadmsgs,

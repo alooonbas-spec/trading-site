@@ -22,6 +22,9 @@ describe("PHASE 43 Graph feed and media after paging", () => {
       if (target.includes("/555/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
+      if (target.includes("/555/tagged")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/feed`);
       if (target.includes("after=feed-2")) {
         return new Response(
@@ -76,7 +79,7 @@ describe("PHASE 43 Graph feed and media after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-c"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|posts:${encodeGraphAfter("feed-2")}|replies:done|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:done|posts:${encodeGraphAfter("feed-2")}|replies:done|tagged:done|threadmsgs:done|threads:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -85,7 +88,7 @@ describe("PHASE 43 Graph feed and media after paging", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-c"]);
-    expect(second.cursor).toBe("comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done");
+    expect(second.cursor).toBe("comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done");
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/feed"))).toHaveLength(3);
   });
 
@@ -93,6 +96,9 @@ describe("PHASE 43 Graph feed and media after paging", () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.includes("/ig-1/conversations")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
+      if (target.includes("/ig-1/tags")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain(`${INSTAGRAM_GRAPH_ORIGIN}/ig-1/media`);
@@ -131,7 +137,7 @@ describe("PHASE 43 Graph feed and media after paging", () => {
       cursor: "comments:2026-08-21T08:00:00+0000|creplies:done|posts:done|threads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-c"]);
-    expect(result.cursor).toBe("comments:2026-08-21T10:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done");
+    expect(result.cursor).toBe("comments:2026-08-21T10:00:00+0000|creplies:done|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done");
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/ig-1/media"))).toHaveLength(1);
   });
 });

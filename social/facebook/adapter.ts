@@ -217,7 +217,7 @@ export class FacebookAdapter extends BaseSocialAdapter {
       return { externalMessageId: sent.externalMessageId };
     }
 
-    if (input.kind === "comment") {
+    if (input.kind === "comment" || input.kind === "mention") {
       const sent = await replyToFacebookComment(page, {
         commentId: input.externalEventId,
         text,
@@ -225,7 +225,7 @@ export class FacebookAdapter extends BaseSocialAdapter {
       return { externalMessageId: sent.externalMessageId };
     }
 
-    throw new UnsupportedActionError("Facebook cannot send a mention inbox reply");
+    throw new UnsupportedActionError("Facebook cannot send this inbox reply");
   }
 
   async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {

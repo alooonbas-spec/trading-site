@@ -22,6 +22,9 @@ describe("PHASE 49 Graph comment-to-comment reply after paging", () => {
       if (target.includes("/555/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
+      if (target.includes("/555/tagged")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       if (target.includes("/555_1/comments")) {
         throw new Error(`unexpected post comments after ${target}`);
       }
@@ -86,7 +89,7 @@ describe("PHASE 49 Graph comment-to-comment reply after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["c1", "r-new"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:${encodeGraphReplies({ c1: "reply-2" })}|posts:done|replies:done|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:${encodeGraphReplies({ c1: "reply-2" })}|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/c1/comments"))).toHaveLength(0);
 
@@ -97,7 +100,7 @@ describe("PHASE 49 Graph comment-to-comment reply after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["r-old"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/c1/comments"))).toHaveLength(1);
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(0);
@@ -107,6 +110,9 @@ describe("PHASE 49 Graph comment-to-comment reply after paging", () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.includes("/ig-1/conversations")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
+      if (target.includes("/ig-1/tags")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("/c1/replies") || /\/[^/]+\/replies/.test(new URL(target).pathname)) {
@@ -146,11 +152,11 @@ describe("PHASE 49 Graph comment-to-comment reply after paging", () => {
     }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:2026-08-21T08:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done",
+      cursor: "comments:2026-08-21T08:00:00+0000|creplies:done|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["c1"]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T10:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T10:00:00+0000|creplies:done|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/c1/replies"))).toHaveLength(0);
   });

@@ -307,6 +307,10 @@ X monitoring (`GET /2/tweets/search/recent`) follows official `meta.next_token` 
 
 Facebook `/{comment-id}/comments` and Instagram `/{comment-id}/replies` follow official Graph `after` for extra nested replies to comments (not paging of comments on a post — that remains `replies` in PHASE 44). The named `creplies` cursor stores `{ commentId: after }` (base64url JSON, at most 20 ids). Feed/media first pages request nested Facebook `comments.limit(25)` and Instagram `replies`. Extra PHASE 44 post/media comment pages also request those nested edges so newly discovered comments can seed `creplies`. Later polls request `GET /{comment-id}/comments?after=` (Facebook, `limit=25`) or `GET /{comment-id}/replies?after=` (Instagram, `limit=25`) with official fields. Extra nested-reply pages are not dropped by the `comments` timestamp watermark. Stored ids are not reset from the nested first-page `after`. An empty map stores `creplies:done` and later polls stay done. Collectors still do not fetch `paging.next` URLs.
 
+## Graph tagged mentions (PHASE 50)
+
+Facebook `GET /{page-id}/tagged` and Instagram `GET /{ig-user-id}/tags` collect posts/media where the connected Page or professional account was tagged. Each poll still reads the latest 10 tagged items. If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `tagged`. A short page stores `tagged:done`. Extra tagged pages are not dropped by the independent `mentions` timestamp watermark. Photo-only tagged posts without text are skipped. This is photo/Page tagging, not Instagram @mention webhooks. Outbound mention replies use official `POST /{post-id}/comments` (Facebook) and `POST /{ig-media-id}/comments` (Instagram). Existing Facebook accounts must reconnect to grant `pages_read_user_content`. Collectors still do not fetch `paging.next` URLs.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

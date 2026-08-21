@@ -66,6 +66,9 @@ describe("PHASE 18 Facebook Messenger", () => {
           { status: 200 },
         );
       }
+      if (target.includes("/555/tagged")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       if (target.includes("/555/feed")) {
         return new Response(
           JSON.stringify({
@@ -240,6 +243,9 @@ describe("PHASE 18 Instagram Direct Messages", () => {
   it("collects media comments and Direct Messages together", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
+      if (target.includes("/ig-1/tags")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       if (target.includes("/ig-1/media")) {
         return new Response(
           JSON.stringify({

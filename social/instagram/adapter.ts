@@ -21,7 +21,7 @@ import type {
   TokenRefreshResult,
 } from "@/social/core/adapter";
 import { INSTAGRAM_SCOPES, executeInstagramPublish, planInstagramPublish, resolveInstagramUserId } from "@/social/instagram/publish";
-import { collectInstagramInbox, replyToInstagramComment } from "@/social/instagram/inbox";
+import { collectInstagramInbox, replyToInstagramComment, replyToInstagramMediaComment } from "@/social/instagram/inbox";
 import { instagramMessengerRecipientId, sendInstagramDirectMessage } from "@/social/instagram/contact";
 import { resolveInstagramPublicProfile } from "@/social/instagram/public-profile";
 
@@ -230,7 +230,15 @@ export class InstagramAdapter extends BaseSocialAdapter {
       return { externalMessageId: sent.externalMessageId };
     }
 
-    throw new UnsupportedActionError("Instagram cannot send a mention inbox reply");
+    if (input.kind === "mention") {
+      const sent = await replyToInstagramMediaComment(token, {
+        mediaId: input.externalEventId,
+        text,
+      });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
+    throw new UnsupportedActionError("Instagram cannot send this inbox reply");
   }
 
   async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {

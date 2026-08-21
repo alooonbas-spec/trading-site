@@ -53,6 +53,9 @@ describe("PHASE 44 Graph nested comment after paging", () => {
       if (target.includes("/555/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
+      if (target.includes("/555/tagged")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       if (target.includes("/555_1/comments")) {
         expect(target).toContain("after=cmt-2");
         expect(target).not.toContain("paging.next");
@@ -102,7 +105,7 @@ describe("PHASE 44 Graph nested comment after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-c"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:${encodeGraphReplies({ "555_1": "cmt-2" })}|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:${encodeGraphReplies({ "555_1": "cmt-2" })}|tagged:done|threadmsgs:done|threads:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(0);
 
@@ -113,7 +116,7 @@ describe("PHASE 44 Graph nested comment after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-c"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(1);
   });
@@ -122,6 +125,9 @@ describe("PHASE 44 Graph nested comment after paging", () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.includes("/ig-1/conversations")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
+      if (target.includes("/ig-1/tags")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("/media-1/comments")) {
@@ -158,11 +164,11 @@ describe("PHASE 44 Graph nested comment after paging", () => {
     }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:2026-08-21T08:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done",
+      cursor: "comments:2026-08-21T08:00:00+0000|creplies:done|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-c"]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T10:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T10:00:00+0000|creplies:done|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/media-1/comments"))).toHaveLength(0);
   });

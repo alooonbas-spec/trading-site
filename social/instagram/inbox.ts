@@ -437,6 +437,67 @@ async function collectInstagramThreadMessages(
   return { messages, nextAfters, fetchedIds: ids };
 }
 
+const instagramTaggedSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        caption: z.string().optional(),
+        username: z.string().optional(),
+        timestamp: z.string().optional(),
+        permalink: z.string().optional(),
+        from: z
+          .object({
+            id: z.union([z.string(), z.number()]).optional(),
+            username: z.string().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+  paging: graphPagingSchema,
+});
+
+async function collectInstagramTagged(
+  accessToken: string,
+  userId: string,
+  after?: string | null,
+): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
+  const url = new URL(`${INSTAGRAM_GRAPH_ORIGIN}/${userId}/tags`);
+  url.searchParams.set("fields", "id,caption,username,timestamp,permalink");
+  url.searchParams.set("limit", "10");
+  url.searchParams.set("access_token", accessToken);
+  if (after) {
+    url.searchParams.set("after", after);
+  }
+  const response = await socialFetch(url.toString());
+  const payload = await readJson<unknown>(response);
+  throwIfGraphError(payload);
+  const parsed = instagramTaggedSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("Instagram tagged media returned an unexpected payload");
+  }
+  const messages: InboxMessage[] = [];
+  for (const media of parsed.data.data ?? []) {
+    const text = media.caption?.trim();
+    const username = media.from?.username ?? media.username;
+    const fromId = media.from?.id !== undefined ? String(media.from.id) : username;
+    if (!text || !fromId || fromId === userId) {
+      continue;
+    }
+    messages.push({
+      externalId: media.id,
+      externalProfileId: fromId,
+      username: username ? `@${username.replace(/^@/, "")}` : null,
+      body: text,
+      url: media.permalink?.trim() || `https://www.instagram.com/p/${media.id}/`,
+      receivedAt: media.timestamp ?? null,
+      replyKind: "mention",
+    });
+  }
+  return { messages, nextAfter: graphPagingAfter(payload) };
+}
+
 export async function collectInstagramInbox(
   accessToken: string,
   metadata: Record<string, unknown> | undefined,
@@ -449,6 +510,7 @@ export async function collectInstagramInbox(
   const storedReplies = decodeGraphReplies(cursor.replies);
   const storedCreplies = decodeGraphReplies(cursor.creplies);
   const storedThreadMsgs = decodeGraphReplies(cursor.threadmsgs);
+  const olderTaggedAfter = decodeGraphAfter(cursor.tagged);
   const emptyPage = {
     messages: [] as InboxMessage[],
     nextAfter: null,
@@ -467,8 +529,18 @@ export async function collectInstagramInbox(
     nextAfters: {} as GraphRepliesMap,
     fetchedIds: [] as string[],
   };
-  const [latestComments, olderComments, extraReplies, extraCreplies, latestDirect, olderDirect, extraThreadMsgs] =
-    await Promise.all([
+  const emptyTagged = { messages: [] as InboxMessage[], nextAfter: null };
+  const [
+    latestComments,
+    olderComments,
+    extraReplies,
+    extraCreplies,
+    latestDirect,
+    olderDirect,
+    extraThreadMsgs,
+    latestTagged,
+    olderTagged,
+  ] = await Promise.all([
       collectInstagramComments(accessToken, userId),
       olderPostsAfter
         ? collectInstagramComments(accessToken, userId, olderPostsAfter)
@@ -484,6 +556,10 @@ export async function collectInstagramInbox(
       storedThreadMsgs
         ? collectInstagramThreadMessages(accessToken, userId, storedThreadMsgs)
         : Promise.resolve(emptyNested),
+      collectInstagramTagged(accessToken, userId),
+      olderTaggedAfter
+        ? collectInstagramTagged(accessToken, userId, olderTaggedAfter)
+        : Promise.resolve(emptyTagged),
     ]);
   const latestMessages = latestDirect.messages;
   const olderMessages = olderDirect.messages;
@@ -494,6 +570,10 @@ export async function collectInstagramInbox(
         ...olderComments.messages,
         ...extraReplies.messages,
         ...extraCreplies.messages,
+      ]),
+      ...uniqueInboxMessages([
+        ...filterMessagesAfterCursor(latestTagged.messages, cursor.mentions),
+        ...olderTagged.messages,
       ]),
       ...uniqueInboxMessages([
         ...filterMessagesAfterCursor(latestMessages, cursor.messages),
@@ -539,6 +619,17 @@ export async function collectInstagramInbox(
         fetchedNextAfters: extraCreplies.nextAfters,
         fetchedIds: extraCreplies.fetchedIds,
       }),
+      mentions:
+        laterTimestampString(
+          cursor.mentions,
+          newestReceivedAt([...latestTagged.messages, ...olderTagged.messages]),
+        ) ?? "",
+      tagged: nextGraphAfterCursor({
+        stored: cursor.tagged,
+        firstPageAfter: latestTagged.nextAfter,
+        olderPageAfter: olderTagged.nextAfter,
+        fetchedOlder: Boolean(olderTaggedAfter),
+      }),
       threadmsgs: nextGraphRepliesCursor({
         stored: cursor.threadmsgs,
         nestedAfters: { ...latestDirect.threadAfters, ...olderDirect.threadAfters },
@@ -563,30 +654,66 @@ export function instagramCommentReplyUrl(commentId: string): string {
   return `${INSTAGRAM_GRAPH_ORIGIN}/${commentId}/replies`;
 }
 
+export function instagramMediaCommentUrl(mediaId: string): string {
+  return `${INSTAGRAM_GRAPH_ORIGIN}/${mediaId}/comments`;
+}
+
 export async function replyToInstagramComment(
   accessToken: string,
   input: { commentId: string; text: string },
 ): Promise<{ externalMessageId: string }> {
-  const text = input.text.trim();
-  if (!text) {
-    throw new ValidationError("Instagram comment replies require a body");
-  }
   if (!input.commentId.trim()) {
     throw new ValidationError("Instagram comment replies require the source comment id");
   }
+  return postInstagramComment(
+    accessToken,
+    instagramCommentReplyUrl(input.commentId),
+    input.text,
+    "Instagram comment replies require a body",
+    "Instagram comment reply returned an unexpected payload",
+  );
+}
 
-  const url = new URL(instagramCommentReplyUrl(input.commentId));
+export async function replyToInstagramMediaComment(
+  accessToken: string,
+  input: { mediaId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  if (!input.mediaId.trim()) {
+    throw new ValidationError("Instagram tagged media replies require the source media id");
+  }
+  return postInstagramComment(
+    accessToken,
+    instagramMediaCommentUrl(input.mediaId),
+    input.text,
+    "Instagram tagged media replies require a body",
+    "Instagram media comment returned an unexpected payload",
+  );
+}
+
+async function postInstagramComment(
+  accessToken: string,
+  endpoint: string,
+  text: string,
+  emptyError: string,
+  unexpectedError: string,
+): Promise<{ externalMessageId: string }> {
+  const body = text.trim();
+  if (!body) {
+    throw new ValidationError(emptyError);
+  }
+
+  const url = new URL(endpoint);
   url.searchParams.set("access_token", accessToken);
   const response = await socialFetch(url.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: text }),
+    body: JSON.stringify({ message: body }),
   });
   const payload = await readJson<unknown>(response);
   throwIfGraphError(payload);
   const parsed = commentReplySchema.safeParse(payload);
   if (!parsed.success) {
-    throw new SocialError("Instagram comment reply returned an unexpected payload");
+    throw new SocialError(unexpectedError);
   }
   return { externalMessageId: parsed.data.id };
 }
