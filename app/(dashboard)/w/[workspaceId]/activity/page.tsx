@@ -134,8 +134,7 @@ export default async function ActivityPage({
             <CardTitle>Log</CardTitle>
             <CardDescription>
               Showing {events.length} event{events.length === 1 ? "" : "s"} on this page. Newest first.
-              Platform is account identity, not a business-logic switch. Older pages use a created_at
-              keyset, not OFFSET.
+              Platform is account identity, not a business-logic switch. Older pages use a created_at keyset, not OFFSET.
             </CardDescription>
           </CardHeader>
           <CardContent>
