@@ -13,6 +13,8 @@ import type {
   ContactActionInput,
   ContactActionResult,
   InboxInput,
+  InboxReplyInput,
+  InboxReplyResult,
   InboxResult,
   MonitorInput,
   MonitorResult,
@@ -25,7 +27,7 @@ import type {
 import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 import { resolveXPublicProfile } from "@/social/x/public-profile";
 import { uploadXMediaFromUrls } from "@/social/x/media-upload";
-import { collectXInbox } from "@/social/x/inbox";
+import { collectXInbox, sendXMentionReply } from "@/social/x/inbox";
 import { resolveXDmParticipantId, sendXDirectMessage } from "@/social/x/contact";
 
 const X_AUTHORIZE_URL = "https://twitter.com/i/oauth2/authorize";
@@ -222,6 +224,7 @@ export class XAdapter extends BaseSocialAdapter {
       publishing: true,
       monitoring: true,
       inbox: true,
+      inboxReply: true,
       contactActions: true,
       messaging: true,
     };
@@ -351,6 +354,31 @@ export class XAdapter extends BaseSocialAdapter {
       throw new AuthenticationError("X account has no access token");
     }
     return collectXInbox(token, input);
+  }
+
+  async replyToInbox(input: InboxReplyInput): Promise<InboxReplyResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("X account has no access token");
+    }
+
+    const text = input.body.trim();
+    if (!text) {
+      throw new ValidationError("X inbox replies require a body");
+    }
+
+    if (input.kind === "direct_message") {
+      const participantId = await resolveXDmParticipantId(token, input.target);
+      const sent = await sendXDirectMessage(token, { participantId, text });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
+    if (input.kind === "mention") {
+      const sent = await sendXMentionReply(token, { tweetId: input.externalEventId, text });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
+    throw new UnsupportedActionError("X cannot send a comment inbox reply");
   }
 
   async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {

@@ -170,11 +170,11 @@ export default async function LeadDetailPage({
           <CardTitle>Inbox replies</CardTitle>
           <CardDescription>
             Matched inbound events for this lead. Unmatched senders are attached from Inbox, never
-            auto-created as new people.
+            auto-created as new people. Official replies are blocked when the lead is do_not_contact.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LeadInboxEvents events={inboxEvents} />
+          <LeadInboxEvents events={inboxEvents} canMutate={canMutate} />
         </CardContent>
       </Card>
       <Card>

@@ -4,6 +4,7 @@ import { listInboxEvents, parseInboxMatchFilter } from "@/services/inbox/query-s
 import { listLeads } from "@/services/leads/lead-service";
 import { AttachInboxForm } from "@/components/inbox/attach-inbox-form";
 import { InboxEventMeta } from "@/components/inbox/inbox-event-meta";
+import { ReplyInboxForm } from "@/components/inbox/reply-inbox-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,8 @@ export default async function InboxPage({
         <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Official inbound replies. Unmatched senders stay stored until an operator attaches them to an
-          existing lead. Inbox never creates people automatically.
+          existing lead. Inbox never creates people automatically. Outbound replies use official APIs
+          for the receiving account.
         </p>
       </div>
       <form className="grid gap-2 md:grid-cols-[1fr_180px_auto]" method="get">
@@ -86,6 +88,7 @@ export default async function InboxPage({
                   <TableHead>Sender</TableHead>
                   <TableHead>Message</TableHead>
                   <TableHead>{canMutate ? "Attach to lead" : "Lead"}</TableHead>
+                  {canMutate ? <TableHead>Reply</TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -108,6 +111,11 @@ export default async function InboxPage({
                         "Unmatched"
                       )}
                     </TableCell>
+                    {canMutate ? (
+                      <TableCell className="align-top">
+                        <ReplyInboxForm workspaceId={workspaceId} inboxEventId={event.id} />
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>

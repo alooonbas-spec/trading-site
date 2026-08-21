@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SocialError } from "@/lib/errors";
+import { SocialError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { INSTAGRAM_GRAPH_ORIGIN, resolveInstagramUserId } from "@/social/instagram/publish";
@@ -86,6 +86,7 @@ export function parseInstagramDirectConversations(payload: unknown, ownUserId: s
         body: text,
         url: null,
         receivedAt: event.created_time ?? null,
+        replyKind: "direct_message",
       });
     }
   }
@@ -121,6 +122,7 @@ async function collectInstagramComments(accessToken: string, userId: string): Pr
         body: text,
         url: `https://www.instagram.com/p/${media.id}/`,
         receivedAt: comment.timestamp ?? null,
+        replyKind: "comment",
       });
     }
   }
@@ -154,3 +156,40 @@ export async function collectInstagramInbox(
     cursor: input.cursor ?? null,
   };
 }
+
+const commentReplySchema = z.object({
+  id: z.string().min(1),
+});
+
+export function instagramCommentReplyUrl(commentId: string): string {
+  return `${INSTAGRAM_GRAPH_ORIGIN}/${commentId}/replies`;
+}
+
+export async function replyToInstagramComment(
+  accessToken: string,
+  input: { commentId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("Instagram comment replies require a body");
+  }
+  if (!input.commentId.trim()) {
+    throw new ValidationError("Instagram comment replies require the source comment id");
+  }
+
+  const url = new URL(instagramCommentReplyUrl(input.commentId));
+  url.searchParams.set("access_token", accessToken);
+  const response = await socialFetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: text }),
+  });
+  const payload = await readJson<unknown>(response);
+  throwIfGraphError(payload);
+  const parsed = commentReplySchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("Instagram comment reply returned an unexpected payload");
+  }
+  return { externalMessageId: parsed.data.id };
+}
+

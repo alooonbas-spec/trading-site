@@ -9,6 +9,8 @@ import type {
   ContactActionResult,
   InboxInput,
   InboxResult,
+  InboxReplyInput,
+  InboxReplyResult,
   MonitorInput,
   MonitorResult,
   SharedUpdateInput,
@@ -44,6 +46,7 @@ export const DISABLED_CAPABILITIES: SocialCapabilities = {
   messaging: false,
   invites: false,
   inbox: false,
+  inboxReply: false,
   sharedUpdateStream: false,
 };
 
@@ -114,6 +117,10 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
 
   async collectInbox(_input: InboxInput): Promise<InboxResult> {
     throw new UnsupportedActionError(`${this.platform} inbox collection is not enabled yet`);
+  }
+
+  async replyToInbox(_input: InboxReplyInput): Promise<InboxReplyResult> {
+    throw new UnsupportedActionError(`${this.platform} inbox replies are not enabled yet`);
   }
 
   async collectSharedUpdates(_input: SharedUpdateInput): Promise<SharedUpdateResult> {

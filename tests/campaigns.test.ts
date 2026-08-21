@@ -73,7 +73,9 @@ describe("adapter rate limits", () => {
   it("exposes rate limits from adapters instead of worker platform switches", () => {
     expect(getSocialAdapter("telegram").getRateLimit()).toEqual(DEFAULT_ACCOUNT_RATE_LIMIT);
     const worker = readFileSync("services/jobs/worker-service.ts", "utf8");
+    const limiter = readFileSync("services/social-accounts/rate-limit-service.ts", "utf8");
     expect(worker).not.toMatch(/platform\s*===\s*["']telegram["']/);
-    expect(worker).toContain("adapter.getRateLimit()");
+    expect(worker).toContain("takeAccountAdapterRate");
+    expect(limiter).toContain("adapter.getRateLimit()");
   });
 });

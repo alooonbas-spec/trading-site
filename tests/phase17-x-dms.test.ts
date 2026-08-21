@@ -59,6 +59,7 @@ describe("PHASE 17 X Direct Messages", () => {
         body: "hello from lead",
         url: null,
         receivedAt: "2026-08-21T12:00:00.000Z",
+        replyKind: "direct_message",
       },
     ]);
   });
@@ -110,6 +111,7 @@ describe("PHASE 17 X Direct Messages", () => {
         body: "private hello",
         url: null,
         receivedAt: "2026-08-21T10:00:00.000Z",
+        replyKind: "direct_message",
       },
     ]);
   });

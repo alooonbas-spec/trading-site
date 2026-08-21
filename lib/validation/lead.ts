@@ -63,3 +63,8 @@ export const attachInboxEventSchema = z.object({
   inboxEventId: z.uuid(),
   leadId: z.uuid(),
 });
+
+export const replyInboxEventSchema = z.object({
+  inboxEventId: z.uuid(),
+  body: z.string().trim().min(1, "Reply cannot be empty").max(4000),
+});

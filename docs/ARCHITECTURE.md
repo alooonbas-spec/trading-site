@@ -177,6 +177,16 @@ Safety policy:
 - Tokenless runs without a service token fall back to TinyFish Search, or fail honestly if TinyFish is not configured. Facebook and Instagram still have no public keyword-search API, so they stay on TinyFish.
 - No new VK OAuth scope is required. The worker still branches on `job.type`, never `platform ===`.
 
+## Official inbox replies (PHASE 20)
+
+- Operators reply to a stored `inbox_events` row from Inbox or a lead page. The server action calls `adapter.replyToInbox()` after `prepareAccountAdapter` and the same `increment_account_rate_bucket` limiter the worker uses. Services do not branch on `platform ===`.
+- Collectors persist `reply_kind` (`direct_message`, `comment`, `mention`). Pre-PHASE-20 rows infer kind from platform and public URL (Telegram private DMs, X status URLs as mentions, Facebook/Instagram public URLs as comments, VK wall comments). Inference never invents a send that the adapter cannot perform.
+- Direct messages reuse official MESSAGE send: Telegram `sendMessage`, X `POST /2/dm_conversations/with/{id}/messages`, Facebook `POST /{page-id}/messages`, Instagram `POST /{ig-user-id}/messages`.
+- Comment replies use official write APIs: Facebook `POST /{comment-id}/comments` (`pages_manage_engagement`; reconnect existing Pages), Instagram `POST /{ig-comment-id}/replies`, VK `wall.createComment` with `reply_to_comment`.
+- X mention replies use `POST /2/tweets` with `reply.in_reply_to_tweet_id`. VK user Direct Messages stay disabled.
+- Matched outbound replies check `leads.do_not_contact` and record interaction type `MESSAGE`. Unmatched inbound replies are allowed (the person already wrote in) and do not create leads. `REPLIED` and `BLOCKED` relationship statuses are not overwritten; other statuses may move to `MESSAGE_SENT`.
+- `inboxReply` is true on Telegram, X, Facebook, Instagram, and VK. Capability-off adapters still throw `UnsupportedActionError`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

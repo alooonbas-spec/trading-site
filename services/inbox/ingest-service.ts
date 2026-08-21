@@ -70,6 +70,7 @@ export async function ingestInboxMessages(input: {
       social_profile_id: profile?.id ?? null,
       relationship_id: relationship?.id ?? null,
       matched: Boolean(profile),
+      reply_kind: message.replyKind,
     });
 
     if (insertError?.code === "23505") {

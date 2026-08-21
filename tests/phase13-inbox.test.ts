@@ -90,6 +90,7 @@ describe("Telegram inbox", () => {
         body: "I am interested",
         url: "https://t.me/lead_user/3",
         receivedAt: expect.any(String),
+        replyKind: "direct_message",
       },
     ]);
   });

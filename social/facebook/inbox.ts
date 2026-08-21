@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SocialError } from "@/lib/errors";
+import { SocialError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { FACEBOOK_GRAPH_ORIGIN } from "@/social/facebook/graph";
@@ -85,6 +85,7 @@ export function parseFacebookMessengerConversations(payload: unknown, pageId: st
         body: text,
         url: null,
         receivedAt: event.created_time ?? null,
+        replyKind: "direct_message",
       });
     }
   }
@@ -119,6 +120,7 @@ async function collectFacebookComments(page: FacebookPageAuth): Promise<InboxMes
         body: text,
         url: `https://www.facebook.com/${comment.id}`,
         receivedAt: comment.created_time ?? null,
+        replyKind: "comment",
       });
     }
   }
@@ -152,3 +154,40 @@ export async function collectFacebookInbox(
     cursor: input.cursor ?? null,
   };
 }
+
+const commentReplySchema = z.object({
+  id: z.string().min(1),
+});
+
+export function facebookCommentReplyUrl(commentId: string): string {
+  return `${FACEBOOK_GRAPH_ORIGIN}/${commentId}/comments`;
+}
+
+export async function replyToFacebookComment(
+  page: FacebookPageAuth,
+  input: { commentId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("Facebook comment replies require a body");
+  }
+  if (!input.commentId.trim()) {
+    throw new ValidationError("Facebook comment replies require the source comment id");
+  }
+
+  const url = new URL(facebookCommentReplyUrl(input.commentId));
+  url.searchParams.set("access_token", page.accessToken);
+  const response = await socialFetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: text }),
+  });
+  const payload = await readJson<unknown>(response);
+  throwIfGraphError(payload);
+  const parsed = commentReplySchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("Facebook comment reply returned an unexpected payload");
+  }
+  return { externalMessageId: parsed.data.id };
+}
+

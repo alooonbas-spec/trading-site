@@ -52,6 +52,7 @@ describe("PHASE 18 Facebook Messenger", () => {
         body: "hello page",
         url: null,
         receivedAt: "2026-08-21T12:00:00+0000",
+        replyKind: "direct_message",
       },
     ]);
   });
@@ -128,6 +129,7 @@ describe("PHASE 18 Facebook Messenger", () => {
         body: "private hello",
         url: null,
         receivedAt: "2026-08-21T12:00:00+0000",
+        replyKind: "direct_message",
       },
     ]);
   });
@@ -230,6 +232,7 @@ describe("PHASE 18 Instagram Direct Messages", () => {
         body: "hello creator",
         url: null,
         receivedAt: "2026-08-21T09:00:00+0000",
+        replyKind: "direct_message",
       },
     ]);
   });
@@ -296,6 +299,7 @@ describe("PHASE 18 Instagram Direct Messages", () => {
         body: "private hi",
         url: null,
         receivedAt: "2026-08-21T09:00:00+0000",
+        replyKind: "direct_message",
       },
     ]);
   });

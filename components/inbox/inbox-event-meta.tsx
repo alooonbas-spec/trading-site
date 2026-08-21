@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
 import type { InboxEventListItem } from "@/types/inbox";
 import { Badge } from "@/components/ui/badge";
+import { INBOX_REPLY_KIND_LABELS } from "@/lib/inbox/reply-kind";
 
 export function InboxEventMeta({ event }: { event: InboxEventListItem }) {
   const sender = event.username ?? event.externalProfileId;
@@ -12,6 +13,7 @@ export function InboxEventMeta({ event }: { event: InboxEventListItem }) {
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{SOCIAL_PLATFORM_LABELS[event.platform]}</Badge>
+        <Badge variant="outline">{INBOX_REPLY_KIND_LABELS[event.resolvedReplyKind]}</Badge>
         {event.matched ? <Badge>Matched</Badge> : <Badge variant="outline">Unmatched</Badge>}
         {event.leadId && event.leadDisplayName ? (
           <Link

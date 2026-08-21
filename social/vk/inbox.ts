@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { SocialError } from "@/lib/errors";
-import type { InboxInput, InboxResult } from "@/social/core/adapter";
+import { SocialError, ValidationError } from "@/lib/errors";
+import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { vkCall } from "@/social/vk/api";
 import { vkWallTarget } from "@/social/vk/publish";
 
@@ -45,7 +45,7 @@ export async function collectVkInbox(
     throw new SocialError("VK wall.get returned an unexpected payload");
   }
 
-  const messages = [];
+  const messages: InboxMessage[] = [];
   for (const post of wall.data.items ?? []) {
     const commentsPayload = await vkCall("wall.getComments", {
       access_token: accessToken,
@@ -71,6 +71,7 @@ export async function collectVkInbox(
         body: text,
         url: ownerId ? `https://vk.com/wall${ownerId}_${post.id}?reply=${comment.id}` : null,
         receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
+        replyKind: "comment",
       });
     }
   }
@@ -80,3 +81,49 @@ export async function collectVkInbox(
     cursor: input.cursor ?? null,
   };
 }
+
+const createCommentSchema = z.object({
+  comment_id: z.number(),
+});
+
+export function parseVkInboxCommentRef(externalId: string): {
+  ownerId: string;
+  postId: string;
+  commentId: string;
+} {
+  const parts = externalId.split(":");
+  const ownerId = parts[0];
+  const postId = parts[1];
+  const commentId = parts[2];
+  if (parts.length !== 3 || !ownerId || !postId || !commentId || !/^-?\d+$/.test(ownerId) || !/^\d+$/.test(postId) || !/^\d+$/.test(commentId)) {
+    throw new ValidationError(
+      "VK comment replies require owner, post, and comment ids from wall.getComments",
+    );
+  }
+  return { ownerId, postId, commentId };
+}
+
+export async function replyToVkWallComment(
+  accessToken: string,
+  input: { externalId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("VK comment replies require a body");
+  }
+
+  const ref = parseVkInboxCommentRef(input.externalId);
+  const payload = await vkCall("wall.createComment", {
+    access_token: accessToken,
+    owner_id: ref.ownerId,
+    post_id: ref.postId,
+    reply_to_comment: ref.commentId,
+    message: text,
+  });
+  const parsed = createCommentSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK wall.createComment returned an unexpected payload");
+  }
+  return { externalMessageId: String(parsed.data.comment_id) };
+}
+

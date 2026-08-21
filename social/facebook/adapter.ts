@@ -11,6 +11,8 @@ import type {
   ContactActionInput,
   ContactActionResult,
   InboxInput,
+  InboxReplyInput,
+  InboxReplyResult,
   InboxResult,
   PublishInput,
   PublishResult,
@@ -26,7 +28,7 @@ import {
   FACEBOOK_TOKEN_URL,
 } from "@/social/facebook/graph";
 import { facebookConnectMetadata, listFacebookPages, resolveFacebookPage } from "@/social/facebook/pages";
-import { collectFacebookInbox } from "@/social/facebook/inbox";
+import { collectFacebookInbox, replyToFacebookComment } from "@/social/facebook/inbox";
 import { facebookMessengerRecipientId, sendFacebookPageMessage } from "@/social/facebook/contact";
 import { executeFacebookPublish, planFacebookPublish } from "@/social/facebook/publish";
 import { resolveFacebookPublicProfile } from "@/social/facebook/public-profile";
@@ -173,7 +175,7 @@ export class FacebookAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true, inbox: true, contactActions: true, messaging: true };
+    return { publishing: true, inbox: true, inboxReply: true, contactActions: true, messaging: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -193,6 +195,37 @@ export class FacebookAdapter extends BaseSocialAdapter {
       throw new AuthenticationError("Facebook account has no access token");
     }
     return collectFacebookInbox(token, this.context.metadata, input);
+  }
+
+  async replyToInbox(input: InboxReplyInput): Promise<InboxReplyResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Facebook account has no access token");
+    }
+
+    const text = input.body.trim();
+    if (!text) {
+      throw new ValidationError("Facebook inbox replies require a body");
+    }
+
+    const page = await resolveFacebookPage(token, this.context.metadata);
+    if (input.kind === "direct_message") {
+      const sent = await sendFacebookPageMessage(page, {
+        recipientId: facebookMessengerRecipientId(input.target),
+        text,
+      });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
+    if (input.kind === "comment") {
+      const sent = await replyToFacebookComment(page, {
+        commentId: input.externalEventId,
+        text,
+      });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
+    throw new UnsupportedActionError("Facebook cannot send a mention inbox reply");
   }
 
   async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {

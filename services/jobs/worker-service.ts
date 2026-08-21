@@ -13,12 +13,12 @@ import {
   errorMessage,
   isAppError,
 } from "@/lib/errors";
-import { AccountRateLimiter } from "@/lib/jobs/account-rate-limiter";
 import { isAdapterContactAction, jobStatusAfterError, INBOX_POLL_INTERVAL_MS, MONITOR_POLL_INTERVAL_MS } from "@/lib/jobs/queue-rules";
 import { matchKeywords, normalizeKeywords } from "@/lib/monitoring/keywords";
 import { laterUpdateStreamCursor, updateStreamCursorFromMetadata, withUpdateStreamCursor } from "@/lib/social/update-stream";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { prepareAccountAdapter } from "@/services/social-accounts/token-refresh-service";
+import { takeAccountAdapterRate } from "@/services/social-accounts/rate-limit-service";
 import { assertCanContactLead } from "@/services/leads/do-not-contact";
 import { recordLeadInteraction } from "@/services/leads/interaction-service";
 import { ingestInboxMessages } from "@/services/inbox/ingest-service";
@@ -273,7 +273,7 @@ async function processContactJob(job: Job, userId: string | null): Promise<void>
       if (profile.platform !== prepared.platform) {
         throw new ValidationError("Contact job platform does not match the social account");
       }
-      await takeAdapterRate(socialAccountId, prepared.adapter);
+      await takeAccountAdapterRate(socialAccountId, prepared.adapter);
 
       const result = await prepared.adapter.executeContactAction({
         workspaceId: job.workspaceId,
@@ -401,7 +401,7 @@ async function processPublishJob(job: Job, userId: string | null): Promise<void>
       .update({ status: "PUBLISHING", last_error: null })
       .eq("id", target.id);
 
-    await takeAdapterRate(socialAccountId, prepared.adapter);
+    await takeAccountAdapterRate(socialAccountId, prepared.adapter);
     const adapter = prepared.adapter;
 
     const media = Array.isArray(post.media)
@@ -479,7 +479,7 @@ async function processMonitorJob(job: Job, userId: string | null): Promise<void>
         });
         return;
       }
-      await takeAdapterRate(accountId, adapter);
+      await takeAccountAdapterRate(accountId, adapter);
     }
 
     const capabilities = await adapter.getCapabilities();
@@ -579,7 +579,7 @@ async function processInboxJob(job: Job, userId: string | null): Promise<void> {
       return;
     }
 
-    await takeAdapterRate(socialAccountId, prepared.adapter);
+    await takeAccountAdapterRate(socialAccountId, prepared.adapter);
 
     const cursor = updateStreamCursorFromMetadata(
       account.metadata && typeof account.metadata === "object" && !Array.isArray(account.metadata)
@@ -644,7 +644,7 @@ async function processSharedUpdateStreamJob(input: {
     return;
   }
 
-  await takeAdapterRate(socialAccountId, adapter);
+  await takeAccountAdapterRate(socialAccountId, adapter);
 
   const { data: account, error: accountError } = await supabase
     .from("social_accounts")
@@ -803,22 +803,6 @@ async function releaseJobForLater(job: Job): Promise<void> {
   if (error) {
     throw new ValidationError(error.message);
   }
-}
-
-async function takeAdapterRate(accountId: string, adapter: SocialAdapter): Promise<void> {
-  const supabase = await createClient();
-  const limiter = new AccountRateLimiter(async ({ accountId: rateAccountId, windowStart, maxActions }) => {
-    const { data, error: rateError } = await supabase.rpc("increment_account_rate_bucket", {
-      p_account_id: rateAccountId,
-      p_window_start: windowStart,
-      p_max: maxActions,
-    });
-    if (rateError) {
-      throw new ValidationError(rateError.message);
-    }
-    return data ?? 0;
-  });
-  await limiter.take(accountId, adapter.getRateLimit());
 }
 
 async function markRelationship(job: Job, status: ContactStatus): Promise<void> {

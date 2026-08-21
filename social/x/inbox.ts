@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AuthenticationError, SocialError } from "@/lib/errors";
+import { AuthenticationError, SocialError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 
@@ -89,6 +89,7 @@ export function parseXDirectMessageEvents(payload: unknown, ownUserId: string): 
       body: text,
       url: null,
       receivedAt: event.created_at ?? new Date().toISOString(),
+      replyKind: "direct_message",
     });
   }
   return messages;
@@ -145,6 +146,7 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
         ? `https://x.com/${author.username}/status/${tweet.id}`
         : `https://x.com/i/web/status/${tweet.id}`,
       receivedAt: new Date().toISOString(),
+      replyKind: "mention",
     });
   }
 
@@ -155,3 +157,44 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
     cursor: parsed.data.meta?.newest_id ?? input.cursor ?? null,
   };
 }
+
+const tweetReplySchema = z.object({
+  data: z.object({
+    id: z.string().min(1),
+  }),
+});
+
+export function xMentionReplyUrl(): string {
+  return "https://api.x.com/2/tweets";
+}
+
+export async function sendXMentionReply(
+  accessToken: string,
+  input: { tweetId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("X mention replies require a body");
+  }
+  if (!input.tweetId.trim()) {
+    throw new ValidationError("X mention replies require the source tweet id");
+  }
+
+  const response = await socialFetch(xMentionReplyUrl(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      text,
+      reply: { in_reply_to_tweet_id: input.tweetId },
+    }),
+  });
+  const parsed = tweetReplySchema.safeParse(await readJson<unknown>(response));
+  if (!parsed.success) {
+    throw new SocialError("X mention reply returned an unexpected payload");
+  }
+  return { externalMessageId: parsed.data.data.id };
+}
+

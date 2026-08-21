@@ -128,6 +128,7 @@ export function parseTelegramUpdates(payload: unknown, cursor?: string | null): 
       body: inboxText,
       url: message.chat?.username ? `https://t.me/${message.chat.username}/${message.message_id}` : null,
       receivedAt: new Date().toISOString(),
+      replyKind: "direct_message",
     });
   }
 

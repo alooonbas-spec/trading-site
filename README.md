@@ -21,6 +21,7 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
    - `supabase/migrations/20260821240000_phase10_worker.sql`
    - `supabase/migrations/20260821260000_phase13_inbox.sql`
    - `supabase/migrations/20260821280000_phase14_inbox_ui.sql`
+   - `supabase/migrations/20260821300000_phase20_inbox_reply.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
@@ -57,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 19: official VK `newsfeed.search` monitoring with a user or service token. Facebook and Instagram stay on TinyFish Search.
+PHASE 20: official inbox replies from Inbox (DM, comment, and X mention) through adapter `replyToInbox()`.

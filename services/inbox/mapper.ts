@@ -14,6 +14,7 @@ export type InboxEventRow = {
   social_profile_id: string | null;
   relationship_id: string | null;
   matched: boolean;
+  reply_kind: import("@/social/core/adapter").InboxReplyKind | null;
   created_at: string;
 };
 
@@ -32,6 +33,7 @@ export function toInboxEvent(row: InboxEventRow): InboxEvent {
     socialProfileId: row.social_profile_id,
     relationshipId: row.relationship_id,
     matched: row.matched,
+    replyKind: row.reply_kind,
     createdAt: row.created_at,
   };
 }

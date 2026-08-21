@@ -1,4 +1,4 @@
-import { AuthenticationError, ValidationError } from "@/lib/errors";
+import { AuthenticationError, UnsupportedActionError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
   BaseSocialAdapter,
@@ -9,6 +9,8 @@ import {
 import type {
   ConnectResult,
   InboxInput,
+  InboxReplyInput,
+  InboxReplyResult,
   InboxResult,
   MonitorInput,
   MonitorResult,
@@ -20,7 +22,7 @@ import type {
 } from "@/social/core/adapter";
 import { VK_SCOPES } from "@/social/vk/api";
 import { executeVkPublish, planVkPublish } from "@/social/vk/publish";
-import { collectVkInbox } from "@/social/vk/inbox";
+import { collectVkInbox, replyToVkWallComment } from "@/social/vk/inbox";
 import { collectVkNewsfeedSearch, vkMonitorAccessToken } from "@/social/vk/monitor";
 import { resolveVkPublicProfile } from "@/social/vk/public-profile";
 import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
@@ -214,7 +216,7 @@ export class VkAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true, inbox: true, monitoring: true };
+    return { publishing: true, inbox: true, inboxReply: true, monitoring: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -233,6 +235,25 @@ export class VkAdapter extends BaseSocialAdapter {
       throw new AuthenticationError("VK account has no access token");
     }
     return collectVkInbox(token, this.context.metadata, input);
+  }
+
+  async replyToInbox(input: InboxReplyInput): Promise<InboxReplyResult> {
+    if (input.kind !== "comment") {
+      throw new UnsupportedActionError(
+        "VK can reply to wall comments. User Direct Messages are not enabled for new apps.",
+      );
+    }
+
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("VK account has no access token");
+    }
+
+    const sent = await replyToVkWallComment(token, {
+      externalId: input.externalEventId,
+      text: input.body,
+    });
+    return { externalMessageId: sent.externalMessageId };
   }
 
   async monitor(input: MonitorInput): Promise<MonitorResult> {

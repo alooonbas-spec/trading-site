@@ -29,7 +29,7 @@ export function inboxEventToMessage(event: InboxIdentityFields & {
   body: string;
   url: string | null;
   receivedAt: string | null;
-}): InboxMessage {
+}): Omit<InboxMessage, "replyKind"> {
   return {
     externalId: event.externalId,
     externalProfileId: event.externalProfileId,

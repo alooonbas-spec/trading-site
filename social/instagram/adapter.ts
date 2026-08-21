@@ -11,6 +11,8 @@ import type {
   ContactActionInput,
   ContactActionResult,
   InboxInput,
+  InboxReplyInput,
+  InboxReplyResult,
   InboxResult,
   PublishInput,
   PublishResult,
@@ -19,7 +21,7 @@ import type {
   TokenRefreshResult,
 } from "@/social/core/adapter";
 import { INSTAGRAM_SCOPES, executeInstagramPublish, planInstagramPublish, resolveInstagramUserId } from "@/social/instagram/publish";
-import { collectInstagramInbox } from "@/social/instagram/inbox";
+import { collectInstagramInbox, replyToInstagramComment } from "@/social/instagram/inbox";
 import { instagramMessengerRecipientId, sendInstagramDirectMessage } from "@/social/instagram/contact";
 import { resolveInstagramPublicProfile } from "@/social/instagram/public-profile";
 
@@ -177,7 +179,7 @@ export class InstagramAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true, inbox: true, contactActions: true, messaging: true };
+    return { publishing: true, inbox: true, inboxReply: true, contactActions: true, messaging: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -197,6 +199,38 @@ export class InstagramAdapter extends BaseSocialAdapter {
       throw new AuthenticationError("Instagram account has no access token");
     }
     return collectInstagramInbox(token, this.context.metadata, input);
+  }
+
+  async replyToInbox(input: InboxReplyInput): Promise<InboxReplyResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Instagram account has no access token");
+    }
+
+    const text = input.body.trim();
+    if (!text) {
+      throw new ValidationError("Instagram inbox replies require a body");
+    }
+
+    if (input.kind === "direct_message") {
+      const userId = await resolveInstagramUserId(token, this.context.metadata);
+      const sent = await sendInstagramDirectMessage(token, {
+        igUserId: userId,
+        recipientId: instagramMessengerRecipientId(input.target),
+        text,
+      });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
+    if (input.kind === "comment") {
+      const sent = await replyToInstagramComment(token, {
+        commentId: input.externalEventId,
+        text,
+      });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
+    throw new UnsupportedActionError("Instagram cannot send a mention inbox reply");
   }
 
   async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {

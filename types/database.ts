@@ -616,6 +616,7 @@ export type Database = {
           social_profile_id: string | null;
           relationship_id: string | null;
           matched: boolean;
+          reply_kind: import("@/social/core/adapter").InboxReplyKind | null;
           created_at: string;
         };
         Insert: {
@@ -631,12 +632,14 @@ export type Database = {
           social_profile_id?: string | null;
           relationship_id?: string | null;
           matched?: boolean;
+          reply_kind?: import("@/social/core/adapter").InboxReplyKind | null;
         };
         Update: {
           lead_id?: string | null;
           social_profile_id?: string | null;
           relationship_id?: string | null;
           matched?: boolean;
+          reply_kind?: import("@/social/core/adapter").InboxReplyKind | null;
         };
         Relationships: [];
       };

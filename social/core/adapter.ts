@@ -10,6 +10,7 @@ export type SocialCapabilities = {
   messaging: boolean;
   invites: boolean;
   inbox: boolean;
+  inboxReply: boolean;
   sharedUpdateStream: boolean;
 };
 
@@ -121,6 +122,10 @@ export type InboxInput = {
   cursor?: string | null;
 };
 
+export type InboxReplyKind = "direct_message" | "comment" | "mention";
+
+export const INBOX_REPLY_KINDS = ["direct_message", "comment", "mention"] as const;
+
 export type InboxMessage = {
   externalId: string;
   externalProfileId: string;
@@ -128,11 +133,28 @@ export type InboxMessage = {
   body: string;
   url: string | null;
   receivedAt: string | null;
+  replyKind: InboxReplyKind;
 };
 
 export type InboxResult = {
   messages: InboxMessage[];
   cursor?: string | null;
+};
+
+export type InboxReplyInput = {
+  workspaceId: string;
+  socialAccountId: string;
+  kind: InboxReplyKind;
+  body: string;
+  externalEventId: string;
+  target: {
+    externalProfileId: string;
+    username: string | null;
+  };
+};
+
+export type InboxReplyResult = {
+  externalMessageId: string;
 };
 
 export type SharedUpdateInput = {
@@ -181,6 +203,7 @@ export interface SocialAdapter {
   monitor(input: MonitorInput): Promise<MonitorResult>;
   collectInbox(input: InboxInput): Promise<InboxResult>;
   collectSharedUpdates(input: SharedUpdateInput): Promise<SharedUpdateResult>;
+  replyToInbox(input: InboxReplyInput): Promise<InboxReplyResult>;
   executeContactAction(input: ContactActionInput): Promise<ContactActionResult>;
   refreshTokens(): Promise<TokenRefreshResult>;
 }

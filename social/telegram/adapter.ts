@@ -8,6 +8,8 @@ import type {
   ContactActionInput,
   ContactActionResult,
   InboxInput,
+  InboxReplyInput,
+  InboxReplyResult,
   InboxResult,
   MonitorInput,
   MonitorResult,
@@ -146,6 +148,7 @@ export class TelegramAdapter extends BaseSocialAdapter {
       contactActions: true,
       messaging: true,
       inbox: true,
+      inboxReply: true,
       sharedUpdateStream: true,
     };
   }
@@ -192,6 +195,26 @@ export class TelegramAdapter extends BaseSocialAdapter {
       messages: batch.inboxMessages,
       cursor: batch.cursor,
     };
+  }
+
+  async replyToInbox(input: InboxReplyInput): Promise<InboxReplyResult> {
+    if (input.kind !== "direct_message") {
+      throw new UnsupportedActionError("Telegram can only reply to private Direct Messages");
+    }
+
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Telegram account has no access token");
+    }
+
+    const text = input.body.trim();
+    if (!text) {
+      throw new ValidationError("Telegram messages require a body");
+    }
+
+    const chatId = telegramChatIdFromTarget(input.target);
+    const sent = await this.sendMessage(token, chatId, text);
+    return { externalMessageId: sent.externalId };
   }
 
   async collectSharedUpdates(input: SharedUpdateInput): Promise<SharedUpdateResult> {

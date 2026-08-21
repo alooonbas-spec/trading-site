@@ -12,6 +12,7 @@ import {
 } from "@/types/inbox";
 import type { SocialPlatform } from "@/types/social";
 import { toInboxEvent, type InboxEventRow } from "@/services/inbox/mapper";
+import { resolveInboxReplyKind } from "@/lib/inbox/reply-kind";
 
 const INBOX_PAGE_SIZE = 200;
 
@@ -156,6 +157,11 @@ async function hydrateInboxEvents(
       accountUsername: account.username,
       accountDisplayName: account.displayName,
       leadDisplayName: row.lead_id ? (leadsById.get(row.lead_id) ?? null) : null,
+      resolvedReplyKind: resolveInboxReplyKind({
+        stored: row.reply_kind,
+        platform: account.platform,
+        url: row.url,
+      }),
     };
   });
 }
