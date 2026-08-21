@@ -13,6 +13,7 @@ const INSTAGRAM_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize";
 const INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const INSTAGRAM_LONG_LIVED_URL = "https://graph.instagram.com/access_token";
 const INSTAGRAM_REFRESH_URL = "https://graph.instagram.com/refresh_access_token";
+const INSTAGRAM_ME_URL = "https://graph.instagram.com/me";
 const INSTAGRAM_SCOPES = "instagram_business_basic";
 
 type InstagramShortLivedResponse = {
