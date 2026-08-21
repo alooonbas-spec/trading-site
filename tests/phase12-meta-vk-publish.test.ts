@@ -192,9 +192,11 @@ describe("VK wall publishing", () => {
       groupId: "123",
       fromGroup: true,
     });
-    expect(() => planVkPublish({ body: "Nope", media: ["https://cdn.example/a.mp4"] })).toThrow(
-      ValidationError,
-    );
+    expect(planVkPublish({ body: "Clip", media: ["https://cdn.example/a.mp4"] })).toEqual({
+      type: "video",
+      url: "https://cdn.example/a.mp4",
+      message: "Clip",
+    });
   });
 
   it("posts text through official wall.post", async () => {

@@ -72,7 +72,7 @@ export function SocialAccountCard({
             field="publishOwnerId"
             label="VK wall owner (optional)"
             placeholder="-communityId or user id"
-            hint="Leave empty to post on the user wall. Negative ids post to a community. Reconnect to grant wall and photos."
+            hint="Leave empty to post on the user wall. Negative ids post to a community. Reconnect to grant wall, photos, and video."
           />
         ) : null}
         {canManage && account.platform === "telegram" ? (

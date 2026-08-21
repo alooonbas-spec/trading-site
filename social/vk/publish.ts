@@ -31,7 +31,8 @@ const wallPostSchema = z.object({
 
 export type VkPublishPlan =
   | { type: "text"; message: string }
-  | { type: "photos"; urls: string[]; message: string };
+  | { type: "photos"; urls: string[]; message: string }
+  | { type: "video"; url: string; message: string };
 
 export type VkWallTarget = {
   ownerId: string | null;
@@ -59,7 +60,7 @@ export function planVkPublish(input: { body: string; media: string[] }): VkPubli
   const message = input.body.trim();
   if (input.media.length === 0) {
     if (!message) {
-      throw new ValidationError("VK wall posts require text or photos");
+      throw new ValidationError("VK wall posts require text or media");
     }
     return { type: "text", message };
   }
@@ -71,11 +72,25 @@ export function planVkPublish(input: { body: string; media: string[] }): VkPubli
     parsePublicMediaUrl(source);
     return classifyMediaUrl(source);
   });
-  if (items.some((item) => item.kind === "video" || item.kind === "document")) {
-    throw new ValidationError("VK publishing supports photo URLs. Video upload is not enabled yet");
+  if (items.some((item) => item.kind === "document")) {
+    throw new ValidationError("VK publishing does not support document URLs");
+  }
+  const kinds = new Set(items.map((item) => (item.kind === "gif" ? "photo" : item.kind)));
+  if (kinds.size > 1) {
+    throw new ValidationError("VK cannot mix photos and videos in one post");
+  }
+  if (kinds.has("video")) {
+    const item = items[0];
+    if (items.length !== 1 || !item) {
+      throw new ValidationError("VK video posts support one mp4 or mov URL");
+    }
+    if (item.mimeType !== "video/mp4" && item.mimeType !== "video/quicktime") {
+      throw new ValidationError("VK videos must be mp4 or mov URLs");
+    }
+    return { type: "video", url: item.url, message };
   }
   if (items.some((item) => item.kind !== "photo" && item.kind !== "gif")) {
-    throw new ValidationError("VK publishing supports jpeg, png, webp, or gif URLs");
+    throw new ValidationError("VK publishing supports jpeg, png, webp, gif, mp4, or mov URLs");
   }
   return { type: "photos", urls: items.map((item) => item.url), message };
 }
@@ -83,6 +98,55 @@ export function planVkPublish(input: { body: string; media: string[] }): VkPubli
 function photoAttachment(photo: { id: number; owner_id: number; access_key?: string }): string {
   const base = `photo${photo.owner_id}_${photo.id}`;
   return photo.access_key ? `${base}_${photo.access_key}` : base;
+}
+
+function videoAttachment(video: { video_id: number; owner_id: number; access_key?: string }): string {
+  const base = `video${video.owner_id}_${video.video_id}`;
+  return video.access_key ? `${base}_${video.access_key}` : base;
+}
+
+const videoSaveSchema = z.object({
+  upload_url: z.string().min(1),
+  video_id: z.coerce.number(),
+  owner_id: z.coerce.number(),
+  access_key: z.string().optional(),
+});
+
+async function uploadWallVideo(
+  accessToken: string,
+  source: string,
+  message: string,
+  target: VkWallTarget,
+): Promise<string> {
+  const downloaded = await downloadPublicMedia(source);
+  const savedPayload = await vkCall("video.save", {
+    access_token: accessToken,
+    name: (message || "Video").slice(0, 128),
+    description: message.slice(0, 4000),
+    wallpost: "0",
+    ...(target.groupId ? { group_id: target.groupId } : {}),
+  });
+  const saved = videoSaveSchema.safeParse(savedPayload);
+  if (!saved.success) {
+    throw new SocialError("VK video.save returned an unexpected payload");
+  }
+  parsePublicMediaUrl(saved.data.upload_url);
+
+  const filename = downloaded.mimeType === "video/quicktime" ? "video.mov" : "video.mp4";
+  const form = new FormData();
+  form.set(
+    "video_file",
+    new Blob([new Uint8Array(downloaded.bytes)], { type: downloaded.mimeType }),
+    filename,
+  );
+  const uploadedResponse = await socialFetch(saved.data.upload_url, {
+    method: "POST",
+    body: form,
+  });
+  const uploadedPayload = await readJson<unknown>(uploadedResponse);
+  throwIfVkError(uploadedPayload);
+
+  return videoAttachment(saved.data);
 }
 
 async function uploadWallPhoto(
@@ -142,8 +206,10 @@ export async function executeVkPublish(
   const attachments =
     plan.type === "photos"
       ? await Promise.all(plan.urls.map((url) => uploadWallPhoto(accessToken, url, target)))
-      : [];
-  const message = plan.type === "text" ? plan.message : plan.message;
+      : plan.type === "video"
+        ? [await uploadWallVideo(accessToken, plan.url, plan.message, target)]
+        : [];
+  const message = plan.message;
 
   const payload = await vkCall("wall.post", {
     access_token: accessToken,

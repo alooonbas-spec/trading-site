@@ -3,7 +3,7 @@ import { AuthenticationError, RateLimitError, SocialError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 
 export const VK_API_VERSION = "5.199";
-export const VK_SCOPES = "vkid.personal_info wall photos offline";
+export const VK_SCOPES = "vkid.personal_info wall photos video offline";
 
 const vkErrorSchema = z.object({
   error: z.object({

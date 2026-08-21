@@ -121,7 +121,7 @@ Safety policy:
 
 - Facebook publishes through a Page access token from official `GET /me/accounts`, then `POST /{page-id}/feed`, `/{page-id}/photos`, or `/{page-id}/videos`. OAuth now requests `pages_manage_posts`. Multiple Pages require `metadata.pageId`.
 - Instagram uses Instagram API with Instagram Login: `POST /{ig-user-id}/media` and `/{ig-user-id}/media_publish` with `instagram_business_content_publish`. Text-only posts are rejected. Images must be jpeg/png; Reels must be mp4.
-- VK uses official `wall.post`. Photos go through `photos.getWallUploadServer` → upload → `photos.saveWallPhoto`. OAuth now requests `wall photos offline`. Optional `metadata.publishOwnerId` targets a community wall.
+- VK uses official `wall.post`. Photos go through `photos.getWallUploadServer` → upload → `photos.saveWallPhoto`. Optional `metadata.publishOwnerId` targets a community wall. Video upload is PHASE 16.
 - Existing Facebook, Instagram, and VK accounts must reconnect to grant the new scopes. Contact actions on these platforms stay `UnsupportedActionError`. App Review still applies; tester/admin tokens work before review.
 
 ## Inbox replies (PHASE 13)
@@ -147,6 +147,12 @@ Safety policy:
 - The shared cursor lives on `social_accounts.metadata.updateStreamCursor` (kept in sync with `inboxCursor`). The worker never writes a cursor backwards and never branches on `platform ===`.
 - Concurrent INBOX/MONITOR jobs on the same account are released and retried shortly instead of issuing a second `getUpdates`.
 - Telegram INVITE remains `UnsupportedActionError`. Other platforms keep separate inbox and monitor APIs.
+
+## VK video publishing (PHASE 16)
+
+- VK videos use official `video.save` to get an upload URL, then `POST` the public mp4/mov file as `video_file`, then `wall.post` with a `video{owner_id}_{video_id}` attachment.
+- Photos and videos cannot be mixed in one post. webm, documents, private hosts, and mixed media fail honestly. Existing VK accounts must reconnect to grant the `video` scope.
+- Community walls still use `metadata.publishOwnerId`. Contact actions on VK stay `UnsupportedActionError`.
 
 ## Social adapters (PHASE 2)
 

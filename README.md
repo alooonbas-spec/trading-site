@@ -57,4 +57,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 15: Telegram inbox and monitoring share one official `getUpdates` stream so DMs and keyword hits are not skipped.
+PHASE 16: VK wall video via official `video.save` upload and `wall.post` attachment. Existing VK accounts must reconnect for the `video` scope.
