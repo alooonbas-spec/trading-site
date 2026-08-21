@@ -1,8 +1,12 @@
 import { z } from "zod";
 
 export const GRAPH_PAGE_DONE = "done";
+export const GRAPH_OBJECT_ID = /^[A-Za-z0-9_]+$/;
+export const GRAPH_REPLIES_FETCH_LIMIT = 20;
 
-const pagingSchema = z
+export type GraphRepliesMap = Record<string, string>;
+
+export const graphPagingSchema = z
   .object({
     next: z.string().optional(),
     cursors: z
@@ -32,7 +36,7 @@ export function decodeGraphAfter(value: string | undefined): string | null {
 }
 
 export function graphPagingAfter(payload: unknown): string | null {
-  const parsed = z.object({ paging: pagingSchema }).safeParse(payload);
+  const parsed = z.object({ paging: graphPagingSchema }).safeParse(payload);
   if (!parsed.success) {
     return null;
   }
@@ -49,6 +53,68 @@ export function graphPagingAfter(payload: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+export function encodeGraphReplies(map: GraphRepliesMap): string {
+  const entries = Object.entries(map).filter(([id, after]) => GRAPH_OBJECT_ID.test(id) && after.trim().length > 0);
+  if (entries.length === 0) {
+    return GRAPH_PAGE_DONE;
+  }
+  entries.sort(([left], [right]) => left.localeCompare(right));
+  return encodeGraphAfter(JSON.stringify(Object.fromEntries(entries.slice(0, GRAPH_REPLIES_FETCH_LIMIT))));
+}
+
+export function decodeGraphReplies(value: string | undefined): GraphRepliesMap | null {
+  if (!value || value === GRAPH_PAGE_DONE) {
+    return null;
+  }
+  const json = decodeGraphAfter(value);
+  if (!json) {
+    return null;
+  }
+  try {
+    const parsed = z.record(z.string(), z.string().min(1)).safeParse(JSON.parse(json) as unknown);
+    if (!parsed.success) {
+      return null;
+    }
+    const map: GraphRepliesMap = {};
+    for (const [id, after] of Object.entries(parsed.data)) {
+      if (GRAPH_OBJECT_ID.test(id) && after.trim()) {
+        map[id] = after.trim();
+      }
+    }
+    return Object.keys(map).length > 0 ? map : null;
+  } catch {
+    return null;
+  }
+}
+
+export function nextGraphRepliesCursor(input: {
+  stored?: string;
+  nestedAfters: GraphRepliesMap;
+  fetchedNextAfters: GraphRepliesMap;
+  fetchedIds: string[];
+}): string {
+  if (input.stored === GRAPH_PAGE_DONE) {
+    return GRAPH_PAGE_DONE;
+  }
+  const stored = decodeGraphReplies(input.stored);
+  if (!stored) {
+    return encodeGraphReplies(input.nestedAfters);
+  }
+  const fetched = new Set(input.fetchedIds);
+  const next: GraphRepliesMap = { ...input.fetchedNextAfters };
+  for (const [id, after] of Object.entries(stored)) {
+    if (!fetched.has(id)) {
+      next[id] = after;
+    }
+  }
+  for (const [id, after] of Object.entries(input.nestedAfters)) {
+    if (!fetched.has(id) && stored[id] === undefined) {
+      next[id] = after;
+    }
+  }
+  return encodeGraphReplies(next);
 }
 
 export function nextGraphAfterCursor(input: {

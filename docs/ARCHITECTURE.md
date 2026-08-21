@@ -281,7 +281,11 @@ Facebook Messenger and Instagram Direct Message collectors follow official Graph
 
 ## Graph feed and media paging (PHASE 43)
 
-Facebook Page `/{page-id}/feed` and Instagram `/{ig-user-id}/media` follow the same official Graph `after` walker as conversations. Each poll still reads the latest 10 posts/media items. If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `posts`. A short page stores `posts:done`. Comments on newly discovered older posts are not dropped by the `comments` timestamp watermark on first sight. Nested `comments.limit(50)` (Facebook) and first nested comments page (Instagram) are unchanged. Collectors still do not fetch `paging.next` URLs.
+Facebook Page `/{page-id}/feed` and Instagram `/{ig-user-id}/media` follow the same official Graph `after` walker as conversations. Each poll still reads the latest 10 posts/media items. If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `posts`. A short page stores `posts:done`. Comments on newly discovered older posts are not dropped by the `comments` timestamp watermark on first sight. Nested first comment pages still seed the `replies` walker in PHASE 44. Collectors still do not fetch `paging.next` URLs.
+
+## Graph nested comment paging (PHASE 44)
+
+Facebook `/{post-id}/comments` and Instagram `/{media-id}/comments` follow official Graph `after` for extra nested comment pages. Graph `after` is per object id, so the named `replies` cursor stores a small `{ objectId: after }` map (base64url JSON, at most 20 ids). The first collect reads nested `comments.paging.cursors.after` from the current feed/media pages. Later polls request `GET /{object-id}/comments?after=` with official fields and `limit=50` for stored ids. The next map is fetched pages that still have `after`, plus newly discovered post/media ids that were not already stored. Stored ids are not reset from the nested first-page `after` (Graph would keep returning that cursor). An empty map stores `replies:done` and later polls stay done. Extra comment-page messages are not dropped by the `comments` timestamp watermark. Collectors still do not fetch `paging.next` URLs.
 
 ## Social adapters (PHASE 2)
 

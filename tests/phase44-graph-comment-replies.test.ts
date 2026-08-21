@@ -1,16 +1,47 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { encodeGraphAfter } from "@/social/meta/graph-paging";
+import {
+  decodeGraphReplies,
+  encodeGraphAfter,
+  encodeGraphReplies,
+  GRAPH_REPLIES_FETCH_LIMIT,
+  nextGraphRepliesCursor,
+} from "@/social/meta/graph-paging";
 import { FACEBOOK_GRAPH_ORIGIN } from "@/social/facebook/graph";
 import { FacebookAdapter } from "@/social/facebook/adapter";
 import { InstagramAdapter } from "@/social/instagram/adapter";
 import { INSTAGRAM_GRAPH_ORIGIN } from "@/social/instagram/publish";
 
-describe("PHASE 43 Graph feed and media after paging", () => {
+describe("Graph nested comment replies helpers", () => {
+  it("encodes and decodes a per-object after map, and stays done once stored", () => {
+    const encoded = encodeGraphReplies({ "555_1": "cmt-2", media1: "ig-2" });
+    expect(encoded).toBe(encodeGraphAfter(JSON.stringify({ "555_1": "cmt-2", media1: "ig-2" })));
+    expect(decodeGraphReplies(encoded)).toEqual({ "555_1": "cmt-2", media1: "ig-2" });
+    expect(encodeGraphReplies({})).toBe("done");
+    expect(decodeGraphReplies("done")).toBeNull();
+    expect(
+      nextGraphRepliesCursor({
+        stored: "done",
+        nestedAfters: { "555_1": "cmt-2" },
+        fetchedNextAfters: {},
+        fetchedIds: [],
+      }),
+    ).toBe("done");
+    const many: Record<string, string> = {};
+    for (let index = 0; index < GRAPH_REPLIES_FETCH_LIMIT + 5; index += 1) {
+      many[`id${String(index).padStart(2, "0")}`] = `after-${index}`;
+    }
+    expect(Object.keys(decodeGraphReplies(encodeGraphReplies(many)) ?? {})).toHaveLength(
+      GRAPH_REPLIES_FETCH_LIMIT,
+    );
+  });
+});
+
+describe("PHASE 44 Graph nested comment after paging", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("walks the next official Facebook feed after cursor and keeps older comments", async () => {
+  it("walks the next official Facebook comment after cursor and keeps older comments", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -22,35 +53,30 @@ describe("PHASE 43 Graph feed and media after paging", () => {
       if (target.includes("/555/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/feed`);
-      if (target.includes("after=feed-2")) {
+      if (target.includes("/555_1/comments")) {
+        expect(target).toContain("after=cmt-2");
+        expect(target).not.toContain("paging.next");
         return new Response(
           JSON.stringify({
             data: [
               {
-                id: "555_old",
-                comments: {
-                  data: [
-                    {
-                      id: "old-c",
-                      message: "older post comment",
-                      from: { id: "800", name: "Commenter" },
-                      created_time: "2026-08-20T09:00:00+0000",
-                    },
-                  ],
-                },
+                id: "old-c",
+                message: "older nested comment",
+                from: { id: "800", name: "Commenter" },
+                created_time: "2026-08-20T09:00:00+0000",
               },
             ],
           }),
           { status: 200 },
         );
       }
+      expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/feed`);
       expect(target).not.toContain("after=");
       return new Response(
         JSON.stringify({
           data: [
             {
-              id: "555_new",
+              id: "555_1",
               comments: {
                 data: [
                   {
@@ -60,10 +86,10 @@ describe("PHASE 43 Graph feed and media after paging", () => {
                     created_time: "2026-08-21T12:00:00+0000",
                   },
                 ],
+                paging: { cursors: { after: "cmt-2" } },
               },
             },
           ],
-          paging: { cursors: { after: "feed-2" } },
         }),
         { status: 200 },
       );
@@ -76,8 +102,9 @@ describe("PHASE 43 Graph feed and media after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-c"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|posts:${encodeGraphAfter("feed-2")}|replies:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|posts:done|replies:${encodeGraphReplies({ "555_1": "cmt-2" })}|threads:done`,
     );
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(0);
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
@@ -85,20 +112,22 @@ describe("PHASE 43 Graph feed and media after paging", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-c"]);
-    expect(second.cursor).toBe("comments:2026-08-21T12:00:00+0000|posts:done|replies:done|threads:done");
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/feed"))).toHaveLength(3);
+    expect(second.cursor).toBe(
+      "comments:2026-08-21T12:00:00+0000|posts:done|replies:done|threads:done",
+    );
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(1);
   });
 
-  it("skips Instagram media after paging once posts:done is stored", async () => {
+  it("skips Instagram comment after paging once replies:done is stored", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.includes("/ig-1/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      expect(target).toContain(`${INSTAGRAM_GRAPH_ORIGIN}/ig-1/media`);
-      if (target.includes("after=")) {
-        throw new Error(`unexpected media after ${target}`);
+      if (target.includes("/media-1/comments")) {
+        throw new Error(`unexpected comment after ${target}`);
       }
+      expect(target).toContain(`${INSTAGRAM_GRAPH_ORIGIN}/ig-1/media`);
       return new Response(
         JSON.stringify({
           data: [
@@ -113,6 +142,7 @@ describe("PHASE 43 Graph feed and media after paging", () => {
                     timestamp: "2026-08-21T10:00:00+0000",
                   },
                 ],
+                paging: { cursors: { after: "ig-cmt-2" } },
               },
             },
           ],
@@ -128,10 +158,12 @@ describe("PHASE 43 Graph feed and media after paging", () => {
     }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:2026-08-21T08:00:00+0000|posts:done|threads:done",
+      cursor: "comments:2026-08-21T08:00:00+0000|posts:done|replies:done|threads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-c"]);
-    expect(result.cursor).toBe("comments:2026-08-21T10:00:00+0000|posts:done|replies:done|threads:done");
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/ig-1/media"))).toHaveLength(1);
+    expect(result.cursor).toBe(
+      "comments:2026-08-21T10:00:00+0000|posts:done|replies:done|threads:done",
+    );
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/media-1/comments"))).toHaveLength(0);
   });
 });

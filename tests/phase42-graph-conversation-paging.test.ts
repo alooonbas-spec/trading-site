@@ -102,7 +102,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-m"]);
     expect(first.cursor).toBe(
-      `messages:2026-08-21T12:00:00+0000|posts:done|threads:${encodeGraphAfter("page-2")}`,
+      `messages:2026-08-21T12:00:00+0000|posts:done|replies:done|threads:${encodeGraphAfter("page-2")}`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -111,7 +111,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-thread-m"]);
-    expect(second.cursor).toBe("messages:2026-08-21T12:00:00+0000|posts:done|threads:done");
+    expect(second.cursor).toBe("messages:2026-08-21T12:00:00+0000|posts:done|replies:done|threads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/conversations")),
     ).toHaveLength(3);
@@ -159,7 +159,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
       cursor: "messages:2026-08-21T08:00:00+0000|threads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-m"]);
-    expect(result.cursor).toBe("messages:2026-08-21T09:00:00+0000|posts:done|threads:done");
+    expect(result.cursor).toBe("messages:2026-08-21T09:00:00+0000|posts:done|replies:done|threads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes("/ig-1/conversations")),
     ).toHaveLength(1);
