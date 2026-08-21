@@ -239,6 +239,10 @@ Campaign compose, inbox attach, and lead merge no longer call unbounded `listLea
 
 Campaigns, Posts, and Monitoring index pages filter by their own status machines. Monitoring can also filter by stored rule platform (identity, not a business-logic switch). Filter GET forms omit `after` so a new filter starts from the newest keyset page. Filters do not rewrite `LeadStatus` or `do_not_contact`.
 
+## Social account index (PHASE 33)
+
+The Social Accounts page paginates connected-account cards with the same `created_at` keyset and filters by stored platform identity and `SocialAccountStatus`. Group create still uses unbounded `listSocialAccounts` so operators can assign any account. Tokens stay server-side. Filtering does not rewrite `LeadStatus` or `do_not_contact`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

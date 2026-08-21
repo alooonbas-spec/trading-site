@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 32: Campaigns, Posts, and Monitoring indexes filter by status (and monitoring platform identity). Filter forms omit after. No new SQL.
+PHASE 33: Social Accounts index uses created_at keyset pagination with platform and status filters. Group/compose pickers keep unbounded `listSocialAccounts`. No new SQL.

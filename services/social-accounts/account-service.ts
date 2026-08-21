@@ -3,6 +3,14 @@ import { requireProfile } from "@/lib/auth/session";
 import { assertCanManageWorkspace, canManageAccounts } from "@/lib/auth/permissions";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { AuthenticationError, PermissionError, SocialAccountUnavailableError, UnsupportedActionError, ValidationError, errorMessage } from "@/lib/errors";
+import {
+  DEFAULT_PAGE_SIZE,
+  keysetOrFilter,
+  nextKeysetCursor,
+  parseKeysetCursor,
+  splitKeysetRows,
+  type KeysetPage,
+} from "@/lib/pagination/keyset";
 import { logger } from "@/lib/logger";
 import { decryptSecret, getTokenEncryptionKey } from "@/lib/crypto/token-encryption";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
@@ -18,6 +26,7 @@ import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import type { SocialAccountHealth, SocialAccountPublic } from "@/types/social-account";
 import type { SocialPlatform } from "@/types/social";
 import { SOCIAL_PLATFORMS } from "@/types/social";
+import type { SocialAccountStatus } from "@/types/status";
 import { isPublishDestinationKey } from "@/lib/social/publish-destination";
 import { enqueueInboxJob } from "@/services/jobs/enqueue-service";
 import { countJobsByAccount } from "@/services/jobs/worker-service";
@@ -39,6 +48,46 @@ export async function listSocialAccounts(workspaceId: string): Promise<SocialAcc
   }
 
   return (data ?? []).map(toPublicSocialAccount);
+}
+
+const SOCIAL_ACCOUNT_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+
+export async function listSocialAccountsPage(input: {
+  workspaceId: string;
+  after?: string;
+  platform?: SocialPlatform;
+  status?: SocialAccountStatus;
+}): Promise<KeysetPage<SocialAccountPublic>> {
+  await requireWorkspaceContext(input.workspaceId);
+  const supabase = await createClient();
+  const cursor = parseKeysetCursor(input.after);
+  let request = supabase
+    .from("social_accounts")
+    .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
+    .eq("workspace_id", input.workspaceId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(SOCIAL_ACCOUNT_PAGE_SIZE + 1);
+  if (input.platform) {
+    request = request.eq("platform", input.platform);
+  }
+  if (input.status) {
+    request = request.eq("status", input.status);
+  }
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  const { page, hasMore } = splitKeysetRows(data ?? [], SOCIAL_ACCOUNT_PAGE_SIZE);
+  return {
+    items: page.map(toPublicSocialAccount),
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }
 
 export async function listSocialAccountsByIds(
@@ -431,6 +480,26 @@ export async function disconnectSocialAccount(input: {
 
 export async function listSocialAccountHealth(workspaceId: string): Promise<SocialAccountHealth[]> {
   const accounts = await listSocialAccounts(workspaceId);
+  return attachSocialAccountHealth(workspaceId, accounts);
+}
+
+export async function listSocialAccountHealthPage(input: {
+  workspaceId: string;
+  after?: string;
+  platform?: SocialPlatform;
+  status?: SocialAccountStatus;
+}): Promise<KeysetPage<SocialAccountHealth>> {
+  const page = await listSocialAccountsPage(input);
+  return {
+    items: await attachSocialAccountHealth(input.workspaceId, page.items),
+    nextCursor: page.nextCursor,
+  };
+}
+
+async function attachSocialAccountHealth(
+  workspaceId: string,
+  accounts: SocialAccountPublic[],
+): Promise<SocialAccountHealth[]> {
   const supabase = await createClient();
   const ids = accounts.map((account) => account.id);
   const activityByAccount = new Map<string, { action: string; created_at: string }>();
@@ -454,9 +523,9 @@ export async function listSocialAccountHealth(workspaceId: string): Promise<Soci
     }
   }
 
-    const queueCounts = await countJobsByAccount(workspaceId, ids);
+  const queueCounts = await countJobsByAccount(workspaceId, ids);
 
-    return accounts.map((account) => {
+  return accounts.map((account) => {
     const last = activityByAccount.get(account.id);
     return {
       account,
