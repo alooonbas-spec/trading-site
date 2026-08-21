@@ -45,6 +45,8 @@ describe("VK community conversation offset cursor", () => {
       historyPage: "done",
       conversations: true,
       conversationsPage: 2,
+      wall: false,
+      wallPage: 0,
     });
     expect(parseVkInboxCursor("comments:1|conversations:done|history:done|messages:8")).toEqual({
       comments: "1",
@@ -53,6 +55,8 @@ describe("VK community conversation offset cursor", () => {
       historyPage: "done",
       conversations: true,
       conversationsPage: "done",
+      wall: false,
+      wallPage: 0,
     });
   });
 });
@@ -128,7 +132,7 @@ describe("PHASE 39 VK community conversation offset", () => {
       cursor: "comments:1710000000|conversations:1|history:done|messages:200",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["201", "50"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:2|history:done|messages:201");
+    expect(result.cursor).toBe("comments:1710000000|conversations:2|history:done|messages:201|wall:1");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getConversations")),
     ).toHaveLength(2);
@@ -196,7 +200,7 @@ describe("PHASE 39 VK community conversation offset", () => {
       cursor: "comments:1710000000|conversations:1|history:done|messages:200",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["201", "50"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:done|history:done|messages:201");
+    expect(result.cursor).toBe("comments:1710000000|conversations:done|history:done|messages:201|wall:1");
   });
 
   it("stops conversation offset when the older window is short and skips offset after done", async () => {
@@ -242,7 +246,7 @@ describe("PHASE 39 VK community conversation offset", () => {
       cursor: "comments:1710000000|conversations:done|history:done|messages:80",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["81"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:done|history:done|messages:81");
+    expect(result.cursor).toBe("comments:1710000000|conversations:done|history:done|messages:81|wall:1");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getConversations")),
     ).toHaveLength(1);

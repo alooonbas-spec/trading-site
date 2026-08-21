@@ -72,6 +72,8 @@ describe("PHASE 23 VK community conversations", () => {
       historyPage: 0,
       conversations: false,
       conversationsPage: 0,
+      wall: false,
+      wallPage: 0,
     });
     expect(parseVkInboxCursor("comments:1710000000|messages:8")).toEqual({
       comments: "1710000000",
@@ -80,6 +82,8 @@ describe("PHASE 23 VK community conversations", () => {
       historyPage: 0,
       conversations: false,
       conversationsPage: 0,
+      wall: false,
+      wallPage: 0,
     });
     expect(parseVkInboxCursor("comments:1710000000|history:1|messages:8")).toEqual({
       comments: "1710000000",
@@ -88,6 +92,8 @@ describe("PHASE 23 VK community conversations", () => {
       historyPage: 1,
       conversations: false,
       conversationsPage: 0,
+      wall: false,
+      wallPage: 0,
     });
     expect(vkCommunityPeerId({ externalProfileId: "42", username: "@lead" })).toBe("42");
     expect(vkCommunityPeerId({ externalProfileId: "lead", username: "@lead" })).toBeNull();
@@ -199,7 +205,7 @@ describe("PHASE 23 VK community adapter", () => {
       cursor: "comments:1710000000|messages:8",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["-12345:20:2", "11", "8", "9"]);
-    expect(result.cursor).toBe("comments:1710000099|conversations:1|history:1|messages:11");
+    expect(result.cursor).toBe("comments:1710000099|conversations:1|history:1|messages:11|wall:1");
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getHistory"))).toHaveLength(1);
   });
 

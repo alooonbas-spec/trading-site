@@ -36,6 +36,8 @@ describe("VK community history offset cursor", () => {
       historyPage: 2,
       conversations: false,
       conversationsPage: 0,
+      wall: false,
+      wallPage: 0,
     });
     expect(parseVkInboxCursor("comments:1|history:done|messages:8")).toEqual({
       comments: "1",
@@ -44,6 +46,8 @@ describe("VK community history offset cursor", () => {
       historyPage: "done",
       conversations: false,
       conversationsPage: 0,
+      wall: false,
+      wallPage: 0,
     });
   });
 });
@@ -105,7 +109,7 @@ describe("PHASE 36 VK community history offset", () => {
     expect(result.messages.map((item) => item.externalId)).toEqual(
       historyItems(70, 50).map((item) => String(item.id)),
     );
-    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:2|messages:120");
+    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:2|messages:120|wall:1");
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getHistory"))).toHaveLength(2);
   });
 
@@ -155,7 +159,7 @@ describe("PHASE 36 VK community history offset", () => {
       cursor: "comments:1710000000|history:done|messages:80",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["81"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:done|messages:81");
+    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:done|messages:81|wall:1");
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getHistory"))).toHaveLength(1);
   });
 });

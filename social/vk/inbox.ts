@@ -85,9 +85,15 @@ const historySchema = z.object({
 
 const VK_COMMUNITY_HISTORY_COUNT = "50";
 const VK_COMMUNITY_CONVERSATION_COUNT = "20";
+const VK_WALL_COUNT = "10";
+const VK_WALL_COMMENT_COUNT = "50";
 const VK_CHAT_PEER_FLOOR = 2_000_000_000;
 
 type VkOffsetPage = number | "done";
+type VkWallPost = {
+  id: number;
+  owner_id?: number;
+};
 
 export function parseVkInboxCursor(cursor?: string | null): {
   comments: string | null;
@@ -96,6 +102,8 @@ export function parseVkInboxCursor(cursor?: string | null): {
   historyPage: VkOffsetPage;
   conversations: boolean;
   conversationsPage: VkOffsetPage;
+  wall: boolean;
+  wallPage: VkOffsetPage;
 } {
   const value = cursor?.trim();
   if (!value) {
@@ -105,6 +113,7 @@ export function parseVkInboxCursor(cursor?: string | null): {
     const named = parseNamedInboxCursor(value);
     const history = vkOffsetCursor(named.history);
     const conversations = vkOffsetCursor(named.conversations);
+    const wall = vkOffsetCursor(named.wall);
     return {
       comments: named.comments ?? null,
       messages: named.messages ?? null,
@@ -112,6 +121,8 @@ export function parseVkInboxCursor(cursor?: string | null): {
       historyPage: history.page,
       conversations: conversations.started,
       conversationsPage: conversations.page,
+      wall: wall.started,
+      wallPage: wall.page,
     };
   }
   if (/^\d{10}$/.test(value)) {
@@ -127,6 +138,8 @@ function emptyVkInboxCursor(): {
   historyPage: VkOffsetPage;
   conversations: boolean;
   conversationsPage: VkOffsetPage;
+  wall: boolean;
+  wallPage: VkOffsetPage;
 } {
   return {
     comments: null,
@@ -135,6 +148,8 @@ function emptyVkInboxCursor(): {
     historyPage: 0,
     conversations: false,
     conversationsPage: 0,
+    wall: false,
+    wallPage: 0,
   };
 }
 
@@ -222,8 +237,8 @@ async function collectVkCommunityInbox(
     cursor.conversationsPage !== 0 && cursor.conversationsPage !== "done"
       ? cursor.conversationsPage * Number(VK_COMMUNITY_CONVERSATION_COUNT)
       : null;
-  const [comments, latestPeers, olderPeers] = await Promise.all([
-    collectVkWallComments(accessToken, metadata),
+  const [wallComments, latestPeers, olderPeers] = await Promise.all([
+    collectVkWallComments(accessToken, metadata, cursor.wallPage),
     listVkCommunityUserPeers(accessToken, groupId, 0),
     conversationOffset === null
       ? Promise.resolve(emptyVkCommunityPeers(true))
@@ -257,14 +272,16 @@ async function collectVkCommunityInbox(
   }
   return {
     messages: [
-      ...filterMessagesAfterCursor(comments, cursor.comments),
+      ...filterMessagesAfterCursor(wallComments.latest, cursor.comments),
+      ...wallComments.older,
       ...uniqueInboxMessages([...inboundLatest, ...olderMessages]),
     ],
     cursor: serializeNamedInboxCursor({
-      comments: laterDigitId(cursor.comments, newestVkCommentUnix(comments)) ?? "",
+      comments: laterDigitId(cursor.comments, newestVkCommentUnix([...wallComments.latest, ...wallComments.older])) ?? "",
       conversations: nextVkOffsetCursor(cursor.conversationsPage, olderPeers.reachedEnd),
       history: nextVkOffsetCursor(cursor.historyPage, reachedEnd),
       messages: laterDigitId(cursor.messages, newestMessageId) ?? "",
+      wall: nextVkOffsetCursor(cursor.wallPage, wallComments.reachedEnd),
     }),
   };
 }
@@ -274,36 +291,83 @@ async function collectVkWallCommentInbox(
   metadata: Record<string, unknown> | undefined,
   cursor?: string | null,
 ): Promise<InboxResult> {
-  const comments = await collectVkWallComments(accessToken, metadata);
-  const watermark = parseVkInboxCursor(cursor).comments;
+  const parsed = parseVkInboxCursor(cursor);
+  const wallComments = await collectVkWallComments(accessToken, metadata, parsed.wallPage);
   return {
-    messages: filterMessagesAfterCursor(comments, watermark),
-    cursor: laterDigitId(watermark, newestVkCommentUnix(comments)),
+    messages: [
+      ...filterMessagesAfterCursor(wallComments.latest, parsed.comments),
+      ...wallComments.older,
+    ],
+    cursor: serializeNamedInboxCursor({
+      comments: laterDigitId(parsed.comments, newestVkCommentUnix([...wallComments.latest, ...wallComments.older])) ?? "",
+      wall: nextVkOffsetCursor(parsed.wallPage, wallComments.reachedEnd),
+    }),
   };
 }
 
 async function collectVkWallComments(
   accessToken: string,
   metadata: Record<string, unknown> | undefined,
-): Promise<InboxMessage[]> {
+  wallPage: VkOffsetPage,
+): Promise<{ latest: InboxMessage[]; older: InboxMessage[]; reachedEnd: boolean }> {
+  const wallOffset =
+    wallPage !== 0 && wallPage !== "done" ? wallPage * Number(VK_WALL_COUNT) : null;
+  const [latestPosts, olderPosts] = await Promise.all([
+    listVkWallPosts(accessToken, metadata, 0),
+    wallOffset === null
+      ? Promise.resolve(emptyVkWallPosts(true))
+      : listVkWallPosts(accessToken, metadata, wallOffset),
+  ]);
+  const [latest, older] = await Promise.all([
+    collectVkCommentsForPosts(accessToken, metadata, latestPosts.posts),
+    collectVkCommentsForPosts(accessToken, metadata, olderPosts.posts),
+  ]);
+  return { latest, older, reachedEnd: olderPosts.reachedEnd };
+}
+
+function emptyVkWallPosts(reachedEnd: boolean): { posts: VkWallPost[]; reachedEnd: boolean } {
+  return { posts: [], reachedEnd };
+}
+
+async function listVkWallPosts(
+  accessToken: string,
+  metadata: Record<string, unknown> | undefined,
+  offset: number,
+): Promise<{ posts: VkWallPost[]; reachedEnd: boolean }> {
   const target = vkWallTarget(metadata);
-  const wallPayload = await vkCall("wall.get", {
+  const pageSize = Number(VK_WALL_COUNT);
+  const params: Record<string, string> = {
     access_token: accessToken,
-    count: "10",
+    count: VK_WALL_COUNT,
     filter: "owner",
-    ...(target.ownerId ? { owner_id: target.ownerId } : {}),
-  });
+  };
+  if (target.ownerId) {
+    params.owner_id = target.ownerId;
+  }
+  if (offset > 0) {
+    params.offset = String(offset);
+  }
+  const wallPayload = await vkCall("wall.get", params);
   const wall = wallGetSchema.safeParse(wallPayload);
   if (!wall.success) {
     throw new SocialError("VK wall.get returned an unexpected payload");
   }
+  const posts = wall.data.items ?? [];
+  return { posts, reachedEnd: posts.length < pageSize };
+}
 
+async function collectVkCommentsForPosts(
+  accessToken: string,
+  metadata: Record<string, unknown> | undefined,
+  posts: VkWallPost[],
+): Promise<InboxMessage[]> {
+  const target = vkWallTarget(metadata);
   const messages: InboxMessage[] = [];
-  for (const post of wall.data.items ?? []) {
+  for (const post of posts) {
     const commentsPayload = await vkCall("wall.getComments", {
       access_token: accessToken,
       post_id: String(post.id),
-      count: "50",
+      count: VK_WALL_COMMENT_COUNT,
       sort: "desc",
       ...(target.ownerId ? { owner_id: target.ownerId } : {}),
     });

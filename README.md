@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 39: Official VK community `messages.getConversations` offset walks older 20-conversation windows after `conversations:1`. Unbounded history offset is unchanged. No new SQL.
+PHASE 40: Official VK `wall.get` offset walks older 10-post windows after `wall:1`. Each post still reads the latest 50 comments. No new SQL.

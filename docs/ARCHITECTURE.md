@@ -193,7 +193,7 @@ Safety policy:
 - Each adapter owns an opaque `inboxCursor`. The worker stores the later of the previous metadata cursor and `collectInbox().cursor` via `laterUpdateStreamCursor`. It still does not branch on `platform ===`.
 - X mentions keep official `since_id`. Direct Messages have no `since_id`, so the adapter skips event ids at or before a `dms` watermark. Legacy numeric cursors stay the mentions watermark.
 - Facebook and Instagram keep independent `comments` and `messages` timestamps so a newer DM cannot hide a later comment (or the reverse). Graph `since` is not applied to Page feed: that would drop comments on older posts.
-- VK wall comments use a unix `date` watermark. `wall.get` / `wall.getComments` still read the recent window; older comments in that window are skipped. Unique constraints remain the safety net if two events share a timestamp.
+- VK wall comments use a unix `date` watermark on the latest `wall.get` page. PHASE 40 walks older `wall.get` offset windows; comments on newly discovered older posts are not dropped by that watermark on first sight. Unique constraints remain the safety net if two events share a timestamp.
 
 ## Inbox operations (PHASE 22)
 
@@ -266,6 +266,10 @@ Campaign accounts (`accounts`) and post targets (`targets`) paginate independent
 ## VK community conversation offset (PHASE 39)
 
 After the first 20-conversation window (`conversations:1`), each later inbox poll calls official `messages.getConversations` with `offset = page * 20`. A full 20-item raw page (including chats) advances `conversations:2`, `conversations:3`, and so on. A short page stores `conversations:done` and later polls only list the latest 20 conversations. Newly discovered older 1:1 peers still get `messages.getHistory` (latest 50 plus the current history offset window). Their inbound Direct Messages are not dropped by the messages watermark on first sight. Chat peers stay skipped. User OAuth inbox is still wall comments only. This is still not a full archive in one poll: each poll walks one extra 20-conversation page, and history remains 50-message windows.
+
+## VK wall offset (PHASE 40)
+
+After the first 10-post window (`wall:1`), each later inbox poll calls official `wall.get` with `offset = page * 10` (`filter=owner`, count 10). A full 10-item page advances `wall:2`, `wall:3`, and so on. A short page stores `wall:done` and later polls only read the latest 10 posts. Newly discovered older posts still get `wall.getComments` (latest 50, `sort=desc`). Their comments are not dropped by the unix comments watermark on first sight. User OAuth and community accounts share this wall walker. Each post still only reads the latest 50 comments; this is not a full wall archive in one poll.
 
 ## Social adapters (PHASE 2)
 

@@ -283,7 +283,7 @@ describe("PHASE 21 collector watermarks", () => {
       cursor: "1710000000",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["10:20:2"]);
-    expect(result.cursor).toBe("1710000099");
+    expect(result.cursor).toBe("comments:1710000099|wall:1");
   });
 });
 
