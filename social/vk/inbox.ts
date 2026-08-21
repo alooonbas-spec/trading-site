@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SocialError, ValidationError } from "@/lib/errors";
+import { filterMessagesAfterCursor, laterDigitId } from "@/lib/inbox/cursor";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { vkCall } from "@/social/vk/api";
 import { vkWallTarget } from "@/social/vk/publish";
@@ -76,10 +77,24 @@ export async function collectVkInbox(
     }
   }
 
+  const cursor = input.cursor && /^\d{10}$/.test(input.cursor) ? input.cursor : null;
   return {
-    messages,
-    cursor: input.cursor ?? null,
+    messages: filterMessagesAfterCursor(messages, cursor),
+    cursor: laterDigitId(cursor, newestVkCommentUnix(messages)),
   };
+}
+
+function newestVkCommentUnix(messages: InboxMessage[]): string | null {
+  return messages.reduce<string | null>((newest, message) => {
+    if (!message.receivedAt) {
+      return newest;
+    }
+    const seconds = String(Math.floor(new Date(message.receivedAt).getTime() / 1000));
+    if (!/^\d{10}$/.test(seconds)) {
+      return newest;
+    }
+    return laterDigitId(newest, seconds);
+  }, null);
 }
 
 const createCommentSchema = z.object({

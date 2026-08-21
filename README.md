@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 20: official inbox replies from Inbox (DM, comment, and X mention) through adapter `replyToInbox()`.
+PHASE 21: inbox cursors for X DMs, Facebook, Instagram, and VK so polls skip already-seen events.

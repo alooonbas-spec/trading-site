@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { AuthenticationError, SocialError, ValidationError } from "@/lib/errors";
+import {
+  isDigitIdAfter,
+  laterDigitId,
+  parseNamedInboxCursor,
+  serializeNamedInboxCursor,
+} from "@/lib/inbox/cursor";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 
@@ -10,6 +16,7 @@ const mentionsSchema = z.object({
         id: z.string().min(1),
         text: z.string(),
         author_id: z.string().optional(),
+        created_at: z.string().optional(),
       }),
     )
     .optional(),
@@ -65,7 +72,37 @@ const meSchema = z.object({
   }),
 });
 
-export function parseXDirectMessageEvents(payload: unknown, ownUserId: string): InboxMessage[] {
+export function parseXInboxCursor(cursor?: string | null): { mentions: string | null; dms: string | null } {
+  const value = cursor?.trim() || null;
+  if (!value) {
+    return { mentions: null, dms: null };
+  }
+  if (/^\d+$/.test(value)) {
+    return { mentions: value, dms: null };
+  }
+  const named = parseNamedInboxCursor(value);
+  return {
+    mentions: named.mentions ?? null,
+    dms: named.dms ?? null,
+  };
+}
+
+export function newestXDirectMessageEventId(payload: unknown): string | null {
+  const parsed = dmEventsSchema.safeParse(payload);
+  if (!parsed.success) {
+    return null;
+  }
+  return (parsed.data.data ?? []).reduce<string | null>(
+    (newest, event) => laterDigitId(newest, event.id),
+    null,
+  );
+}
+
+export function parseXDirectMessageEvents(
+  payload: unknown,
+  ownUserId: string,
+  sinceEventId?: string | null,
+): InboxMessage[] {
   const parsed = dmEventsSchema.safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("X dm_events returned an unexpected payload");
@@ -75,6 +112,9 @@ export function parseXDirectMessageEvents(payload: unknown, ownUserId: string): 
   const messages: InboxMessage[] = [];
   for (const event of parsed.data.data ?? []) {
     if (!event.sender_id || event.sender_id === ownUserId) {
+      continue;
+    }
+    if (!isDigitIdAfter(event.id, sinceEventId)) {
       continue;
     }
     const text = event.text?.trim();
@@ -103,13 +143,14 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
     throw new AuthenticationError("X users/me failed");
   }
 
+  const cursor = parseXInboxCursor(input.cursor);
   const mentionsUrl = new URL(`https://api.x.com/2/users/${me.data.data.id}/mentions`);
   mentionsUrl.searchParams.set("max_results", "10");
   mentionsUrl.searchParams.set("tweet.fields", "author_id,created_at");
   mentionsUrl.searchParams.set("expansions", "author_id");
   mentionsUrl.searchParams.set("user.fields", "username");
-  if (input.cursor && /^\d+$/.test(input.cursor)) {
-    mentionsUrl.searchParams.set("since_id", input.cursor);
+  if (cursor.mentions && /^\d+$/.test(cursor.mentions)) {
+    mentionsUrl.searchParams.set("since_id", cursor.mentions);
   }
 
   const dmUrl = new URL("https://api.x.com/2/dm_events");
@@ -145,16 +186,21 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
       url: author?.username
         ? `https://x.com/${author.username}/status/${tweet.id}`
         : `https://x.com/i/web/status/${tweet.id}`,
-      receivedAt: new Date().toISOString(),
+      receivedAt: tweet.created_at ?? new Date().toISOString(),
       replyKind: "mention",
     });
   }
 
-  const dmMessages = parseXDirectMessageEvents(await readJson<unknown>(dmResponse), me.data.data.id);
+  const dmPayload = await readJson<unknown>(dmResponse);
+  const dmMessages = parseXDirectMessageEvents(dmPayload, me.data.data.id, cursor.dms);
+  const newestDmId = newestXDirectMessageEventId(dmPayload);
 
   return {
     messages: [...mentionMessages, ...dmMessages],
-    cursor: parsed.data.meta?.newest_id ?? input.cursor ?? null,
+    cursor: serializeNamedInboxCursor({
+      mentions: laterDigitId(cursor.mentions, parsed.data.meta?.newest_id) ?? "",
+      dms: laterDigitId(cursor.dms, newestDmId) ?? "",
+    }),
   };
 }
 

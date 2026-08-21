@@ -1,3 +1,11 @@
+import {
+  isNamedInboxCursor,
+  laterDigitId,
+  laterNamedInboxCursor,
+  laterTimestampString,
+  parseInboxTimestampMs,
+} from "@/lib/inbox/cursor";
+
 export function updateStreamCursorFromMetadata(metadata?: Record<string, unknown>): string | null {
   const shared = metadata?.updateStreamCursor;
   if (typeof shared === "string" && shared.trim()) {
@@ -20,7 +28,15 @@ export function laterUpdateStreamCursor(left: string | null, right: string | nul
     return left;
   }
   if (/^-?\d+$/.test(left) && /^-?\d+$/.test(right)) {
-    return Number(right) > Number(left) ? right : left;
+    return laterDigitId(left, right);
+  }
+  if (isNamedInboxCursor(left) && isNamedInboxCursor(right)) {
+    return laterNamedInboxCursor(left, right);
+  }
+  const leftMs = parseInboxTimestampMs(left);
+  const rightMs = parseInboxTimestampMs(right);
+  if (leftMs !== null && rightMs !== null) {
+    return laterTimestampString(left, right);
   }
   return right;
 }

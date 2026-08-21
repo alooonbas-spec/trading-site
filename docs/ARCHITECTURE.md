@@ -187,6 +187,14 @@ Safety policy:
 - Matched outbound replies check `leads.do_not_contact` and record interaction type `MESSAGE`. Unmatched inbound replies are allowed (the person already wrote in) and do not create leads. `REPLIED` and `BLOCKED` relationship statuses are not overwritten; other statuses may move to `MESSAGE_SENT`.
 - `inboxReply` is true on Telegram, X, Facebook, Instagram, and VK. Capability-off adapters still throw `UnsupportedActionError`.
 
+## Inbox cursors (PHASE 21)
+
+- Facebook, Instagram, and VK inbox jobs used to return the previous cursor unchanged, so every poll re-fetched the same window and relied only on the unique `(workspace, account, external_id)` constraint.
+- Each adapter owns an opaque `inboxCursor`. The worker stores the later of the previous metadata cursor and `collectInbox().cursor` via `laterUpdateStreamCursor`. It still does not branch on `platform ===`.
+- X mentions keep official `since_id`. Direct Messages have no `since_id`, so the adapter skips event ids at or before a `dms` watermark. Legacy numeric cursors stay the mentions watermark.
+- Facebook and Instagram keep independent `comments` and `messages` timestamps so a newer DM cannot hide a later comment (or the reverse). Graph `since` is not applied to Page feed: that would drop comments on older posts.
+- VK wall comments use a unix `date` watermark. `wall.get` / `wall.getComments` still read the recent window; older comments in that window are skipped. Unique constraints remain the safety net if two events share a timestamp.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

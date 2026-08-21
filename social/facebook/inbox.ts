@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { SocialError, ValidationError } from "@/lib/errors";
+import {
+  filterMessagesAfterCursor,
+  newestReceivedAt,
+  serializeNamedInboxCursor,
+  parseNamedInboxCursor,
+  laterTimestampString,
+} from "@/lib/inbox/cursor";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { FACEBOOK_GRAPH_ORIGIN } from "@/social/facebook/graph";
@@ -149,9 +156,16 @@ export async function collectFacebookInbox(
     collectFacebookComments(page),
     collectFacebookMessenger(page),
   ]);
+  const cursor = parseNamedInboxCursor(input.cursor);
   return {
-    messages: [...comments, ...directMessages],
-    cursor: input.cursor ?? null,
+    messages: [
+      ...filterMessagesAfterCursor(comments, cursor.comments),
+      ...filterMessagesAfterCursor(directMessages, cursor.messages),
+    ],
+    cursor: serializeNamedInboxCursor({
+      comments: laterTimestampString(cursor.comments, newestReceivedAt(comments)) ?? "",
+      messages: laterTimestampString(cursor.messages, newestReceivedAt(directMessages)) ?? "",
+    }),
   };
 }
 

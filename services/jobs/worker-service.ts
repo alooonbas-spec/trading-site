@@ -581,11 +581,11 @@ async function processInboxJob(job: Job, userId: string | null): Promise<void> {
 
     await takeAccountAdapterRate(socialAccountId, prepared.adapter);
 
-    const cursor = updateStreamCursorFromMetadata(
+    const currentMetadata =
       account.metadata && typeof account.metadata === "object" && !Array.isArray(account.metadata)
         ? (account.metadata as Record<string, unknown>)
-        : {},
-    );
+        : {};
+    const cursor = updateStreamCursorFromMetadata(currentMetadata);
     const collected = await prepared.adapter.collectInbox({
       workspaceId: job.workspaceId,
       socialAccountId,
@@ -599,12 +599,8 @@ async function processInboxJob(job: Job, userId: string | null): Promise<void> {
       userId,
     });
 
-    const nextMetadata = {
-      ...(account.metadata && typeof account.metadata === "object" && !Array.isArray(account.metadata)
-        ? account.metadata
-        : {}),
-      ...(collected.cursor ? { inboxCursor: collected.cursor } : {}),
-    };
+    const nextCursor = laterUpdateStreamCursor(cursor, collected.cursor ?? null);
+    const nextMetadata = nextCursor ? { ...currentMetadata, inboxCursor: nextCursor } : currentMetadata;
     const { error: metadataError } = await supabase
       .from("social_accounts")
       .update({ metadata: nextMetadata })

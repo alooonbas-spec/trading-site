@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { SocialError, ValidationError } from "@/lib/errors";
+import {
+  filterMessagesAfterCursor,
+  laterTimestampString,
+  newestReceivedAt,
+  parseNamedInboxCursor,
+  serializeNamedInboxCursor,
+} from "@/lib/inbox/cursor";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { INSTAGRAM_GRAPH_ORIGIN, resolveInstagramUserId } from "@/social/instagram/publish";
@@ -151,9 +158,16 @@ export async function collectInstagramInbox(
     collectInstagramComments(accessToken, userId),
     collectInstagramDirectMessages(accessToken, userId),
   ]);
+  const cursor = parseNamedInboxCursor(input.cursor);
   return {
-    messages: [...comments, ...directMessages],
-    cursor: input.cursor ?? null,
+    messages: [
+      ...filterMessagesAfterCursor(comments, cursor.comments),
+      ...filterMessagesAfterCursor(directMessages, cursor.messages),
+    ],
+    cursor: serializeNamedInboxCursor({
+      comments: laterTimestampString(cursor.comments, newestReceivedAt(comments)) ?? "",
+      messages: laterTimestampString(cursor.messages, newestReceivedAt(directMessages)) ?? "",
+    }),
   };
 }
 
