@@ -40,8 +40,8 @@ export function inboxEventToMessage(event: InboxIdentityFields & {
   };
 }
 
-export function inboxMessageMatchesProfile(
-  message: InboxIdentityFields,
+export function inboxMessageMatchesProfile<T extends InboxIdentityFields>(
+  message: T,
   profile: InboxIdentityFields,
 ): boolean {
   const known = new Set(
