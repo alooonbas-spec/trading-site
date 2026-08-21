@@ -15,6 +15,8 @@ import { InboxControls } from "@/components/inbox/inbox-controls";
 import { InboxEventMeta } from "@/components/inbox/inbox-event-meta";
 import { ReplyInboxForm } from "@/components/inbox/reply-inbox-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +43,7 @@ export default async function InboxPage({
     account?: string;
     platform?: string;
     kind?: string;
+    after?: string;
   }>;
 }) {
   const { workspaceId } = await params;
@@ -52,7 +55,7 @@ export default async function InboxPage({
   const socialAccountId = parseInboxAccountIdFilter(query.account);
   const platform = parseInboxPlatformFilter(query.platform);
   const replyKind = parseInboxReplyKindFilter(query.kind);
-  const [events, leads, accounts] = await Promise.all([
+  const [inboxPage, leads, accounts] = await Promise.all([
     listInboxEvents({
       workspaceId,
       match,
@@ -60,10 +63,20 @@ export default async function InboxPage({
       socialAccountId,
       platform,
       replyKind,
+      after: query.after,
     }),
     canMutate ? listLeads({ workspaceId }) : Promise.resolve([]),
     listSocialAccounts(workspaceId),
   ]);
+  const events = inboxPage.items;
+  const filterQuery = {
+    q: query.q,
+    match: match === "all" ? undefined : match,
+    account: socialAccountId,
+    platform,
+    kind: replyKind,
+  };
+  const inboxPath = `/w/${workspaceId}/inbox`;
 
   return (
     <div className="space-y-6">
@@ -145,8 +158,9 @@ export default async function InboxPage({
           <CardHeader>
             <CardTitle>Events</CardTitle>
             <CardDescription>
-              Showing {events.length} event{events.length === 1 ? "" : "s"}. Matching uses the receiving
-              account platform, not a platform switch in this page.
+              Showing {events.length} event{events.length === 1 ? "" : "s"} on this page. Matching uses
+              the receiving account platform, not a platform switch in this page. Older pages use a
+              created_at keyset, not OFFSET.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -188,6 +202,16 @@ export default async function InboxPage({
                 ))}
               </TableBody>
             </Table>
+            <div className="mt-4">
+              <ListPagination
+                newestHref={query.after ? searchHref(inboxPath, filterQuery) : null}
+                olderHref={
+                  inboxPage.nextCursor
+                    ? searchHref(inboxPath, { ...filterQuery, after: inboxPage.nextCursor })
+                    : null
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       )}

@@ -2,6 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { ValidationError } from "@/lib/errors";
 import { parseInboxMatchFilter } from "@/lib/inbox/filters";
+import {
+  DEFAULT_PAGE_SIZE,
+  keysetOrFilter,
+  nextKeysetCursor,
+  parseKeysetCursor,
+  splitKeysetRows,
+  type KeysetPage,
+} from "@/lib/pagination/keyset";
 import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import { LEAD_PUBLIC_COLUMNS } from "@/types/crm";
 import {
@@ -15,7 +23,7 @@ import type { SocialPlatform } from "@/types/social";
 import { toInboxEvent, type InboxEventRow } from "@/services/inbox/mapper";
 import { resolveInboxReplyKind } from "@/lib/inbox/reply-kind";
 
-const INBOX_PAGE_SIZE = 200;
+const INBOX_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export { parseInboxMatchFilter };
 
@@ -26,21 +34,26 @@ export async function listInboxEvents(input: {
   socialAccountId?: string;
   platform?: SocialPlatform;
   replyKind?: InboxReplyKind;
-}): Promise<InboxEventListItem[]> {
+  after?: string;
+}): Promise<KeysetPage<InboxEventListItem>> {
   await requireWorkspaceContext(input.workspaceId);
   const supabase = await createClient();
   const accountIds = await resolveInboxAccountIds(input.workspaceId, input.socialAccountId, input.platform);
   if (accountIds && accountIds.length === 0) {
-    return [];
+    return { items: [], nextCursor: null };
   }
 
+  const cursor = parseKeysetCursor(input.after);
   let request = supabase
     .from("inbox_events")
     .select(INBOX_EVENT_PUBLIC_COLUMNS)
     .eq("workspace_id", input.workspaceId)
-    .order("received_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(INBOX_PAGE_SIZE);
+    .order("id", { ascending: false })
+    .limit(INBOX_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
 
   if (accountIds) {
     request = request.in("social_account_id", accountIds);
@@ -65,7 +78,12 @@ export async function listInboxEvents(input: {
   }
 
   const rows = (data ?? []) as InboxEventRow[];
-  return hydrateInboxEvents(input.workspaceId, rows);
+  const { page, hasMore } = splitKeysetRows(rows, INBOX_PAGE_SIZE);
+  const items = await hydrateInboxEvents(input.workspaceId, page);
+  return {
+    items,
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }
 
 export async function listInboxEventsForLead(

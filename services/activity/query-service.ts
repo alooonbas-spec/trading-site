@@ -3,6 +3,14 @@ import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { ValidationError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import {
+  DEFAULT_PAGE_SIZE,
+  keysetOrFilter,
+  nextKeysetCursor,
+  parseKeysetCursor,
+  splitKeysetRows,
+  type KeysetPage,
+} from "@/lib/pagination/keyset";
+import {
   ACTIVITY_PUBLIC_COLUMNS,
   type ActivityAction,
   type ActivityEntityType,
@@ -11,7 +19,7 @@ import {
 import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import { SOCIAL_PLATFORMS, type SocialPlatform } from "@/types/social";
 
-const ACTIVITY_PAGE_SIZE = 200;
+const ACTIVITY_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export async function listWorkspaceActivity(input: {
   workspaceId: string;
@@ -19,15 +27,21 @@ export async function listWorkspaceActivity(input: {
   entityType?: ActivityEntityType;
   socialAccountId?: string;
   platform?: SocialPlatform;
-}): Promise<ActivityLogItem[]> {
+  after?: string;
+}): Promise<KeysetPage<ActivityLogItem>> {
   await requireWorkspaceContext(input.workspaceId);
   const supabase = await createClient();
+  const cursor = parseKeysetCursor(input.after);
   let request = supabase
     .from("activity_log")
     .select(ACTIVITY_PUBLIC_COLUMNS)
     .eq("workspace_id", input.workspaceId)
     .order("created_at", { ascending: false })
-    .limit(ACTIVITY_PAGE_SIZE);
+    .order("id", { ascending: false })
+    .limit(ACTIVITY_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
 
   if (input.action) {
     request = request.eq("action", input.action);
@@ -48,13 +62,14 @@ export async function listWorkspaceActivity(input: {
   }
 
   const rows = data ?? [];
-  if (rows.length === 0) {
-    return [];
+  const { page, hasMore } = splitKeysetRows(rows, ACTIVITY_PAGE_SIZE);
+  if (page.length === 0) {
+    return { items: [], nextCursor: null };
   }
 
-  const userIds = [...new Set(rows.map((row) => row.user_id).filter((id): id is string => id !== null))];
+  const userIds = [...new Set(page.map((row) => row.user_id).filter((id): id is string => id !== null))];
   const accountIds = [
-    ...new Set(rows.map((row) => row.social_account_id).filter((id): id is string => id !== null)),
+    ...new Set(page.map((row) => row.social_account_id).filter((id): id is string => id !== null)),
   ];
 
   const [{ data: profiles, error: profileError }, { data: accounts, error: accountError }] = await Promise.all([
@@ -92,7 +107,7 @@ export async function listWorkspaceActivity(input: {
     ]),
   );
 
-  return rows.map((row) => {
+  const items = page.map((row) => {
     const account = row.social_account_id ? accountsById.get(row.social_account_id) : undefined;
     const profile = row.user_id ? profilesById.get(row.user_id) : undefined;
     const metadata =
@@ -116,6 +131,10 @@ export async function listWorkspaceActivity(input: {
       createdAt: row.created_at,
     };
   });
+  return {
+    items,
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }
 
 function parseStoredPlatform(value: string | null): SocialPlatform | null {

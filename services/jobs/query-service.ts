@@ -2,6 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { ValidationError } from "@/lib/errors";
 import { canCancelJob, canRetryFailedJob } from "@/lib/jobs/status";
+import {
+  DEFAULT_PAGE_SIZE,
+  keysetOrFilter,
+  nextKeysetCursor,
+  parseKeysetCursor,
+  splitKeysetRows,
+  type KeysetPage,
+} from "@/lib/pagination/keyset";
 import { toJob } from "@/services/campaigns/mapper";
 import { CAMPAIGN_PUBLIC_COLUMNS, JOB_PUBLIC_COLUMNS, type JobListItem, type JobType } from "@/types/campaign";
 import { LEAD_PUBLIC_COLUMNS } from "@/types/crm";
@@ -11,22 +19,28 @@ import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import type { CampaignStatus, JobStatus, MonitoringRuleStatus, PostStatus, PostTargetStatus } from "@/types/status";
 import type { SocialPlatform } from "@/types/social";
 
-const JOB_PAGE_SIZE = 200;
+const JOB_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export async function listWorkspaceJobs(input: {
   workspaceId: string;
   type?: JobType;
   status?: JobStatus;
   socialAccountId?: string;
-}): Promise<JobListItem[]> {
+  after?: string;
+}): Promise<KeysetPage<JobListItem>> {
   await requireWorkspaceContext(input.workspaceId);
   const supabase = await createClient();
+  const cursor = parseKeysetCursor(input.after);
   let request = supabase
     .from("jobs")
     .select(JOB_PUBLIC_COLUMNS)
     .eq("workspace_id", input.workspaceId)
     .order("created_at", { ascending: false })
-    .limit(JOB_PAGE_SIZE);
+    .order("id", { ascending: false })
+    .limit(JOB_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
 
   if (input.type) {
     request = request.eq("type", input.type);
@@ -44,17 +58,18 @@ export async function listWorkspaceJobs(input: {
   }
 
   const rows = data ?? [];
-  if (rows.length === 0) {
-    return [];
+  const { page, hasMore } = splitKeysetRows(rows, JOB_PAGE_SIZE);
+  if (page.length === 0) {
+    return { items: [], nextCursor: null };
   }
 
-  const accountIds = [...new Set(rows.map((row) => row.social_account_id).filter((id): id is string => id !== null))];
-  const leadIds = [...new Set(rows.map((row) => row.lead_id).filter((id): id is string => id !== null))];
-  const campaignIds = [...new Set(rows.map((row) => row.campaign_id).filter((id): id is string => id !== null))];
-  const postIds = [...new Set(rows.map((row) => row.post_id).filter((id): id is string => id !== null))];
-  const postTargetIds = [...new Set(rows.map((row) => row.post_target_id).filter((id): id is string => id !== null))];
+  const accountIds = [...new Set(page.map((row) => row.social_account_id).filter((id): id is string => id !== null))];
+  const leadIds = [...new Set(page.map((row) => row.lead_id).filter((id): id is string => id !== null))];
+  const campaignIds = [...new Set(page.map((row) => row.campaign_id).filter((id): id is string => id !== null))];
+  const postIds = [...new Set(page.map((row) => row.post_id).filter((id): id is string => id !== null))];
+  const postTargetIds = [...new Set(page.map((row) => row.post_target_id).filter((id): id is string => id !== null))];
   const ruleIds = [
-    ...new Set(rows.map((row) => row.monitoring_rule_id).filter((id): id is string => id !== null)),
+    ...new Set(page.map((row) => row.monitoring_rule_id).filter((id): id is string => id !== null)),
   ];
 
   const [
@@ -136,7 +151,7 @@ export async function listWorkspaceJobs(input: {
     ]),
   );
 
-  return rows.map((row) => {
+  const items = page.map((row) => {
     const job = toJob(row);
     const account = job.socialAccountId ? accountsById.get(job.socialAccountId) : undefined;
     const campaign = job.campaignId ? campaignsById.get(job.campaignId) : undefined;
@@ -162,4 +177,8 @@ export async function listWorkspaceJobs(input: {
       canCancel: canCancelJob(job.status),
     };
   });
+  return {
+    items,
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }

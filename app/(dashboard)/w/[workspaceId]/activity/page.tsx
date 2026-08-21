@@ -10,6 +10,8 @@ import {
 } from "@/lib/activity/filters";
 import { activityEntityHref } from "@/lib/activity/links";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +31,7 @@ export default async function ActivityPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ action?: string; entity?: string; account?: string; platform?: string }>;
+  searchParams: Promise<{ action?: string; entity?: string; account?: string; platform?: string; after?: string }>;
 }) {
   const { workspaceId } = await params;
   const query = await searchParams;
@@ -38,16 +40,25 @@ export default async function ActivityPage({
   const entityType = parseActivityEntityTypeFilter(query.entity);
   const socialAccountId = parseActivityAccountIdFilter(query.account);
   const platform = parseActivityPlatformFilter(query.platform);
-  const [events, accounts] = await Promise.all([
+  const [activityPage, accounts] = await Promise.all([
     listWorkspaceActivity({
       workspaceId,
       action,
       entityType,
       socialAccountId,
       platform,
+      after: query.after,
     }),
     listSocialAccounts(workspaceId),
   ]);
+  const events = activityPage.items;
+  const activityPath = `/w/${workspaceId}/activity`;
+  const filterQuery = {
+    action,
+    entity: entityType,
+    account: socialAccountId,
+    platform,
+  };
 
   return (
     <div className="space-y-6">
@@ -122,8 +133,9 @@ export default async function ActivityPage({
           <CardHeader>
             <CardTitle>Log</CardTitle>
             <CardDescription>
-              Showing {events.length} event{events.length === 1 ? "" : "s"}. Newest first. Platform is
-              account identity, not a business-logic switch.
+              Showing {events.length} event{events.length === 1 ? "" : "s"} on this page. Newest first.
+              Platform is account identity, not a business-logic switch. Older pages use a created_at
+              keyset, not OFFSET.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -177,6 +189,16 @@ export default async function ActivityPage({
                 })}
               </TableBody>
             </Table>
+            <div className="mt-4">
+              <ListPagination
+                newestHref={query.after ? searchHref(activityPath, filterQuery) : null}
+                olderHref={
+                  activityPage.nextCursor
+                    ? searchHref(activityPath, { ...filterQuery, after: activityPage.nextCursor })
+                    : null
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       )}

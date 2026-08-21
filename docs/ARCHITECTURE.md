@@ -215,6 +215,10 @@ The Activity page lists `activity_log` rows with action, entity, account, and pl
 
 Community inbox no longer stops at `last_message`. After listing conversations, the adapter calls official `messages.getHistory` for each 1:1 user peer (count 50). A `history:1` cursor marker means later polls may skip Direct Message ids at or before the messages watermark. PHASE 23 cursors without that marker backfill the recent history window once. Unique `(workspace, account, external_id)` still dedups. Chat peers stay skipped. User OAuth inbox is still wall comments only.
 
+## Operator list pagination (PHASE 27)
+
+Inbox, Jobs, and Activity pages fetch 201 rows and keep 200. If more exist, an opaque `after` keyset (`created_at`, `id`) loads older rows. Invalid cursors are ignored. There is no SQL `OFFSET`. Filter forms omit `after` so a new filter starts from the newest page.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

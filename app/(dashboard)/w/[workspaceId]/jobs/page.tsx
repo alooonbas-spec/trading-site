@@ -10,6 +10,8 @@ import {
 import { JobsQueueControls } from "@/components/jobs/jobs-queue-controls";
 import { JobRowControls } from "@/components/jobs/job-row-controls";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +32,7 @@ export default async function JobsPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ type?: string; status?: string; account?: string }>;
+  searchParams: Promise<{ type?: string; status?: string; account?: string; after?: string }>;
 }) {
   const { workspaceId } = await params;
   const query = await searchParams;
@@ -39,15 +41,23 @@ export default async function JobsPage({
   const type = parseJobTypeFilter(query.type);
   const status = parseJobStatusFilter(query.status);
   const socialAccountId = parseJobAccountIdFilter(query.account);
-  const [jobs, accounts] = await Promise.all([
+  const [jobsPage, accounts] = await Promise.all([
     listWorkspaceJobs({
       workspaceId,
       type,
       status,
       socialAccountId,
+      after: query.after,
     }),
     listSocialAccounts(workspaceId),
   ]);
+  const jobs = jobsPage.items;
+  const jobsPath = `/w/${workspaceId}/jobs`;
+  const filterQuery = {
+    type,
+    status,
+    account: socialAccountId,
+  };
 
   return (
     <div className="space-y-6">
@@ -111,8 +121,9 @@ export default async function JobsPage({
           <CardHeader>
             <CardTitle>Queue</CardTitle>
             <CardDescription>
-              Showing {jobs.length} job{jobs.length === 1 ? "" : "s"}. Process queue still uses SKIP
-              LOCKED. Cancelled and successful jobs are not retried.
+              Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. Process queue still
+              uses SKIP LOCKED. Cancelled and successful jobs are not retried. Older pages use a
+              created_at keyset, not OFFSET.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -167,6 +178,16 @@ export default async function JobsPage({
                 ))}
               </TableBody>
             </Table>
+            <div className="mt-4">
+              <ListPagination
+                newestHref={query.after ? searchHref(jobsPath, filterQuery) : null}
+                olderHref={
+                  jobsPage.nextCursor
+                    ? searchHref(jobsPath, { ...filterQuery, after: jobsPage.nextCursor })
+                    : null
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       )}

@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 26: VK community inbox reads official `messages.getHistory` (latest 50 inbound DMs per 1:1 conversation). First poll after upgrade backfills that window; later polls skip already-seen ids. No new SQL.
+PHASE 27: Inbox, Jobs, and Activity lists use created_at keyset pagination (200 rows per page, Older/Newest). No OFFSET and no new SQL.
