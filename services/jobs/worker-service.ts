@@ -15,7 +15,8 @@ import {
 } from "@/lib/errors";
 import { AccountRateLimiter } from "@/lib/jobs/account-rate-limiter";
 import { isAdapterContactAction, jobStatusAfterError, INBOX_POLL_INTERVAL_MS, MONITOR_POLL_INTERVAL_MS } from "@/lib/jobs/queue-rules";
-import { inboxCursorFromMetadata } from "@/lib/inbox/match-profile";
+import { matchKeywords, normalizeKeywords } from "@/lib/monitoring/keywords";
+import { laterUpdateStreamCursor, updateStreamCursorFromMetadata, withUpdateStreamCursor } from "@/lib/social/update-stream";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { prepareAccountAdapter } from "@/services/social-accounts/token-refresh-service";
 import { assertCanContactLead } from "@/services/leads/do-not-contact";
@@ -468,6 +469,16 @@ async function processMonitorJob(job: Job, userId: string | null): Promise<void>
         throw new ValidationError("Monitoring account platform does not match the rule");
       }
       adapter = prepared.adapter;
+      const capabilities = await adapter.getCapabilities();
+      if (capabilities.sharedUpdateStream) {
+        await processSharedUpdateStreamJob({
+          job,
+          userId,
+          socialAccountId: accountId,
+          adapter,
+        });
+        return;
+      }
       await takeAdapterRate(accountId, adapter);
     }
 
@@ -558,8 +569,23 @@ async function processInboxJob(job: Job, userId: string | null): Promise<void> {
       throw new UnsupportedActionError(`${prepared.platform} inbox collection is not enabled yet`);
     }
 
+    if (capabilities.sharedUpdateStream) {
+      await processSharedUpdateStreamJob({
+        job,
+        userId,
+        socialAccountId,
+        adapter: prepared.adapter,
+      });
+      return;
+    }
+
     await takeAdapterRate(socialAccountId, prepared.adapter);
-    const cursor = inboxCursorFromMetadata(account.metadata);
+
+    const cursor = updateStreamCursorFromMetadata(
+      account.metadata && typeof account.metadata === "object" && !Array.isArray(account.metadata)
+        ? (account.metadata as Record<string, unknown>)
+        : {},
+    );
     const collected = await prepared.adapter.collectInbox({
       workspaceId: job.workspaceId,
       socialAccountId,
@@ -601,6 +627,181 @@ async function processInboxJob(job: Job, userId: string | null): Promise<void> {
     });
   } catch (caught) {
     await failOrRetry(job, userId, caught);
+  }
+}
+
+async function processSharedUpdateStreamJob(input: {
+  job: Job;
+  userId: string | null;
+  socialAccountId: string;
+  adapter: SocialAdapter;
+}): Promise<void> {
+  const { job, userId, socialAccountId, adapter } = input;
+  const supabase = await createClient();
+
+  if (await hasConcurrentUpdateStreamJob(job.workspaceId, socialAccountId, job.id)) {
+    await releaseJobForLater(job);
+    return;
+  }
+
+  await takeAdapterRate(socialAccountId, adapter);
+
+  const { data: account, error: accountError } = await supabase
+    .from("social_accounts")
+    .select("id, metadata")
+    .eq("id", socialAccountId)
+    .eq("workspace_id", job.workspaceId)
+    .maybeSingle();
+  if (accountError || !account) {
+    throw new ValidationError(accountError?.message ?? "Social account not found");
+  }
+
+  const currentMetadata =
+    account.metadata && typeof account.metadata === "object" && !Array.isArray(account.metadata)
+      ? (account.metadata as Record<string, unknown>)
+      : {};
+
+  const { data: ruleRows, error: rulesError } = await supabase
+    .from("monitoring_rules")
+    .select(MONITORING_RULE_PUBLIC_COLUMNS)
+    .eq("workspace_id", job.workspaceId)
+    .eq("social_account_id", socialAccountId)
+    .eq("status", "ACTIVE");
+  if (rulesError) {
+    throw new ValidationError(rulesError.message);
+  }
+
+  const rules = (ruleRows ?? []).map((row) => toMonitoringRule(row));
+  const collected = await adapter.collectSharedUpdates({
+    workspaceId: job.workspaceId,
+    socialAccountId,
+    cursor: updateStreamCursorFromMetadata(currentMetadata),
+    monitorSources: rules.map((rule) => rule.sources),
+  });
+
+  const ingested = await ingestInboxMessages({
+    workspaceId: job.workspaceId,
+    socialAccountId,
+    platform: adapter.platform,
+    messages: collected.messages,
+    userId,
+  });
+
+  let monitorEventCount = 0;
+  const nextCursor = laterUpdateStreamCursor(
+    updateStreamCursorFromMetadata(currentMetadata),
+    collected.cursor ?? null,
+  );
+
+  for (const rule of rules) {
+    const keywords = normalizeKeywords(rule.keywords);
+    const events =
+      keywords.length === 0
+        ? []
+        : collected.monitorCandidates.flatMap((candidate) => {
+            const matchedKeywords = matchKeywords(candidate.content, keywords);
+            return matchedKeywords.length > 0 ? [{ ...candidate, matchedKeywords }] : [];
+          });
+
+    if (events.length > 0) {
+      const { error: insertError } = await supabase.from("monitoring_events").upsert(
+        events.map((event) => ({
+          workspace_id: job.workspaceId,
+          rule_id: rule.id,
+          social_account_id: socialAccountId,
+          external_id: event.externalId,
+          author: event.author,
+          content: event.content,
+          url: event.url,
+          matched_keywords: event.matchedKeywords,
+        })),
+        { onConflict: "workspace_id,rule_id,external_id", ignoreDuplicates: true },
+      );
+      if (insertError) {
+        throw new ValidationError(insertError.message);
+      }
+      monitorEventCount += events.length;
+    }
+
+    const { error: ruleUpdateError } = await supabase
+      .from("monitoring_rules")
+      .update({
+        last_run_at: new Date().toISOString(),
+        last_error: null,
+        cursor: nextCursor ?? rule.cursor,
+      })
+      .eq("id", rule.id)
+      .eq("workspace_id", job.workspaceId);
+    if (ruleUpdateError) {
+      throw new ValidationError(ruleUpdateError.message);
+    }
+  }
+
+  const { error: metadataError } = await supabase
+    .from("social_accounts")
+    .update({ metadata: withUpdateStreamCursor(currentMetadata, nextCursor) })
+    .eq("id", socialAccountId);
+  if (metadataError) {
+    throw new ValidationError(metadataError.message);
+  }
+
+  if (job.type === "INBOX") {
+    await enqueueInboxJob({
+      workspaceId: job.workspaceId,
+      socialAccountId,
+      runAfter: new Date(Date.now() + INBOX_POLL_INTERVAL_MS).toISOString(),
+    });
+  } else if (job.monitoringRuleId) {
+    await enqueueMonitorJob({
+      workspaceId: job.workspaceId,
+      ruleId: job.monitoringRuleId,
+      runAfter: new Date(Date.now() + MONITOR_POLL_INTERVAL_MS).toISOString(),
+    });
+  }
+
+  await finishJob(job, userId, {
+    status: "SUCCESS",
+    result: { ...ingested, monitorEventCount },
+    activity: job.type === "INBOX" ? "INBOX_EVENT_CREATED" : "MONITORING_EVENT_CREATED",
+    metadata: { ...ingested, monitorEventCount },
+  });
+}
+
+async function hasConcurrentUpdateStreamJob(
+  workspaceId: string,
+  socialAccountId: string,
+  jobId: string,
+): Promise<boolean> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("social_account_id", socialAccountId)
+    .in("type", ["INBOX", "MONITOR"])
+    .eq("status", "RUNNING")
+    .neq("id", jobId)
+    .limit(1);
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+  return (data ?? []).length > 0;
+}
+
+async function releaseJobForLater(job: Job): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("jobs")
+    .update({
+      status: "PENDING",
+      locked_at: null,
+      locked_by: null,
+      attempts: Math.max(job.attempts - 1, 0),
+      run_after: new Date(Date.now() + 15_000).toISOString(),
+    })
+    .eq("id", job.id);
+  if (error) {
+    throw new ValidationError(error.message);
   }
 }
 

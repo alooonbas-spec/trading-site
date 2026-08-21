@@ -57,4 +57,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 14: inbox UI. Operators attach unmatched senders to existing leads. Inbox never auto-creates people.
+PHASE 15: Telegram inbox and monitoring share one official `getUpdates` stream so DMs and keyword hits are not skipped.

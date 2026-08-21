@@ -87,11 +87,3 @@ export function unmatchedInboxEventsForProfile<T extends InboxIdentityFields & {
       inboxMessageMatchesProfile(event, profile),
   );
 }
-
-export function inboxCursorFromMetadata(metadata?: Record<string, unknown>): string | null {
-  const value = metadata?.inboxCursor;
-  if (typeof value !== "string" || !value.trim()) {
-    return null;
-  }
-  return value.trim();
-}

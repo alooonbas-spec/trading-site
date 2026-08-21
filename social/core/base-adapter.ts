@@ -11,6 +11,8 @@ import type {
   InboxResult,
   MonitorInput,
   MonitorResult,
+  SharedUpdateInput,
+  SharedUpdateResult,
   OAuthBeginInput,
   PublishInput,
   PublishResult,
@@ -41,6 +43,7 @@ export const DISABLED_CAPABILITIES: SocialCapabilities = {
   contactActions: false,
   messaging: false,
   inbox: false,
+  sharedUpdateStream: false,
 };
 
 export const DEFAULT_ACCOUNT_RATE_LIMIT: AccountRateLimit = {
@@ -110,6 +113,10 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
 
   async collectInbox(_input: InboxInput): Promise<InboxResult> {
     throw new UnsupportedActionError(`${this.platform} inbox collection is not enabled yet`);
+  }
+
+  async collectSharedUpdates(_input: SharedUpdateInput): Promise<SharedUpdateResult> {
+    throw new UnsupportedActionError(`${this.platform} does not share a single inbound update stream`);
   }
 
   async executeContactAction(_input: ContactActionInput): Promise<ContactActionResult> {

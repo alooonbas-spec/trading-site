@@ -129,7 +129,7 @@ Safety policy:
 - `INBOX` jobs poll connected accounts. `adapter.collectInbox()` talks to official APIs: Telegram `getUpdates` DMs, X `GET /2/users/:id/mentions`, Facebook Page comments, Instagram media comments, and VK `wall.getComments`.
 - Events are stored in `inbox_events` (unique per account + external id). Unknown senders are kept unmatched and are not turned into leads.
 - Matched CRM profiles record a `REPLY` interaction. Existing contact relationships move to `REPLIED` unless they are `BLOCKED`. `do_not_contact` does not block recording replies.
-- Instagram comment inbox needs `instagram_business_manage_comments` (reconnect). Telegram `getUpdates` is a single Bot API consumer; running inbox and Telegram monitoring together can skip updates.
+- Instagram comment inbox needs `instagram_business_manage_comments` (reconnect). Telegram `getUpdates` is a single Bot API consumer; PHASE 15 shares that stream between inbox and monitoring.
 - The worker still branches on `job.type`, never `platform ===`.
 
 ## Inbox UI (PHASE 14)
@@ -139,6 +139,14 @@ Safety policy:
 - Sibling unmatched events for the same identity are rematched together. Each records a `REPLY` interaction. Existing contact relationships move to `REPLIED` unless they are `BLOCKED`. `do_not_contact` does not block recording replies.
 - Lead merge moves matched inbox events onto the surviving lead and reassigns events before a duplicate profile is deleted.
 - The worker still branches on `job.type`, never `platform ===`.
+
+## Telegram shared updates (PHASE 15)
+
+- Telegram Bot API `getUpdates` is one consumer per bot. Adapters expose `sharedUpdateStream` when inbox and monitoring must share that stream.
+- INBOX and MONITOR jobs for those accounts call `adapter.collectSharedUpdates()` once, then ingest private DMs and keyword-match monitor candidates. Dedup stays on unique inbox and monitoring event constraints.
+- The shared cursor lives on `social_accounts.metadata.updateStreamCursor` (kept in sync with `inboxCursor`). The worker never writes a cursor backwards and never branches on `platform ===`.
+- Concurrent INBOX/MONITOR jobs on the same account are released and retried shortly instead of issuing a second `getUpdates`.
+- Telegram INVITE remains `UnsupportedActionError`. Other platforms keep separate inbox and monitor APIs.
 
 ## Social adapters (PHASE 2)
 

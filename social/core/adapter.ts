@@ -9,6 +9,7 @@ export type SocialCapabilities = {
   contactActions: boolean;
   messaging: boolean;
   inbox: boolean;
+  sharedUpdateStream: boolean;
 };
 
 export type ConnectInput = {
@@ -133,6 +134,26 @@ export type InboxResult = {
   cursor?: string | null;
 };
 
+export type SharedUpdateInput = {
+  workspaceId: string;
+  socialAccountId: string;
+  cursor?: string | null;
+  monitorSources: string[][];
+};
+
+export type SharedUpdateMonitorCandidate = {
+  externalId: string;
+  author: string | null;
+  content: string;
+  url: string | null;
+};
+
+export type SharedUpdateResult = {
+  messages: InboxMessage[];
+  monitorCandidates: SharedUpdateMonitorCandidate[];
+  cursor?: string | null;
+};
+
 export type TokenRefreshResult = {
   accessToken: string;
   refreshToken: string | null;
@@ -158,6 +179,7 @@ export interface SocialAdapter {
   publish(input: PublishInput): Promise<PublishResult>;
   monitor(input: MonitorInput): Promise<MonitorResult>;
   collectInbox(input: InboxInput): Promise<InboxResult>;
+  collectSharedUpdates(input: SharedUpdateInput): Promise<SharedUpdateResult>;
   executeContactAction(input: ContactActionInput): Promise<ContactActionResult>;
   refreshTokens(): Promise<TokenRefreshResult>;
 }
