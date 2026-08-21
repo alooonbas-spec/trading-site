@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 23: VK community tokens for official community Direct Messages (`messages.getConversations` / `messages.send`). User OAuth still cannot DM.
+PHASE 24: workspace Jobs queue page with type/status/account filters, FAILED retry, and PENDING/RETRY cancel. Process queue still uses shared SKIP LOCKED. Retry does not rewrite LeadStatus or `do_not_contact`. No new SQL.
