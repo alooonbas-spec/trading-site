@@ -211,7 +211,7 @@ describe("PHASE 23 VK community adapter", () => {
       cursor: "comments:1710000000|messages:8",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["-12345:20:2", "11", "8", "9"]);
-    expect(result.cursor).toBe("comments:1710000099|conversations:1|history:1|messages:11|wall:1|wallcomments:1");
+    expect(result.cursor).toBe("comments:1710000099|conversations:1|history:1|messages:11|wall:1|wallcomments:1|wallthreads:done");
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getHistory"))).toHaveLength(1);
   });
 

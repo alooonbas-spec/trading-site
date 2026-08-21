@@ -95,13 +95,13 @@ describe("PHASE 41 VK wall.getComments offset", () => {
     const result = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:1710000000|wall:done|wallcomments:1",
+      cursor: "comments:1710000000|wall:done|wallcomments:1|wallthreads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual([
       "10:20:80",
       ...older.map((item) => `10:20:${item.id}`),
     ]);
-    expect(result.cursor).toBe("comments:1710000200|mentionpages:1|photocomments:1|videocomments:1|videos:1|wall:done|wallcomments:2");
+    expect(result.cursor).toBe("comments:1710000200|mentionpages:1|photocomments:1|videocomments:1|videos:1|wall:done|wallcomments:2|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("wall.getComments")),
     ).toHaveLength(2);
@@ -152,10 +152,10 @@ describe("PHASE 41 VK wall.getComments offset", () => {
     const result = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:1710000000|wall:done|wallcomments:1",
+      cursor: "comments:1710000000|wall:done|wallcomments:1|wallthreads:done",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["10:20:1", "10:20:80"]);
-    expect(result.cursor).toBe("comments:1710000200|mentionpages:1|photocomments:1|videocomments:1|videos:1|wall:done|wallcomments:done");
+    expect(result.cursor).toBe("comments:1710000200|mentionpages:1|photocomments:1|videocomments:1|videos:1|wall:done|wallcomments:done|wallthreads:done");
   });
 
   it("skips getComments offset after wallcomments:done", async () => {
@@ -196,10 +196,10 @@ describe("PHASE 41 VK wall.getComments offset", () => {
     const result = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:1710000000|wall:done|wallcomments:done",
+      cursor: "comments:1710000000|wall:done|wallcomments:done|wallthreads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["10:20:81"]);
-    expect(result.cursor).toBe("comments:1710000081|mentionpages:1|photocomments:1|videocomments:1|videos:1|wall:done|wallcomments:done");
+    expect(result.cursor).toBe("comments:1710000081|mentionpages:1|photocomments:1|videocomments:1|videos:1|wall:done|wallcomments:done|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("wall.getComments")),
     ).toHaveLength(1);

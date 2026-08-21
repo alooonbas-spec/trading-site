@@ -323,6 +323,10 @@ User OAuth inbox calls official `photos.getAllComments` (count 50) for comments 
 
 User OAuth inbox calls official `video.get` (count 10, Added album) then `video.getComments` (count 50, `sort=desc`) for those videos. `owner_id` and `album_id` are omitted on `video.get` so VK uses the current user. Offset is omitted when `0`. After `videos:1`, each later poll requests `video.get` `offset = page * 10`. After `videocomments:1`, each later poll requests `video.getComments` `offset = page * 50` for the current videos. A full page advances `videos:2` / `videocomments:2`. A short page stores `done`. Extra video and comment pages are not dropped by the independent unix `video` watermark. Events store `video:{ownerId}:{videoId}:{commentId}` and `replyKind=comment`. Replies use official `video.createComment` with `owner_id`, `video_id`, and `reply_to_comment`. Community tokens skip these methods. No new VK OAuth scope (`video` is already granted for publishing).
 
+## VK wall comment threads (PHASE 54)
+
+`wall.getComments` requests official `thread_items_count=10` so each top-level comment includes its first nested replies. Nested replies use the same `{owner}:{post}:{comment}` ids and `wall.createComment` reply path as top-level comments. If `thread.count` is greater than the nested items returned, the next poll requests `wall.getComments` with `comment_id` of that parent (`count=10`, `sort=desc`, `offset = page * 10`). Opaque parent keys are stored base64url-encoded in `wallthreads` (at most 20). A short extra thread page drops that parent. An empty map stores `wallthreads:done` and later polls stay done. Extra thread pages are not dropped by the unix comments watermark. User OAuth and community wall collectors share this walker. Collectors still do not invent a separate thread API.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

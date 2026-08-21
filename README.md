@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 53: Official VK `video.get` + `video.getComments` offset paging for user OAuth inbox. No new SQL.
+PHASE 54: Official VK `wall.getComments` nested thread paging (`thread_items_count` + `comment_id`). No new SQL.

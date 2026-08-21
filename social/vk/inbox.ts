@@ -12,6 +12,13 @@ import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapte
 import { vkCall } from "@/social/vk/api";
 import { isVkCommunityAccount, vkCommunityGroupId } from "@/social/vk/community";
 import { vkWallTarget } from "@/social/vk/publish";
+import {
+  decodeVkThreadMap,
+  nextVkThreadCursor,
+  parseVkThreadId,
+  VK_THREAD_FETCH_LIMIT,
+  type VkThreadMap,
+} from "@/social/vk/thread-paging";
 
 const wallGetSchema = z.object({
   items: z
@@ -24,14 +31,23 @@ const wallGetSchema = z.object({
     .optional(),
 });
 
+const vkCommentReplySchema = z.object({
+  id: z.number(),
+  from_id: z.number().optional(),
+  text: z.string().optional(),
+  date: z.number().optional(),
+});
+
 const wallCommentsSchema = z.object({
   items: z
     .array(
-      z.object({
-        id: z.number(),
-        from_id: z.number().optional(),
-        text: z.string().optional(),
-        date: z.number().optional(),
+      vkCommentReplySchema.extend({
+        thread: z
+          .object({
+            count: z.number().optional(),
+            items: z.array(vkCommentReplySchema).optional(),
+          })
+          .optional(),
       }),
     )
     .optional(),
@@ -115,6 +131,7 @@ const VK_COMMUNITY_HISTORY_COUNT = "50";
 const VK_COMMUNITY_CONVERSATION_COUNT = "20";
 const VK_WALL_COUNT = "10";
 const VK_WALL_COMMENT_COUNT = "50";
+const VK_WALL_THREAD_COUNT = "10";
 const VK_MENTIONS_COUNT = "20";
 const VK_PHOTO_COMMENT_COUNT = "50";
 const VK_VIDEO_COUNT = "10";
@@ -279,12 +296,13 @@ async function collectVkCommunityInbox(
 ): Promise<InboxResult> {
   const groupId = vkCommunityGroupId(metadata);
   const cursor = parseVkInboxCursor(input.cursor);
+  const named = parseNamedInboxCursor(input.cursor);
   const conversationOffset =
     cursor.conversationsPage !== 0 && cursor.conversationsPage !== "done"
       ? cursor.conversationsPage * Number(VK_COMMUNITY_CONVERSATION_COUNT)
       : null;
   const [wallComments, latestPeers, olderPeers] = await Promise.all([
-    collectVkWallComments(accessToken, metadata, cursor.wallPage, cursor.wallcommentsPage),
+    collectVkWallComments(accessToken, metadata, cursor.wallPage, cursor.wallcommentsPage, named.wallthreads),
     listVkCommunityUserPeers(accessToken, groupId, 0),
     conversationOffset === null
       ? Promise.resolve(emptyVkCommunityPeers(true))
@@ -329,6 +347,7 @@ async function collectVkCommunityInbox(
       messages: laterDigitId(cursor.messages, newestMessageId) ?? "",
       wall: nextVkOffsetCursor(cursor.wallPage, wallComments.reachedEnd),
       wallcomments: nextVkOffsetCursor(cursor.wallcommentsPage, wallComments.commentsReachedEnd),
+      wallthreads: wallComments.wallthreads,
     }),
   };
 }
@@ -354,7 +373,7 @@ async function collectVkWallCommentInbox(
   const videocommentsPage = vkOffsetCursor(named.videocomments);
   const [wallComments, latestMentions, olderMentions, latestPhotos, olderPhotos, videoComments] =
     await Promise.all([
-      collectVkWallComments(accessToken, metadata, parsed.wallPage, parsed.wallcommentsPage),
+      collectVkWallComments(accessToken, metadata, parsed.wallPage, parsed.wallcommentsPage, named.wallthreads),
       collectVkMentions(accessToken, 0),
       mentionOffset === null
         ? Promise.resolve(emptyVkMentionPage(true))
@@ -394,6 +413,7 @@ async function collectVkWallCommentInbox(
       videos: nextVkOffsetCursor(videoPage.page, videoComments.reachedEnd),
       wall: nextVkOffsetCursor(parsed.wallPage, wallComments.reachedEnd),
       wallcomments: nextVkOffsetCursor(parsed.wallcommentsPage, wallComments.commentsReachedEnd),
+      wallthreads: wallComments.wallthreads,
     }),
   };
 }
@@ -600,11 +620,13 @@ async function collectVkWallComments(
   metadata: Record<string, unknown> | undefined,
   wallPage: VkOffsetPage,
   wallcommentsPage: VkOffsetPage,
+  wallthreadsStored?: string,
 ): Promise<{
   latest: InboxMessage[];
   older: InboxMessage[];
   reachedEnd: boolean;
   commentsReachedEnd: boolean;
+  wallthreads: string;
 }> {
   const wallOffset =
     wallPage !== 0 && wallPage !== "done" ? wallPage * Number(VK_WALL_COUNT) : null;
@@ -626,11 +648,26 @@ async function collectVkWallComments(
       ? Promise.resolve(emptyVkCommentPage(true))
       : collectVkCommentsForPosts(accessToken, metadata, commentPosts, commentOffset),
   ]);
+  const storedThreads = decodeVkThreadMap(wallthreadsStored);
+  const extraThreads =
+    storedThreads === null
+      ? { messages: [] as InboxMessage[], nextAfters: {} as VkThreadMap, fetchedIds: [] as string[] }
+      : await collectVkWallThreads(accessToken, storedThreads);
   return {
     latest: latest.messages,
-    older: uniqueInboxMessages([...olderWall.messages, ...olderComments.messages]),
+    older: uniqueInboxMessages([...olderWall.messages, ...olderComments.messages, ...extraThreads.messages]),
     reachedEnd: olderPosts.reachedEnd,
     commentsReachedEnd: olderComments.reachedEnd,
+    wallthreads: nextVkThreadCursor({
+      stored: wallthreadsStored,
+      nestedAfters: {
+        ...latest.nestedAfters,
+        ...olderWall.nestedAfters,
+        ...olderComments.nestedAfters,
+      },
+      fetchedNextAfters: extraThreads.nextAfters,
+      fetchedIds: extraThreads.fetchedIds,
+    }),
   };
 }
 
@@ -670,10 +707,11 @@ async function collectVkCommentsForPosts(
   metadata: Record<string, unknown> | undefined,
   posts: VkWallPost[],
   offset: number,
-): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean; nestedAfters: VkThreadMap }> {
   const target = vkWallTarget(metadata);
   const pageSize = Number(VK_WALL_COMMENT_COUNT);
   const messages: InboxMessage[] = [];
+  const nestedAfters: VkThreadMap = {};
   let reachedEnd = true;
   for (const post of posts) {
     const params: Record<string, string> = {
@@ -681,6 +719,7 @@ async function collectVkCommentsForPosts(
       post_id: String(post.id),
       count: VK_WALL_COMMENT_COUNT,
       sort: "desc",
+      thread_items_count: VK_WALL_THREAD_COUNT,
     };
     if (target.ownerId) {
       params.owner_id = target.ownerId;
@@ -697,27 +736,117 @@ async function collectVkCommentsForPosts(
       reachedEnd = false;
     }
     const ownerId = post.owner_id ?? (target.ownerId ? Number(target.ownerId) : null);
-    for (const comment of comments.data.items ?? []) {
-      const text = comment.text?.trim();
-      if (!text || comment.from_id === undefined || comment.from_id === ownerId) {
-        continue;
-      }
-      messages.push({
-        externalId: `${ownerId ?? ""}:${post.id}:${comment.id}`,
-        externalProfileId: String(comment.from_id),
-        username: null,
-        body: text,
-        url: ownerId ? `https://vk.com/wall${ownerId}_${post.id}?reply=${comment.id}` : null,
-        receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
-        replyKind: "comment",
-      });
-    }
+    const parsed = vkCommentsToInbox(comments.data.items ?? [], ownerId, post.id);
+    messages.push(...parsed.messages);
+    Object.assign(nestedAfters, parsed.nestedAfters);
   }
-  return { messages, reachedEnd: posts.length === 0 ? true : reachedEnd };
+  return { messages, reachedEnd: posts.length === 0 ? true : reachedEnd, nestedAfters };
 }
 
-function emptyVkCommentPage(reachedEnd: boolean): { messages: InboxMessage[]; reachedEnd: boolean } {
-  return { messages: [], reachedEnd };
+function emptyVkCommentPage(reachedEnd: boolean): {
+  messages: InboxMessage[];
+  reachedEnd: boolean;
+  nestedAfters: VkThreadMap;
+} {
+  return { messages: [], reachedEnd, nestedAfters: {} };
+}
+
+function vkCommentsToInbox(
+  comments: Array<{
+    id: number;
+    from_id?: number;
+    text?: string;
+    date?: number;
+    thread?: { count?: number; items?: Array<{ id: number; from_id?: number; text?: string; date?: number }> };
+  }>,
+  ownerId: number | null,
+  postId: number,
+): { messages: InboxMessage[]; nestedAfters: VkThreadMap } {
+  const messages: InboxMessage[] = [];
+  const nestedAfters: VkThreadMap = {};
+  for (const comment of comments) {
+    const message = vkWallCommentMessage(comment, ownerId, postId);
+    if (message) {
+      messages.push(message);
+    }
+    const threadItems = comment.thread?.items ?? [];
+    for (const reply of threadItems) {
+      const nested = vkWallCommentMessage(reply, ownerId, postId);
+      if (nested) {
+        messages.push(nested);
+      }
+    }
+    if (ownerId !== null && (comment.thread?.count ?? 0) > threadItems.length) {
+      nestedAfters[`${ownerId}_${postId}_${comment.id}`] = "1";
+    }
+  }
+  return { messages, nestedAfters };
+}
+
+function vkWallCommentMessage(
+  comment: { id: number; from_id?: number; text?: string; date?: number },
+  ownerId: number | null,
+  postId: number,
+): InboxMessage | null {
+  const text = comment.text?.trim();
+  if (!text || comment.from_id === undefined || comment.from_id === ownerId) {
+    return null;
+  }
+  return {
+    externalId: `${ownerId ?? ""}:${postId}:${comment.id}`,
+    externalProfileId: String(comment.from_id),
+    username: null,
+    body: text,
+    url: ownerId ? `https://vk.com/wall${ownerId}_${postId}?reply=${comment.id}` : null,
+    receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
+    replyKind: "comment",
+  };
+}
+
+async function collectVkWallThreads(
+  accessToken: string,
+  stored: VkThreadMap,
+): Promise<{ messages: InboxMessage[]; nextAfters: VkThreadMap; fetchedIds: string[] }> {
+  const pageSize = Number(VK_WALL_THREAD_COUNT);
+  const messages: InboxMessage[] = [];
+  const nextAfters: VkThreadMap = {};
+  const fetchedIds: string[] = [];
+  for (const id of Object.keys(stored).slice(0, VK_THREAD_FETCH_LIMIT)) {
+    const ref = parseVkThreadId(id);
+    const page = Number(stored[id]);
+    if (!ref || !Number.isInteger(page) || page < 1) {
+      continue;
+    }
+    fetchedIds.push(id);
+    const params: Record<string, string> = {
+      access_token: accessToken,
+      owner_id: ref.ownerId,
+      post_id: ref.postId,
+      comment_id: ref.commentId,
+      count: VK_WALL_THREAD_COUNT,
+      sort: "desc",
+      offset: String(page * pageSize),
+    };
+    const commentsPayload = await vkCall("wall.getComments", params);
+    const comments = wallCommentsSchema.safeParse(commentsPayload);
+    if (!comments.success) {
+      throw new SocialError("VK wall.getComments returned an unexpected payload");
+    }
+    const rawItems = comments.data.items ?? [];
+    if (rawItems.length >= pageSize) {
+      nextAfters[id] = String(page + 1);
+    }
+    for (const comment of rawItems) {
+      if (comment.id === Number(ref.commentId)) {
+        continue;
+      }
+      const message = vkWallCommentMessage(comment, Number(ref.ownerId), Number(ref.postId));
+      if (message) {
+        messages.push(message);
+      }
+    }
+  }
+  return { messages, nextAfters, fetchedIds };
 }
 
 type VkCommunityPeers = {
