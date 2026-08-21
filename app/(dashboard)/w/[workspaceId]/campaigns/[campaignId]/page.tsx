@@ -147,7 +147,7 @@ export default async function CampaignDetailPage({
               <TableBody>
                 {jobs.map((job) => (
                   <TableRow key={job.id}>
-                    <TableCell>{leadMap.get(job.leadId)?.displayName ?? job.leadId}</TableCell>
+                    <TableCell>{job.leadId ? (leadMap.get(job.leadId)?.displayName ?? job.leadId) : "—"}</TableCell>
                     <TableCell>
                       {(() => {
                         const account = accountMap.get(job.socialAccountId);

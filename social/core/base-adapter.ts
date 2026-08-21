@@ -67,7 +67,12 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
     return {
       ...DISABLED_CAPABILITIES,
       publicCollection: isTinyFishConfigured(),
+      ...this.extraCapabilities(),
     };
+  }
+
+  protected extraCapabilities(): Partial<SocialCapabilities> {
+    return {};
   }
 
   async collectPublicData(input: CollectInput): Promise<CollectResult> {

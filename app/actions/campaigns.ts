@@ -109,6 +109,7 @@ export async function processQueueAction(workspaceId: string, campaignId?: strin
       revalidatePath(`/w/${workspaceId}/campaigns/${campaignId}`);
     }
     revalidatePath(`/w/${workspaceId}/social-accounts`);
+    revalidatePath(`/w/${workspaceId}/posts`);
     return {
       error: null,
       success: `Processed ${result.processed} job${result.processed === 1 ? "" : "s"} (${result.claimed} claimed)`,

@@ -1,5 +1,5 @@
-export { LEAD_STATUSES, CONTACT_STATUSES, CAMPAIGN_STATUSES, JOB_STATUSES, SOCIAL_ACCOUNT_STATUSES, WORKSPACE_ROLES } from "@/types/status";
-export type { LeadStatus, ContactStatus, CampaignStatus, JobStatus, SocialAccountStatus, WorkspaceRole } from "@/types/status";
+export { LEAD_STATUSES, CONTACT_STATUSES, CAMPAIGN_STATUSES, JOB_STATUSES, SOCIAL_ACCOUNT_STATUSES, WORKSPACE_ROLES, POST_STATUSES, POST_TARGET_STATUSES } from "@/types/status";
+export type { LeadStatus, ContactStatus, CampaignStatus, JobStatus, SocialAccountStatus, WorkspaceRole, PostStatus, PostTargetStatus } from "@/types/status";
 export { SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS } from "@/types/social";
 export type { SocialPlatform } from "@/types/social";
 export { ACTIVITY_ACTIONS } from "@/types/activity";
@@ -11,3 +11,4 @@ export type { Lead, SocialProfile, ContactRelationship, LeadInteraction, Interac
 export { INTERACTION_TYPES } from "@/types/crm";
 export type { Campaign, Job, CampaignAction, JobType } from "@/types/campaign";
 export { CAMPAIGN_ACTIONS, JOB_TYPES } from "@/types/campaign";
+export type { Post, PostTarget } from "@/types/post";

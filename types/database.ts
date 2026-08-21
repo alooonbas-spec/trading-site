@@ -409,17 +409,80 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      posts: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          body: string;
+          media: string[];
+          status: import("@/types/status").PostStatus;
+          scheduled_at: string | null;
+          published_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          body: string;
+          media?: string[];
+          status?: import("@/types/status").PostStatus;
+          scheduled_at?: string | null;
+          published_at?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          body?: string;
+          media?: string[];
+          status?: import("@/types/status").PostStatus;
+          scheduled_at?: string | null;
+          published_at?: string | null;
+        };
+        Relationships: [];
+      };
+      post_targets: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          post_id: string;
+          social_account_id: string;
+          status: import("@/types/status").PostTargetStatus;
+          external_post_id: string | null;
+          published_at: string | null;
+          last_error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          post_id: string;
+          social_account_id: string;
+          status?: import("@/types/status").PostTargetStatus;
+          external_post_id?: string | null;
+          published_at?: string | null;
+          last_error?: string | null;
+        };
+        Update: {
+          status?: import("@/types/status").PostTargetStatus;
+          external_post_id?: string | null;
+          published_at?: string | null;
+          last_error?: string | null;
+        };
+        Relationships: [];
+      };
       jobs: {
         Row: {
           id: string;
           workspace_id: string;
           campaign_id: string | null;
           social_account_id: string;
-          lead_id: string;
+          lead_id: string | null;
           social_profile_id: string | null;
           relationship_id: string | null;
+          post_id: string | null;
+          post_target_id: string | null;
           type: import("@/types/campaign").JobType;
-          action: import("@/types/campaign").CampaignAction;
+          action: import("@/types/campaign").CampaignAction | null;
           body: string | null;
           status: import("@/types/status").JobStatus;
           attempts: number;
@@ -437,11 +500,13 @@ export type Database = {
           workspace_id: string;
           campaign_id?: string | null;
           social_account_id: string;
-          lead_id: string;
+          lead_id?: string | null;
           social_profile_id?: string | null;
           relationship_id?: string | null;
+          post_id?: string | null;
+          post_target_id?: string | null;
           type?: import("@/types/campaign").JobType;
-          action: import("@/types/campaign").CampaignAction;
+          action?: import("@/types/campaign").CampaignAction | null;
           body?: string | null;
           status?: import("@/types/status").JobStatus;
           attempts?: number;
@@ -530,11 +595,13 @@ export type Database = {
           workspace_id: string;
           campaign_id: string | null;
           social_account_id: string;
-          lead_id: string;
+          lead_id: string | null;
           social_profile_id: string | null;
           relationship_id: string | null;
+          post_id: string | null;
+          post_target_id: string | null;
           type: import("@/types/campaign").JobType;
-          action: import("@/types/campaign").CampaignAction;
+          action: import("@/types/campaign").CampaignAction | null;
           body: string | null;
           status: import("@/types/status").JobStatus;
           attempts: number;
@@ -565,6 +632,8 @@ export type Database = {
       job_status: import("@/types/status").JobStatus;
       campaign_action: import("@/types/campaign").CampaignAction;
       job_type: import("@/types/campaign").JobType;
+      post_status: import("@/types/status").PostStatus;
+      post_target_status: import("@/types/status").PostTargetStatus;
     };
     CompositeTypes: Record<string, never>;
   };

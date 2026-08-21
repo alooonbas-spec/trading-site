@@ -1,4 +1,5 @@
-import { AuthenticationError, ValidationError } from "@/lib/errors";
+import { z } from "zod";
+import { AuthenticationError, SocialError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
   BaseSocialAdapter,
@@ -6,14 +7,15 @@ import {
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot } from "@/social/core/adapter";
+import type { ConnectResult, PublishInput, PublishResult, SocialAccountSnapshot, SocialCapabilities } from "@/social/core/adapter";
 import { resolveXPublicProfile } from "@/social/x/public-profile";
 
 const X_AUTHORIZE_URL = "https://twitter.com/i/oauth2/authorize";
 const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
 const X_REVOKE_URL = "https://api.x.com/2/oauth2/revoke";
 const X_ME_URL = "https://api.x.com/2/users/me";
-const X_SCOPES = "tweet.read users.read offline.access";
+const X_TWEETS_URL = "https://api.x.com/2/tweets";
+const X_SCOPES = "tweet.read tweet.write users.read offline.access";
 
 type XTokenResponse = {
   access_token?: string;
@@ -23,6 +25,13 @@ type XTokenResponse = {
   error?: string;
   error_description?: string;
 };
+
+const xCreateTweetResponseSchema = z.object({
+  data: z.object({
+    id: z.string().min(1),
+    text: z.string().optional(),
+  }),
+});
 
 type XMeResponse = {
   data?: {
@@ -147,6 +156,43 @@ export class XAdapter extends BaseSocialAdapter {
         token_type_hint: "access_token",
       }),
     });
+  }
+
+  protected extraCapabilities(): Partial<SocialCapabilities> {
+    return { publishing: true };
+  }
+
+  async publish(input: PublishInput): Promise<PublishResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("X account has no access token");
+    }
+
+    const text = input.body.trim();
+    if (!text) {
+      throw new ValidationError("X posts require text");
+    }
+    if (input.media.length > 0) {
+      throw new ValidationError("X media upload is not enabled. Remove media URLs or wait for media.write publishing.");
+    }
+
+    const response = await socialFetch(X_TWEETS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text }),
+    });
+    const parsed = xCreateTweetResponseSchema.safeParse(await readJson<unknown>(response));
+    if (!parsed.success) {
+      throw new SocialError("X create tweet returned an unexpected payload");
+    }
+
+    return {
+      externalPostId: parsed.data.data.id,
+      publishedAt: new Date().toISOString(),
+    };
   }
 
   protected resolvePublicProfile(source: string) {

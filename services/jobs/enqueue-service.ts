@@ -198,3 +198,77 @@ export async function enqueueCampaignJobs(input: {
 
   return inserts.length;
 }
+
+export async function enqueuePublishJobs(input: {
+  workspaceId: string;
+  postId: string;
+  runAfter: string | null;
+}): Promise<number> {
+  const supabase = await createClient();
+  const [{ data: post, error: postError }, { data: targets, error: targetError }] = await Promise.all([
+    supabase
+      .from("posts")
+      .select("id, body")
+      .eq("id", input.postId)
+      .eq("workspace_id", input.workspaceId)
+      .maybeSingle(),
+    supabase
+      .from("post_targets")
+      .select("id, social_account_id, status")
+      .eq("post_id", input.postId)
+      .eq("workspace_id", input.workspaceId),
+  ]);
+
+  if (postError || !post) {
+    throw new ValidationError(postError?.message ?? "Post not found");
+  }
+  if (targetError) {
+    throw new ValidationError(targetError.message);
+  }
+
+  const readyTargets = (targets ?? []).filter(
+    (target) => target.status === "PENDING" || target.status === "SCHEDULED",
+  );
+  if (readyTargets.length === 0) {
+    throw new ValidationError("Post has no targets ready to publish");
+  }
+
+  const { data: existingJobs, error: existingError } = await supabase
+    .from("jobs")
+    .select("post_target_id")
+    .eq("post_id", input.postId)
+    .in("status", ["PENDING", "RETRY", "RUNNING", "SUCCESS"]);
+  if (existingError) {
+    throw new ValidationError(existingError.message);
+  }
+  const existingTargets = new Set((existingJobs ?? []).map((job) => job.post_target_id).filter(Boolean));
+
+  const inserts = readyTargets
+    .filter((target) => !existingTargets.has(target.id))
+    .map((target) => ({
+      workspace_id: input.workspaceId,
+      campaign_id: null,
+      social_account_id: target.social_account_id,
+      lead_id: null,
+      social_profile_id: null,
+      relationship_id: null,
+      post_id: input.postId,
+      post_target_id: target.id,
+      type: "PUBLISH" as const,
+      action: null,
+      body: post.body,
+      status: "PENDING" as const,
+      run_after: input.runAfter ?? new Date().toISOString(),
+    }));
+
+  if (inserts.length === 0) {
+    return 0;
+  }
+
+  const { error: insertError } = await supabase.from("jobs").insert(inserts);
+  if (insertError) {
+    throw new ValidationError(insertError.message);
+  }
+
+  return inserts.length;
+}

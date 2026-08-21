@@ -16,6 +16,7 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
    - `supabase/migrations/20260821140000_phase3_crm.sql`
    - `supabase/migrations/20260821160000_phase4_campaigns.sql`
    - `supabase/migrations/20260821180000_phase5_tinyfish.sql`
+   - `supabase/migrations/20260821200000_phase6_posts.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
@@ -51,6 +52,6 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 5: TinyFish public collection. Server-only. No captcha bypass. No rate-limit bypass.
+PHASE 6: posts, post targets, and the publishing worker.
 
-Later phases add publishing, monitoring, and analytics.
+Later phases add monitoring and analytics.

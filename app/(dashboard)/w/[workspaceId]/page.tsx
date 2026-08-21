@@ -4,6 +4,7 @@ import { countSocialAccounts } from "@/services/social-accounts/account-service"
 import { countNewLeadsToday } from "@/services/leads/lead-service";
 import { countRunningCampaigns } from "@/services/campaigns/campaign-service";
 import { countSuccessfulContactJobsToday } from "@/services/jobs/worker-service";
+import { countPublishedPostsToday } from "@/services/posts/post-service";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
 
@@ -14,7 +15,7 @@ export default async function WorkspaceDashboardPage({
 }) {
   const { workspaceId } = await params;
   const context = await requireWorkspaceContext(workspaceId);
-  const [memberCount, actionsToday, accountCount, newLeadsToday, runningCampaigns, successfulActions] =
+  const [memberCount, actionsToday, accountCount, newLeadsToday, runningCampaigns, successfulActions, postsToday] =
     await Promise.all([
       countWorkspaceMembers(workspaceId),
       countTodayActivity(workspaceId),
@@ -22,6 +23,7 @@ export default async function WorkspaceDashboardPage({
       countNewLeadsToday(workspaceId),
       countRunningCampaigns(workspaceId),
       countSuccessfulContactJobsToday(workspaceId),
+      countPublishedPostsToday(workspaceId),
     ]);
 
   return (
@@ -39,7 +41,7 @@ export default async function WorkspaceDashboardPage({
         <StatCard title="New leads" value={String(newLeadsToday)} hint="Created today, excluding merged records" />
         <StatCard title="Active campaigns" value={String(runningCampaigns)} hint="Campaigns currently RUNNING" />
         <StatCard title="Successful actions" value={String(successfulActions)} hint="Contact jobs completed today" />
-        <StatCard title="Posts today" value="—" hint="Publishing metrics appear after PHASE 6" />
+        <StatCard title="Posts today" value={String(postsToday)} hint="Posts that reached PUBLISHED or PARTIAL today" />
         <StatCard title="Monitoring events" value="—" hint="Monitoring metrics appear after PHASE 7" />
         <StatCard title="Replies" value="—" hint="Contact metrics appear after PHASE 3" />
       </div>
@@ -48,7 +50,7 @@ export default async function WorkspaceDashboardPage({
         description={
           accountCount === 0
             ? "Open Social Accounts to connect Telegram, VK, X, Instagram, or Facebook. One workspace can hold many accounts per platform."
-            : `${accountCount} social account${accountCount === 1 ? "" : "s"} in this workspace. Publishing and monitoring come in later phases.`
+            : `${accountCount} social account${accountCount === 1 ? "" : "s"} in this workspace. Monitoring comes in a later phase.`
         }
       />
     </div>

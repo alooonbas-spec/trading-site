@@ -68,7 +68,16 @@ Safety policy:
 - `bot_blocked` fails honestly. There is no stealth retry.
 - HTTP 429 is surfaced as `RateLimitError`. The client does not tight-loop.
 
-`publicCollection` is true only when the server key is configured. Publishing, monitoring, and contact actions stay disabled.
+`publicCollection` is true only when the server key is configured. Contact actions stay disabled.
+
+## Publishing (PHASE 6)
+
+- A post has many `post_targets` (one per social account). Never assume 1 platform = 1 account.
+- Publish enqueues `PUBLISH` jobs onto the shared queue. Scheduling uses `jobs.run_after`, not adapter-native scheduling.
+- Workers skip cancelled posts, inoperable accounts, and already-published targets. They honor `AccountRateLimiter`.
+- `adapter.getCapabilities().publishing` decides whether `adapter.publish` runs. X text posts use official `POST https://api.x.com/2/tweets` with `tweet.write`. Other platforms throw `UnsupportedActionError` instead of fake success.
+- Media URLs on X fail honestly until media upload is implemented.
+- Post status (`DRAFT` / `SCHEDULED` / `PUBLISHING` / `PUBLISHED` / `PARTIAL` / `FAILED` / `CANCELLED`) is independent of JobStatus and CampaignStatus. `do_not_contact` is not on posts.
 
 ## Social adapters (PHASE 2)
 

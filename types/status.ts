@@ -57,6 +57,30 @@ export const SOCIAL_ACCOUNT_STATUSES = [
 
 export type SocialAccountStatus = (typeof SOCIAL_ACCOUNT_STATUSES)[number];
 
+export const POST_STATUSES = [
+  "DRAFT",
+  "SCHEDULED",
+  "PUBLISHING",
+  "PUBLISHED",
+  "PARTIAL",
+  "FAILED",
+  "CANCELLED",
+] as const;
+
+export type PostStatus = (typeof POST_STATUSES)[number];
+
+export const POST_TARGET_STATUSES = [
+  "PENDING",
+  "SCHEDULED",
+  "PUBLISHING",
+  "PUBLISHED",
+  "FAILED",
+  "SKIPPED",
+  "CANCELLED",
+] as const;
+
+export type PostTargetStatus = (typeof POST_TARGET_STATUSES)[number];
+
 export const WORKSPACE_ROLES = [
   "OWNER",
   "ADMIN",

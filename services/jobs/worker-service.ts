@@ -24,6 +24,8 @@ import { CAMPAIGN_PUBLIC_COLUMNS, JOB_PUBLIC_COLUMNS, type Job } from "@/types/c
 import { LEAD_PUBLIC_COLUMNS } from "@/types/crm";
 import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import { toJob } from "@/services/campaigns/mapper";
+import { refreshPostRollup } from "@/services/posts/post-service";
+import { POST_PUBLIC_COLUMNS, POST_TARGET_PUBLIC_COLUMNS } from "@/types/post";
 import type { ContactStatus } from "@/types/status";
 
 export async function listCampaignJobs(workspaceId: string, campaignId: string): Promise<Job[]> {
@@ -34,6 +36,23 @@ export async function listCampaignJobs(workspaceId: string, campaignId: string):
     .select(JOB_PUBLIC_COLUMNS)
     .eq("workspace_id", workspaceId)
     .eq("campaign_id", campaignId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  return (data ?? []).map(toJob);
+}
+
+export async function listPostJobs(workspaceId: string, postId: string): Promise<Job[]> {
+  await requireWorkspaceContext(workspaceId);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("jobs")
+    .select(JOB_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .eq("post_id", postId)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -64,6 +83,7 @@ export async function countSuccessfulContactJobsToday(workspaceId: string): Prom
     .from("jobs")
     .select("id", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
+    .eq("type", "CONTACT")
     .eq("status", "SUCCESS")
     .gte("completed_at", startOfDay.toISOString());
   if (error) {
@@ -125,7 +145,21 @@ export async function processJobBatch(input: {
 }
 
 async function processClaimedJob(job: Job, userId: string): Promise<void> {
+  if (job.type === "PUBLISH") {
+    await processPublishJob(job, userId);
+    return;
+  }
+
+  await processContactJob(job, userId);
+}
+
+async function processContactJob(job: Job, userId: string): Promise<void> {
   const supabase = await createClient();
+  if (!job.leadId || !job.action) {
+    throw new ValidationError("Contact job is missing a lead or action");
+  }
+  const action = job.action;
+  const leadId = job.leadId;
 
   try {
     if (job.campaignId) {
@@ -146,7 +180,7 @@ async function processClaimedJob(job: Job, userId: string): Promise<void> {
     const { data: lead } = await supabase
       .from("leads")
       .select(LEAD_PUBLIC_COLUMNS)
-      .eq("id", job.leadId)
+      .eq("id", leadId)
       .maybeSingle();
     if (!lead) {
       throw new ValidationError("Lead not found");
@@ -170,8 +204,8 @@ async function processClaimedJob(job: Job, userId: string): Promise<void> {
       throw new ValidationError("Job is missing a social profile");
     }
 
-    if (isAdapterContactAction(job.action)) {
-      await markRelationship(job, job.action === "INVITE" ? "INVITE_PENDING" : "MESSAGE_PENDING");
+    if (isAdapterContactAction(action)) {
+      await markRelationship(job, action === "INVITE" ? "INVITE_PENDING" : "MESSAGE_PENDING");
       const { data: secrets, error: secretError } = await supabase.rpc("read_social_account_secrets", {
         p_account_id: job.socialAccountId,
       });
@@ -201,14 +235,14 @@ async function processClaimedJob(job: Job, userId: string): Promise<void> {
         workspaceId: job.workspaceId,
         socialAccountId: job.socialAccountId,
         socialProfileId: job.socialProfileId,
-        leadId: job.leadId,
-        action: job.action,
+        leadId,
+        action,
         body: job.body ?? undefined,
       });
 
       await finishJob(job, userId, {
         status: "SUCCESS",
-        relationshipStatus: job.action === "INVITE" ? "INVITE_SENT" : "MESSAGE_SENT",
+        relationshipStatus: action === "INVITE" ? "INVITE_SENT" : "MESSAGE_SENT",
         result: { status: result.status, externalMessageId: result.externalMessageId },
         activity: "CONTACT_ACTION_SUCCESS",
       });
@@ -217,22 +251,155 @@ async function processClaimedJob(job: Job, userId: string): Promise<void> {
 
     await recordLeadInteraction({
       workspaceId: job.workspaceId,
-      leadId: job.leadId,
+      leadId,
       userId,
       type: "NOTE",
       socialProfileId: job.socialProfileId,
       socialAccountId: job.socialAccountId,
       relationshipId: job.relationshipId,
       body:
-        job.action === "OPEN_PROFILE"
+        action === "OPEN_PROFILE"
           ? "Open-profile job recorded. No automated contact was sent."
           : "Manual action required. No automated contact was sent.",
-      metadata: { jobId: job.id, action: job.action },
+      metadata: { jobId: job.id, action },
     });
     await finishJob(job, userId, {
       status: "SUCCESS",
-      result: { status: job.action },
+      result: { status: action },
       activity: "CONTACT_ACTION_SUCCESS",
+    });
+  } catch (caught) {
+    await failOrRetry(job, userId, caught);
+  }
+}
+
+async function processPublishJob(job: Job, userId: string): Promise<void> {
+  const supabase = await createClient();
+
+  try {
+    if (!job.postId || !job.postTargetId) {
+      throw new ValidationError("Publish job is missing a post target");
+    }
+
+    const { data: post } = await supabase
+      .from("posts")
+      .select(POST_PUBLIC_COLUMNS)
+      .eq("id", job.postId)
+      .maybeSingle();
+    if (!post || post.status === "CANCELLED") {
+      await supabase
+        .from("jobs")
+        .update({
+          status: "CANCELLED",
+          locked_at: null,
+          locked_by: null,
+          completed_at: new Date().toISOString(),
+          last_error: "Post was cancelled",
+        })
+        .eq("id", job.id);
+      return;
+    }
+
+    const { data: target } = await supabase
+      .from("post_targets")
+      .select(POST_TARGET_PUBLIC_COLUMNS)
+      .eq("id", job.postTargetId)
+      .maybeSingle();
+    if (!target || target.status === "CANCELLED") {
+      await supabase
+        .from("jobs")
+        .update({
+          status: "CANCELLED",
+          locked_at: null,
+          locked_by: null,
+          completed_at: new Date().toISOString(),
+          last_error: "Post target was cancelled",
+        })
+        .eq("id", job.id);
+      return;
+    }
+
+    if (target.status === "PUBLISHED" && target.external_post_id) {
+      await finishJob(job, userId, {
+        status: "SUCCESS",
+        result: { externalPostId: target.external_post_id },
+        activity: "POST_PUBLISHED",
+      });
+      return;
+    }
+
+    const { data: account } = await supabase
+      .from("social_accounts")
+      .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
+      .eq("id", job.socialAccountId)
+      .maybeSingle();
+    if (
+      !account ||
+      !isAccountOperable(account.status) ||
+      deriveTokenStatus({ status: account.status, tokenExpiresAt: account.token_expires_at }) !== "CONNECTED"
+    ) {
+      throw new SocialAccountUnavailableError();
+    }
+
+    await supabase
+      .from("post_targets")
+      .update({ status: "PUBLISHING", last_error: null })
+      .eq("id", target.id);
+
+    const { data: secrets, error: secretError } = await supabase.rpc("read_social_account_secrets", {
+      p_account_id: job.socialAccountId,
+    });
+    const secret = secrets?.[0];
+    if (secretError || !secret?.access_token_encrypted) {
+      throw new SocialAccountUnavailableError("Social account has no access token");
+    }
+
+    const adapter = getSocialAdapter(account.platform, {
+      accessToken: decryptSecret(secret.access_token_encrypted, getTokenEncryptionKey()),
+      metadata: secret.metadata,
+    });
+    const capabilities = await adapter.getCapabilities();
+    if (!capabilities.publishing) {
+      throw new UnsupportedActionError(`${account.platform} publishing is not enabled yet`);
+    }
+
+    const limiter = new AccountRateLimiter(async ({ accountId, windowStart, maxActions }) => {
+      const { data, error: rateError } = await supabase.rpc("increment_account_rate_bucket", {
+        p_account_id: accountId,
+        p_window_start: windowStart,
+        p_max: maxActions,
+      });
+      if (rateError) {
+        throw new ValidationError(rateError.message);
+      }
+      return data ?? 0;
+    });
+    await limiter.take(job.socialAccountId, adapter.getRateLimit());
+
+    const media = Array.isArray(post.media)
+      ? post.media.filter((item): item is string => typeof item === "string")
+      : [];
+    const result = await adapter.publish({
+      workspaceId: job.workspaceId,
+      socialAccountId: job.socialAccountId,
+      body: post.body,
+      media,
+    });
+
+    await supabase
+      .from("post_targets")
+      .update({
+        status: "PUBLISHED",
+        external_post_id: result.externalPostId,
+        published_at: result.publishedAt,
+        last_error: null,
+      })
+      .eq("id", target.id);
+
+    await finishJob(job, userId, {
+      status: "SUCCESS",
+      result: { externalPostId: result.externalPostId },
+      activity: "POST_PUBLISHED",
     });
   } catch (caught) {
     await failOrRetry(job, userId, caught);
@@ -257,7 +424,7 @@ async function finishJob(
     status: "SUCCESS" | "FAILED";
     relationshipStatus?: ContactStatus;
     result: Record<string, unknown>;
-    activity: "CONTACT_ACTION_SUCCESS" | "CONTACT_ACTION_FAILED";
+    activity: "CONTACT_ACTION_SUCCESS" | "CONTACT_ACTION_FAILED" | "POST_PUBLISHED" | "POST_FAILED";
     error?: string;
   },
 ): Promise<void> {
@@ -278,6 +445,14 @@ async function finishJob(
     })
     .eq("id", job.id);
 
+  if (job.postTargetId && input.status === "FAILED") {
+    await supabase
+      .from("post_targets")
+      .update({ status: "FAILED", last_error: input.error ?? "Publish failed" })
+      .eq("id", job.postTargetId)
+      .neq("status", "PUBLISHED");
+  }
+
   await logActivity({
     workspaceId: job.workspaceId,
     userId,
@@ -289,6 +464,9 @@ async function finishJob(
 
   if (job.campaignId) {
     await maybeCompleteCampaign(job.workspaceId, job.campaignId);
+  }
+  if (job.postId) {
+    await refreshPostRollup(job.workspaceId, job.postId);
   }
 }
 
@@ -307,17 +485,28 @@ async function failOrRetry(job: Job, userId: string, caught: unknown): Promise<v
   if (caught instanceof DoNotContactError || outcome.status === "FAILED") {
     await finishJob(job, userId, {
       status: "FAILED",
-      relationshipStatus: caught instanceof UnsupportedActionError || caught instanceof DoNotContactError || caught instanceof SocialAccountUnavailableError
-        ? "FAILED"
-        : undefined,
+      relationshipStatus:
+        job.type === "CONTACT" &&
+        (caught instanceof UnsupportedActionError ||
+          caught instanceof DoNotContactError ||
+          caught instanceof SocialAccountUnavailableError)
+          ? "FAILED"
+          : undefined,
       result: { error: isAppError(caught) ? caught.code : "INTERNAL" },
-      activity: "CONTACT_ACTION_FAILED",
+      activity: job.type === "PUBLISH" ? "POST_FAILED" : "CONTACT_ACTION_FAILED",
       error: message,
     });
     return;
   }
 
   const supabase = await createClient();
+  if (job.postTargetId) {
+    await supabase
+      .from("post_targets")
+      .update({ status: "PENDING", last_error: message })
+      .eq("id", job.postTargetId)
+      .neq("status", "PUBLISHED");
+  }
   await supabase
     .from("jobs")
     .update({
