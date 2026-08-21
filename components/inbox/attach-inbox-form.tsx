@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { attachInboxEventAction, idleActionState } from "@/app/actions/inbox";
-import type { Lead } from "@/types/crm";
+import type { PickerLead } from "@/lib/leads/picker";
 
 export function AttachInboxForm({
   workspaceId,
@@ -13,7 +13,7 @@ export function AttachInboxForm({
 }: {
   workspaceId: string;
   inboxEventId: string;
-  leads: Lead[];
+  leads: PickerLead[];
 }) {
   const action = attachInboxEventAction.bind(null, workspaceId, inboxEventId);
   const [state, formAction, pending] = useActionState(action, idleActionState);
@@ -21,7 +21,7 @@ export function AttachInboxForm({
   if (leads.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        Create a lead first. Inbox never auto-creates people.
+        Create a lead first or search for an existing person. Inbox never auto-creates people.
       </p>
     );
   }

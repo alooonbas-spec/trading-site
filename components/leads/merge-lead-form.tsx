@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { idleActionState, mergeLeadAction } from "@/app/actions/leads";
 import type { Lead } from "@/types/crm";
+import type { PickerLead } from "@/lib/leads/picker";
 
 export function MergeLeadForm({
   workspaceId,
@@ -13,7 +14,7 @@ export function MergeLeadForm({
 }: {
   workspaceId: string;
   targetLead: Lead;
-  candidates: Lead[];
+  candidates: PickerLead[];
 }) {
   const action = mergeLeadAction.bind(null, workspaceId, targetLead.id);
   const [state, formAction, pending] = useActionState(action, idleActionState);

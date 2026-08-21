@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canManageWorkspace, canMutateWorkspaceData } from "@/lib/auth/permissions";
-import { findLead, listLeads } from "@/services/leads/lead-service";
+import { findLead, searchPickerLeads } from "@/services/leads/lead-service";
 import { listSocialProfiles } from "@/services/leads/profile-service";
 import { listContactRelationships } from "@/services/leads/relationship-service";
 import { listLeadInteractions } from "@/services/leads/interaction-service";
@@ -10,6 +10,7 @@ import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { listInboxEventsForLead } from "@/services/inbox/query-service";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
+import { LEAD_PICKER_LIMIT_HINT, toPickerLead } from "@/lib/leads/picker";
 import { EditLeadForm } from "@/components/leads/edit-lead-form";
 import { CreateProfileForm } from "@/components/leads/create-profile-form";
 import { CreateRelationshipForm } from "@/components/leads/create-relationship-form";
@@ -20,7 +21,9 @@ import { DeleteLeadButton } from "@/components/leads/delete-lead-button";
 import { CollectPublicProfileForm } from "@/components/leads/collect-public-profile-form";
 import { LeadInboxEvents } from "@/components/inbox/lead-inbox-events";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
 import { isTinyFishConfigured } from "@/lib/tinyfish/config";
 
@@ -29,7 +32,7 @@ export default async function LeadDetailPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string; leadId: string }>;
-  searchParams: Promise<{ inbox?: string; timeline?: string }>;
+  searchParams: Promise<{ inbox?: string; timeline?: string; mergeQ?: string }>;
 }) {
   const { workspaceId, leadId } = await params;
   const query = await searchParams;
@@ -46,10 +49,12 @@ export default async function LeadDetailPage({
     listContactRelationships(workspaceId, leadId),
     listLeadInteractions(workspaceId, leadId, query.timeline),
     listSocialAccounts(workspaceId),
-    canMutate ? listLeads({ workspaceId }) : Promise.resolve([]),
+    canMutate ? searchPickerLeads(workspaceId, query.mergeQ) : Promise.resolve({ items: [], hasMore: false }),
     listInboxEventsForLead(workspaceId, leadId, query.inbox),
   ]);
-  const mergeCandidates = others.filter((item) => item.id !== lead.id);
+  const mergeCandidates = others.items
+    .filter((item) => item.id !== lead.id)
+    .map(toPickerLead);
   const leadPath = `/w/${workspaceId}/leads/${leadId}`;
   const inboxEvents = inboxPage.items;
   const interactions = interactionPage.items;
@@ -185,10 +190,16 @@ export default async function LeadDetailPage({
         <CardContent className="space-y-4">
           <LeadInboxEvents events={inboxEvents} canMutate={canMutate} />
           <ListPagination
-            newestHref={query.inbox ? searchHref(leadPath, { timeline: query.timeline }) : null}
+            newestHref={
+              query.inbox ? searchHref(leadPath, { timeline: query.timeline, mergeQ: query.mergeQ }) : null
+            }
             olderHref={
               inboxPage.nextCursor
-                ? searchHref(leadPath, { inbox: inboxPage.nextCursor, timeline: query.timeline })
+                ? searchHref(leadPath, {
+                    inbox: inboxPage.nextCursor,
+                    timeline: query.timeline,
+                    mergeQ: query.mergeQ,
+                  })
                 : null
             }
           />
@@ -209,10 +220,16 @@ export default async function LeadDetailPage({
             canMutate={canMutate}
           />
           <ListPagination
-            newestHref={query.timeline ? searchHref(leadPath, { inbox: query.inbox }) : null}
+            newestHref={
+              query.timeline ? searchHref(leadPath, { inbox: query.inbox, mergeQ: query.mergeQ }) : null
+            }
             olderHref={
               interactionPage.nextCursor
-                ? searchHref(leadPath, { inbox: query.inbox, timeline: interactionPage.nextCursor })
+                ? searchHref(leadPath, {
+                    inbox: query.inbox,
+                    timeline: interactionPage.nextCursor,
+                    mergeQ: query.mergeQ,
+                  })
                 : null
             }
           />
@@ -222,9 +239,22 @@ export default async function LeadDetailPage({
         <Card>
           <CardHeader>
             <CardTitle>Merge</CardTitle>
-            <CardDescription>The selected lead is absorbed into this one and archived.</CardDescription>
+            <CardDescription>
+              The selected lead is absorbed into this one and archived. {LEAD_PICKER_LIMIT_HINT}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <form className="grid gap-2 md:grid-cols-[1fr_auto]" method="get">
+              {query.inbox ? <input type="hidden" name="inbox" value={query.inbox} /> : null}
+              {query.timeline ? <input type="hidden" name="timeline" value={query.timeline} /> : null}
+              <Input name="mergeQ" placeholder="Search a lead to merge from" defaultValue={query.mergeQ ?? ""} />
+              <Button type="submit" variant="outline">
+                Find lead
+              </Button>
+            </form>
+            {others.hasMore ? (
+              <p className="text-xs text-muted-foreground">More than 200 leads match. Refine the search.</p>
+            ) : null}
             <MergeLeadForm workspaceId={workspaceId} targetLead={lead} candidates={mergeCandidates} />
           </CardContent>
         </Card>

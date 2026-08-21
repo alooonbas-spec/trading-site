@@ -1,29 +1,53 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createCampaignAction, idleActionState } from "@/app/actions/campaigns";
+import { searchPickerLeadsAction, type PickerLeadState } from "@/app/actions/leads";
 import { CAMPAIGN_ACTIONS } from "@/types/campaign";
-import type { Lead } from "@/types/crm";
+import { LEAD_PICKER_LIMIT_HINT, type PickerLead } from "@/lib/leads/picker";
 import type { SocialAccountPublic } from "@/types/social-account";
 import { SocialAccountSelector } from "@/components/social-accounts/social-account-selector";
 
 export function CreateCampaignForm({
   workspaceId,
-  leads,
+  initialLeads,
+  initialHasMore,
   accounts,
 }: {
   workspaceId: string;
-  leads: Lead[];
+  initialLeads: PickerLead[];
+  initialHasMore: boolean;
   accounts: SocialAccountPublic[];
 }) {
   const action = createCampaignAction.bind(null, workspaceId);
   const [state, formAction, pending] = useActionState(action, idleActionState);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
-  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const [selectedLeads, setSelectedLeads] = useState<PickerLead[]>([]);
+  const [search, setSearch] = useState("");
+  const initialPicker: PickerLeadState = {
+    error: null,
+    query: "",
+    leads: initialLeads,
+    hasMore: initialHasMore,
+  };
+  const [picker, searchLeads, searching] = useActionState(
+    searchPickerLeadsAction.bind(null, workspaceId),
+    initialPicker,
+  );
+  const visibleIds = new Set(picker.leads.map((lead) => lead.id));
+  const selectedOutsideResults = selectedLeads.filter((lead) => !visibleIds.has(lead.id));
+
+  function toggleLead(lead: PickerLead) {
+    setSelectedLeads((current) =>
+      current.some((item) => item.id === lead.id)
+        ? current.filter((item) => item.id !== lead.id)
+        : [...current, lead],
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-4">
@@ -65,26 +89,64 @@ export function CreateCampaignForm({
       </div>
       <div className="space-y-2">
         <Label>Leads</Label>
-        {selectedLeads.map((id) => (
-          <input key={id} type="hidden" name="leadIds" value={id} />
+        {selectedLeads.map((lead) => (
+          <input key={lead.id} type="hidden" name="leadIds" value={lead.id} />
         ))}
+        <div className="flex gap-2">
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search name, email, phone"
+            autoComplete="off"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={searching}
+            onClick={() => {
+              const data = new FormData();
+              data.set("q", search);
+              startTransition(() => {
+                searchLeads(data);
+              });
+            }}
+          >
+            {searching ? "Searching..." : "Search"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">{LEAD_PICKER_LIMIT_HINT}</p>
+        {picker.hasMore ? (
+          <p className="text-xs text-muted-foreground">More than 200 leads match. Refine the search.</p>
+        ) : null}
+        {picker.error ? <p className="text-sm text-destructive">{picker.error}</p> : null}
         <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-border p-3">
-          {leads.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Create leads before starting a campaign.</p>
+          {selectedOutsideResults.length > 0 ? (
+            <p className="text-xs text-muted-foreground">Selected</p>
+          ) : null}
+          {selectedOutsideResults.map((lead) => (
+            <label key={`selected-${lead.id}`} className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked
+                onChange={() => toggleLead(lead)}
+              />
+              <span>
+                {lead.displayName}
+                {lead.doNotContact ? " · DNC" : ""}
+              </span>
+            </label>
+          ))}
+          {picker.leads.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No matching leads. Search or create a lead first.</p>
           ) : (
-            leads.map((lead) => (
+            picker.leads.map((lead) => (
               <label key={lead.id} className="flex cursor-pointer items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   className="size-4 accent-primary"
-                  checked={selectedLeads.includes(lead.id)}
-                  onChange={() =>
-                    setSelectedLeads((current) =>
-                      current.includes(lead.id)
-                        ? current.filter((id) => id !== lead.id)
-                        : [...current, lead.id],
-                    )
-                  }
+                  checked={selectedLeads.some((item) => item.id === lead.id)}
+                  onChange={() => toggleLead(lead)}
                 />
                 <span>
                   {lead.displayName}

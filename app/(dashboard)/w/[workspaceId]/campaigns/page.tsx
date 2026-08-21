@@ -2,12 +2,13 @@ import Link from "next/link";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
 import { listCampaignsPage } from "@/services/campaigns/campaign-service";
-import { listLeads } from "@/services/leads/lead-service";
+import { searchPickerLeads } from "@/services/leads/lead-service";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { CreateCampaignForm } from "@/components/campaigns/create-campaign-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
+import { toPickerLead } from "@/lib/leads/picker";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -30,9 +31,9 @@ export default async function CampaignsPage({
   const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
   const canMutate = canMutateWorkspaceData(context.role);
-  const [campaignsPage, leads, accounts] = await Promise.all([
+  const [campaignsPage, picker, accounts] = await Promise.all([
     listCampaignsPage(workspaceId, query.after),
-    listLeads({ workspaceId }),
+    searchPickerLeads(workspaceId),
     listSocialAccounts(workspaceId),
   ]);
   const campaigns = campaignsPage.items;
@@ -54,11 +55,16 @@ export default async function CampaignsPage({
             <CardDescription>
               Jobs are created when the campaign starts. MESSAGE enqueues only for accounts whose
               adapter reports messaging, including VK community tokens. INVITE currently enqueues for
-              nobody.
+              nobody. Lead picker shows the newest 200 matching leads.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <CreateCampaignForm workspaceId={workspaceId} leads={leads} accounts={accounts} />
+            <CreateCampaignForm
+              workspaceId={workspaceId}
+              initialLeads={picker.items.map(toPickerLead)}
+              initialHasMore={picker.hasMore}
+              accounts={accounts}
+            />
           </CardContent>
         </Card>
       ) : null}

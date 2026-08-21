@@ -231,6 +231,10 @@ Leads, Campaigns, Posts, and Monitoring index pages use the same `created_at` ke
 
 Campaign, post, and monitoring rule pages paginate their job lists with the same keyset. Campaign leads paginate independently (`leads`) from campaign jobs (`after`). Monitoring events (`after`) and jobs (`jobs`) stay independent. Detail pages load leads and social accounts by id instead of the whole workspace CRM. Retry still lives on the Jobs queue and does not rewrite `LeadStatus` or `do_not_contact`.
 
+## Lead pickers (PHASE 31)
+
+Campaign compose, inbox attach, and lead merge no longer call unbounded `listLeads`. They search the newest 200 matching leads (`searchPickerLeads` / `listLeadsPage`). Selected campaign leads stay checked across searches. Inbox `leadQ` and merge `mergeQ` are GET searches that keep the other page cursors. The picker never creates people and does not rewrite `do_not_contact`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

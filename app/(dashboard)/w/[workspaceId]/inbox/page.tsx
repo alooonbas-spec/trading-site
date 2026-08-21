@@ -8,7 +8,7 @@ import {
   parseInboxReplyKindFilter,
 } from "@/lib/inbox/filters";
 import { INBOX_REPLY_KIND_LABELS } from "@/lib/inbox/reply-kind";
-import { listLeads } from "@/services/leads/lead-service";
+import { searchPickerLeads } from "@/services/leads/lead-service";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { AttachInboxForm } from "@/components/inbox/attach-inbox-form";
 import { InboxControls } from "@/components/inbox/inbox-controls";
@@ -17,6 +17,7 @@ import { ReplyInboxForm } from "@/components/inbox/reply-inbox-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
+import { LEAD_PICKER_LIMIT_HINT, toPickerLead } from "@/lib/leads/picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +45,7 @@ export default async function InboxPage({
     platform?: string;
     kind?: string;
     after?: string;
+    leadQ?: string;
   }>;
 }) {
   const { workspaceId } = await params;
@@ -55,7 +57,7 @@ export default async function InboxPage({
   const socialAccountId = parseInboxAccountIdFilter(query.account);
   const platform = parseInboxPlatformFilter(query.platform);
   const replyKind = parseInboxReplyKindFilter(query.kind);
-  const [inboxPage, leads, accounts] = await Promise.all([
+  const [inboxPage, picker, accounts] = await Promise.all([
     listInboxEvents({
       workspaceId,
       match,
@@ -65,16 +67,18 @@ export default async function InboxPage({
       replyKind,
       after: query.after,
     }),
-    canMutate ? listLeads({ workspaceId }) : Promise.resolve([]),
+    canMutate ? searchPickerLeads(workspaceId, query.leadQ) : Promise.resolve({ items: [], hasMore: false }),
     listSocialAccounts(workspaceId),
   ]);
   const events = inboxPage.items;
+  const leads = picker.items.map(toPickerLead);
   const filterQuery = {
     q: query.q,
     match: match === "all" ? undefined : match,
     account: socialAccountId,
     platform,
     kind: replyKind,
+    leadQ: query.leadQ,
   };
   const inboxPath = `/w/${workspaceId}/inbox`;
 
@@ -95,6 +99,7 @@ export default async function InboxPage({
         canMutate={canMutate}
       />
       <form className="grid gap-2 md:grid-cols-2 xl:grid-cols-6" method="get">
+        {query.leadQ ? <input type="hidden" name="leadQ" value={query.leadQ} /> : null}
         <Input name="q" placeholder="Search sender or message" defaultValue={query.q ?? ""} />
         <select
           name="match"
@@ -148,6 +153,26 @@ export default async function InboxPage({
           Filter
         </Button>
       </form>
+      {canMutate ? (
+        <form className="grid gap-2 md:grid-cols-[1fr_auto]" method="get">
+          {query.q ? <input type="hidden" name="q" value={query.q} /> : null}
+          {match !== "all" ? <input type="hidden" name="match" value={match} /> : null}
+          {socialAccountId ? <input type="hidden" name="account" value={socialAccountId} /> : null}
+          {platform ? <input type="hidden" name="platform" value={platform} /> : null}
+          {replyKind ? <input type="hidden" name="kind" value={replyKind} /> : null}
+          {query.after ? <input type="hidden" name="after" value={query.after} /> : null}
+          <Input name="leadQ" placeholder="Find a lead to attach" defaultValue={query.leadQ ?? ""} />
+          <Button type="submit" variant="outline">
+            Find lead
+          </Button>
+        </form>
+      ) : null}
+      {canMutate ? (
+        <p className="text-xs text-muted-foreground">
+          {LEAD_PICKER_LIMIT_HINT}
+          {picker.hasMore ? " More than 200 leads match. Refine the search." : ""}
+        </p>
+      ) : null}
       {events.length === 0 ? (
         <EmptyState
           title="No inbox events match"
@@ -159,8 +184,8 @@ export default async function InboxPage({
             <CardTitle>Events</CardTitle>
             <CardDescription>
               Showing {events.length} event{events.length === 1 ? "" : "s"} on this page. Matching uses
-              the receiving account platform, not a platform switch in this page. Older pages use a
-              created_at keyset, not OFFSET.
+              the receiving account platform, not a platform switch in this page. Attach uses the newest
+              200 matching leads. Older pages use a created_at keyset, not OFFSET.
             </CardDescription>
           </CardHeader>
           <CardContent>

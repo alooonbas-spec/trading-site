@@ -58,7 +58,7 @@ describe("PHASE 29 operator index pagination", () => {
     expect(monitoring).not.toContain("do_not_contact");
   });
 
-  it("exposes Newest/Older links on index pages and keeps picker listLeads unbounded", () => {
+  it("exposes Newest/Older links on index pages", () => {
     const leadsPage = readFileSync("app/(dashboard)/w/[workspaceId]/leads/page.tsx", "utf8");
     const campaignsPage = readFileSync("app/(dashboard)/w/[workspaceId]/campaigns/page.tsx", "utf8");
     const postsPage = readFileSync("app/(dashboard)/w/[workspaceId]/posts/page.tsx", "utf8");
@@ -78,9 +78,9 @@ describe("PHASE 29 operator index pagination", () => {
     expect(leadsPage).toContain("do_not_contact");
     expect(leadsPage).not.toContain("name=\"after\"");
     expect(campaignsPage).toContain("listCampaignsPage");
-    expect(campaignsPage).toContain("listLeads({ workspaceId })");
-    expect(inboxPage).toContain("listLeads({ workspaceId })");
-    expect(leadDetail).toContain("listLeads({ workspaceId })");
+    expect(campaignsPage).toContain("searchPickerLeads");
+    expect(inboxPage).toContain("searchPickerLeads");
+    expect(leadDetail).toContain("searchPickerLeads");
     expect(rulePage).toContain("listMonitoringEventsPage");
   });
 });

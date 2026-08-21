@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { errorMessage } from "@/lib/errors";
-import { createLead, deleteLead, updateLead } from "@/services/leads/lead-service";
+import { createLead, deleteLead, updateLead, searchPickerLeads } from "@/services/leads/lead-service";
 import { createSocialProfile } from "@/services/leads/profile-service";
 import { createContactRelationship, updateContactRelationship } from "@/services/leads/relationship-service";
 import { addLeadNote } from "@/services/leads/note-service";
 import { mergeLeads } from "@/services/leads/merge-service";
 import { collectLeadPublicProfile } from "@/services/leads/collect-service";
 import { parsePlatform } from "@/services/social-accounts/account-service";
+import { toPickerLead, type PickerLead } from "@/lib/leads/picker";
 import type { ContactStatus, LeadStatus } from "@/types/status";
 import { CONTACT_STATUSES, LEAD_STATUSES } from "@/types/status";
 
@@ -19,6 +20,32 @@ export type ActionState = {
 };
 
 export const idleActionState: ActionState = { error: null, success: null };
+
+export type PickerLeadState = {
+  error: string | null;
+  query: string;
+  leads: PickerLead[];
+  hasMore: boolean;
+};
+
+export async function searchPickerLeadsAction(
+  workspaceId: string,
+  _prev: PickerLeadState,
+  formData: FormData,
+): Promise<PickerLeadState> {
+  const query = String(formData.get("q") ?? "");
+  try {
+    const result = await searchPickerLeads(workspaceId, query);
+    return {
+      error: null,
+      query: query.trim(),
+      leads: result.items.map(toPickerLead),
+      hasMore: result.hasMore,
+    };
+  } catch (error) {
+    return { error: errorMessage(error), query: query.trim(), leads: [], hasMore: false };
+  }
+}
 
 function parseLeadStatus(value: string): LeadStatus | undefined {
   if (!value) {

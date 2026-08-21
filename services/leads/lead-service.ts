@@ -12,6 +12,7 @@ import {
 } from "@/lib/pagination/keyset";
 import { logActivity } from "@/services/activity/activity-service";
 import { createLeadSchema, updateLeadSchema } from "@/lib/validation/lead";
+import { sanitizePickerQuery } from "@/lib/leads/picker";
 import { LEAD_PUBLIC_COLUMNS, type Lead } from "@/types/crm";
 import { emptyToNull, toLead } from "@/services/leads/mapper";
 import { recordLeadInteraction } from "@/services/leads/interaction-service";
@@ -72,6 +73,20 @@ export async function listLeadsPage(
   return {
     items: await attachLeadProfileCounts(input.workspaceId, page),
     nextCursor: nextKeysetCursor(page, hasMore),
+  };
+}
+
+export async function searchPickerLeads(
+  workspaceId: string,
+  query?: string,
+): Promise<{ items: Lead[]; hasMore: boolean }> {
+  const page = await listLeadsPage({
+    workspaceId,
+    query: sanitizePickerQuery(query),
+  });
+  return {
+    items: page.items,
+    hasMore: page.nextCursor !== null,
   };
 }
 

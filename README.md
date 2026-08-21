@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 30: campaign, post, and monitoring detail jobs (and campaign leads) use created_at keyset pagination. Detail pages load leads and accounts by id. No new SQL.
+PHASE 31: campaign, inbox attach, and merge lead pickers search the newest 200 matching leads instead of loading the whole CRM. No new SQL.
