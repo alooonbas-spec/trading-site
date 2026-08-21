@@ -1,8 +1,15 @@
 import { z } from "zod";
 import { SocialError, ValidationError } from "@/lib/errors";
+import {
+  laterDigitId,
+  parseNamedInboxCursor,
+  serializeNamedInboxCursor,
+} from "@/lib/inbox/cursor";
 import { matchKeywords, normalizeKeywords } from "@/lib/monitoring/keywords";
 import type { MonitorInput, MonitorResult } from "@/social/core/adapter";
 import { vkCall } from "@/social/vk/api";
+
+export const VK_SEARCH_PAGE_DONE = "done";
 
 const searchSchema = z.object({
   items: z
@@ -35,6 +42,7 @@ const searchSchema = z.object({
       }),
     )
     .optional(),
+  next_from: z.string().optional(),
 });
 
 export function buildVkNewsfeedSearchQuery(keywords: string[]): string {
@@ -46,10 +54,50 @@ export function buildVkNewsfeedSearchQuery(keywords: string[]): string {
 }
 
 export function vkNewsfeedSearchCursor(cursor?: string | null): string | undefined {
-  if (cursor && /^\d{10}$/.test(cursor)) {
-    return cursor;
+  const value = cursor?.trim();
+  if (!value) {
+    return undefined;
+  }
+  if (/^\d{10}$/.test(value)) {
+    return value;
+  }
+  const time = parseNamedInboxCursor(value).time?.trim();
+  if (time && /^\d{10}$/.test(time)) {
+    return time;
   }
   return undefined;
+}
+
+export function encodeVkSearchFrom(startFrom: string): string {
+  return Buffer.from(startFrom, "utf8").toString("base64url");
+}
+
+export function decodeVkSearchFrom(value: string | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw || raw === VK_SEARCH_PAGE_DONE) {
+    return null;
+  }
+  try {
+    const decoded = Buffer.from(raw, "base64url").toString("utf8").trim();
+    return decoded.length > 0 ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+export function nextVkSearchPageCursor(input: {
+  stored?: string;
+  firstPageFrom: string | null;
+  olderPageFrom: string | null;
+  fetchedOlder: boolean;
+}): string {
+  if (input.stored === VK_SEARCH_PAGE_DONE) {
+    return VK_SEARCH_PAGE_DONE;
+  }
+  if (!input.fetchedOlder) {
+    return input.firstPageFrom ? encodeVkSearchFrom(input.firstPageFrom) : VK_SEARCH_PAGE_DONE;
+  }
+  return input.olderPageFrom ? encodeVkSearchFrom(input.olderPageFrom) : VK_SEARCH_PAGE_DONE;
 }
 
 function authorLabel(
@@ -79,7 +127,10 @@ function authorLabel(
   return group.screen_name ? `@${group.screen_name}` : (group.name ?? null);
 }
 
-export function parseVkNewsfeedSearch(payload: unknown, keywords: string[]): MonitorResult {
+export function parseVkNewsfeedSearch(
+  payload: unknown,
+  keywords: string[],
+): MonitorResult & { nextFrom: string | null } {
   const parsed = searchSchema.safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("VK newsfeed.search returned an unexpected payload");
@@ -114,7 +165,38 @@ export function parseVkNewsfeedSearch(payload: unknown, keywords: string[]): Mon
   return {
     events,
     cursor: newestDate > 0 ? String(newestDate) : null,
+    nextFrom: parsed.data.next_from?.trim() || null,
   };
+}
+
+function uniqueVkNewsfeedEvents(events: MonitorResult["events"]): MonitorResult["events"] {
+  const seen = new Set<string>();
+  const unique: MonitorResult["events"] = [];
+  for (const event of events) {
+    if (seen.has(event.externalId)) {
+      continue;
+    }
+    seen.add(event.externalId);
+    unique.push(event);
+  }
+  return unique;
+}
+
+async function searchVkNewsfeed(
+  accessToken: string,
+  query: string,
+  keywords: string[],
+  input: { startTime?: string; startFrom?: string },
+): Promise<MonitorResult & { nextFrom: string | null }> {
+  const payload = await vkCall("newsfeed.search", {
+    access_token: accessToken,
+    q: query,
+    count: "30",
+    extended: "1",
+    ...(input.startTime ? { start_time: input.startTime } : {}),
+    ...(input.startFrom ? { start_from: input.startFrom } : {}),
+  });
+  return parseVkNewsfeedSearch(payload, keywords);
 }
 
 export async function collectVkNewsfeedSearch(
@@ -123,17 +205,26 @@ export async function collectVkNewsfeedSearch(
 ): Promise<MonitorResult> {
   const query = buildVkNewsfeedSearchQuery(input.keywords);
   const startTime = vkNewsfeedSearchCursor(input.cursor);
-  const payload = await vkCall("newsfeed.search", {
-    access_token: accessToken,
-    q: query,
-    count: "30",
-    extended: "1",
-    ...(startTime ? { start_time: startTime } : {}),
-  });
-  const parsed = parseVkNewsfeedSearch(payload, input.keywords);
+  const named = parseNamedInboxCursor(input.cursor);
+  const olderFrom = decodeVkSearchFrom(named.pages);
+  const emptyPage = { events: [] as MonitorResult["events"], cursor: null as string | null, nextFrom: null as string | null };
+  const [latest, extra] = await Promise.all([
+    searchVkNewsfeed(accessToken, query, input.keywords, { startTime }),
+    olderFrom
+      ? searchVkNewsfeed(accessToken, query, input.keywords, { startTime, startFrom: olderFrom })
+      : Promise.resolve(emptyPage),
+  ]);
   return {
-    events: parsed.events,
-    cursor: parsed.cursor ?? input.cursor ?? null,
+    events: uniqueVkNewsfeedEvents([...latest.events, ...extra.events]),
+    cursor: serializeNamedInboxCursor({
+      pages: nextVkSearchPageCursor({
+        stored: named.pages,
+        firstPageFrom: latest.nextFrom,
+        olderPageFrom: extra.nextFrom,
+        fetchedOlder: Boolean(olderFrom),
+      }),
+      time: laterDigitId(startTime, laterDigitId(latest.cursor, extra.cursor)) ?? "",
+    }),
   };
 }
 

@@ -78,7 +78,7 @@ describe("PHASE 19 VK newsfeed.search", () => {
       sources: [],
       cursor: "1710000000",
     });
-    expect(result.cursor).toBe("1710000042");
+    expect(result.cursor).toBe("pages:done|time:1710000042");
     expect(result.events[0]).toMatchObject({
       externalId: "42_9",
       author: "Anna Lead",

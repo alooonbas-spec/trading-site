@@ -173,7 +173,7 @@ Safety policy:
 
 ## VK newsfeed monitoring (PHASE 19)
 
-- VK monitoring uses official `newsfeed.search` with a connected user token, or `VK_SERVICE_TOKEN` when no user token is present. Keyword matching still happens after collection. The cursor is the newest Unix `date` and is sent back as `start_time`.
+- VK monitoring uses official `newsfeed.search` with a connected user token, or `VK_SERVICE_TOKEN` when no user token is present. Keyword matching still happens after collection. The unix `date` watermark is sent back as `start_time`. PHASE 47 walks older `start_from` windows.
 - Tokenless runs without a service token fall back to TinyFish Search, or fail honestly if TinyFish is not configured. Facebook and Instagram still have no public keyword-search API, so they stay on TinyFish.
 - No new VK OAuth scope is required. The worker still branches on `job.type`, never `platform ===`.
 
@@ -294,6 +294,10 @@ Facebook `/{conversation-id}/messages` and Instagram `/{conversation-id}/message
 ## X mention and DM pagination (PHASE 46)
 
 X mentions (`GET /2/users/:id/mentions`) and Direct Messages (`GET /2/dm_events`) follow official `meta.next_token` as `pagination_token`. Each poll still reads the latest page (`max_results=10` mentions, `max_results=50` DMs). Mentions still send `since_id` on the latest page. If a next token exists, the next poll requests that page once on the same constructed endpoint. Opaque tokens are stored base64url-encoded in `mentionpages` and `dmpages` so named cursors cannot split on `:` or `|`. A short page stores `mentionpages:done` / `dmpages:done`. Extra DM pages are not dropped by the `dms` event-id watermark on first sight. Collectors set `pagination_token=` on the official path and do not treat `next_token` as a fetch URL.
+
+## VK newsfeed.search paging (PHASE 47)
+
+VK `newsfeed.search` follows official `next_from` as `start_from`. Each poll still reads the latest 30 posts with `extended=1`. `start_time` still comes from the unix `time` watermark (legacy 10-digit cursors stay the time watermark). If `next_from` exists, the next poll requests that page once. Opaque `start_from` values are stored base64url-encoded in `pages`. A short page stores `pages:done`. Extra-page posts are not dropped by the `time` watermark on first sight. `start_from` is omitted when it is not set.
 
 ## Social adapters (PHASE 2)
 
