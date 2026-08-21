@@ -118,6 +118,12 @@ describe("OAuth URL builders", () => {
       }),
     ).toContain("pages_manage_posts");
     expect(
+      buildFacebookAuthorizationUrl({
+        ...input,
+        redirectUri: "http://localhost:3000/api/social/facebook/callback",
+      }),
+    ).toContain("pages_messaging");
+    expect(
       buildInstagramAuthorizationUrl({
         ...input,
         redirectUri: "http://localhost:3000/api/social/instagram/callback",
@@ -135,6 +141,12 @@ describe("OAuth URL builders", () => {
         redirectUri: "http://localhost:3000/api/social/instagram/callback",
       }),
     ).toContain("instagram_business_manage_comments");
+    expect(
+      buildInstagramAuthorizationUrl({
+        ...input,
+        redirectUri: "http://localhost:3000/api/social/instagram/callback",
+      }),
+    ).toContain("instagram_business_manage_messages");
   });
 
   it("refuses OAuth when platform credentials are missing", () => {

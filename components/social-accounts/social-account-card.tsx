@@ -62,7 +62,7 @@ export function SocialAccountCard({
             field="pageId"
             label="Facebook Page ID"
             placeholder="Page id from /me/accounts"
-            hint="Required when the user manages more than one Page. Existing accounts must reconnect to grant pages_manage_posts."
+            hint="Required when the user manages more than one Page. Reconnect to grant pages_manage_posts, pages_manage_metadata, and pages_messaging."
           />
         ) : null}
         {canManage && account.platform === "vk" ? (
@@ -79,6 +79,13 @@ export function SocialAccountCard({
           <p className="text-xs text-muted-foreground">
             Mentions and Direct Messages need dm.read. Outbound campaign MESSAGE needs dm.write.
             Reconnect if this account was connected before those scopes.
+          </p>
+        ) : null}
+        {account.platform === "instagram" ? (
+          <p className="text-xs text-muted-foreground">
+            Media comments and Direct Messages need instagram_business_manage_messages. Outbound
+            MESSAGE only reaches people who already messaged this professional account (24-hour
+            window). Reconnect if this account was connected before that scope.
           </p>
         ) : null}
         {canManage && account.platform === "telegram" ? (

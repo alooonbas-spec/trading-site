@@ -260,21 +260,21 @@ describe("VK wall publishing", () => {
 });
 
 describe("PHASE 12 capabilities and source boundaries", () => {
-  it("enables official publish and keeps contact unsupported", async () => {
+  it("enables official publish and keeps VK contact unsupported", async () => {
     for (const platform of ["facebook", "instagram", "vk"] as const) {
       const adapter = getSocialAdapter(platform);
       expect((await adapter.getCapabilities()).publishing).toBe(true);
-      expect((await adapter.getCapabilities()).contactActions).toBe(false);
-      await expect(
-        adapter.executeContactAction({
-          workspaceId: "w",
-          socialAccountId: "a",
-          socialProfileId: "p",
-          leadId: "l",
-          action: "MESSAGE",
-        }),
-      ).rejects.toBeInstanceOf(UnsupportedActionError);
     }
+    expect((await getSocialAdapter("vk").getCapabilities()).contactActions).toBe(false);
+    await expect(
+      getSocialAdapter("vk").executeContactAction({
+        workspaceId: "w",
+        socialAccountId: "a",
+        socialProfileId: "p",
+        leadId: "l",
+        action: "MESSAGE",
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedActionError);
   });
 
   it("keeps platform switches out of the worker and uses official endpoints", () => {

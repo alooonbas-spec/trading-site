@@ -56,10 +56,11 @@ export function CreateCampaignForm({
         <Label htmlFor="campaign-body">Message body</Label>
         <Textarea id="campaign-body" name="body" />
         <p className="text-xs text-muted-foreground">
-          MESSAGE starts only for accounts whose adapter can message (Telegram bots and X Direct
-          Messages). INVITE is not enabled on any adapter yet, so start fails instead of queuing
-          jobs that cannot send. OPEN_PROFILE and MANUAL_ACTION_REQUIRED still enqueue without an
-          adapter send.
+          MESSAGE starts for Telegram bots, X Direct Messages, Facebook Page Messenger, and Instagram
+          professional DMs. Facebook and Instagram can only message people who already opened a
+          conversation (24-hour window). INVITE is not enabled on any adapter yet, so start fails
+          instead of queuing jobs that cannot send. OPEN_PROFILE and MANUAL_ACTION_REQUIRED still
+          enqueue without an adapter send.
         </p>
       </div>
       <div className="space-y-2">

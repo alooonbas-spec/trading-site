@@ -33,7 +33,7 @@ export async function platformsSupportingCampaignAction(
 
 export function unsupportedCampaignActionMessage(action: CampaignAction): string {
   if (action === "MESSAGE") {
-    return "None of the selected connected accounts can send MESSAGE. Connect a Telegram bot or reconnect X with Direct Message scopes (dm.read and dm.write). Facebook, Instagram, and VK messaging is not enabled.";
+    return "None of the selected connected accounts can send MESSAGE. Connect a Telegram bot, reconnect X with Direct Message scopes (dm.read and dm.write), or reconnect Facebook/Instagram with messaging permissions. VK user messaging is not enabled for new apps.";
   }
   if (action === "INVITE") {
     return "None of the selected connected accounts can send INVITE. No current adapter enables invites; Telegram bots cannot CRM-invite.";

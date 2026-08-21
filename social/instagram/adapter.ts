@@ -1,4 +1,4 @@
-import { AuthenticationError, ValidationError } from "@/lib/errors";
+import { AuthenticationError, UnsupportedActionError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
   BaseSocialAdapter,
@@ -8,6 +8,8 @@ import {
 } from "@/social/core/base-adapter";
 import type {
   ConnectResult,
+  ContactActionInput,
+  ContactActionResult,
   InboxInput,
   InboxResult,
   PublishInput,
@@ -18,6 +20,7 @@ import type {
 } from "@/social/core/adapter";
 import { INSTAGRAM_SCOPES, executeInstagramPublish, planInstagramPublish, resolveInstagramUserId } from "@/social/instagram/publish";
 import { collectInstagramInbox } from "@/social/instagram/inbox";
+import { instagramMessengerRecipientId, sendInstagramDirectMessage } from "@/social/instagram/contact";
 import { resolveInstagramPublicProfile } from "@/social/instagram/public-profile";
 
 const INSTAGRAM_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize";
@@ -174,7 +177,7 @@ export class InstagramAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true, inbox: true };
+    return { publishing: true, inbox: true, contactActions: true, messaging: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -194,6 +197,38 @@ export class InstagramAdapter extends BaseSocialAdapter {
       throw new AuthenticationError("Instagram account has no access token");
     }
     return collectInstagramInbox(token, this.context.metadata, input);
+  }
+
+  async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {
+    if (input.action !== "MESSAGE") {
+      throw new UnsupportedActionError(
+        "Instagram professional accounts can send Direct Message replies but cannot invite contacts",
+      );
+    }
+
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Instagram account has no access token");
+    }
+
+    const text = input.body?.trim();
+    if (!text) {
+      throw new ValidationError("Instagram Direct Messages require a body");
+    }
+    if (!input.target) {
+      throw new ValidationError("Instagram contact requires a social profile target");
+    }
+
+    const userId = await resolveInstagramUserId(token, this.context.metadata);
+    const sent = await sendInstagramDirectMessage(token, {
+      igUserId: userId,
+      recipientId: instagramMessengerRecipientId(input.target),
+      text,
+    });
+    return {
+      status: "SUCCESS",
+      externalMessageId: sent.externalMessageId,
+    };
   }
 
   protected resolvePublicProfile(source: string) {

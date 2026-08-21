@@ -123,11 +123,11 @@ Safety policy:
 - Facebook publishes through a Page access token from official `GET /me/accounts`, then `POST /{page-id}/feed`, `/{page-id}/photos`, or `/{page-id}/videos`. OAuth now requests `pages_manage_posts`. Multiple Pages require `metadata.pageId`.
 - Instagram uses Instagram API with Instagram Login: `POST /{ig-user-id}/media` and `/{ig-user-id}/media_publish` with `instagram_business_content_publish`. Text-only posts are rejected. Images must be jpeg/png; Reels must be mp4.
 - VK uses official `wall.post`. Photos go through `photos.getWallUploadServer` → upload → `photos.saveWallPhoto`. Optional `metadata.publishOwnerId` targets a community wall. Video upload is PHASE 16.
-- Existing Facebook, Instagram, and VK accounts must reconnect to grant the new scopes. Contact actions on these platforms stay `UnsupportedActionError`. App Review still applies; tester/admin tokens work before review.
+- Existing Facebook, Instagram, and VK accounts must reconnect to grant the new scopes. App Review still applies; tester/admin tokens work before review. Contact send for Facebook and Instagram is PHASE 18. VK contact stays `UnsupportedActionError`.
 
 ## Inbox replies (PHASE 13)
 
-- `INBOX` jobs poll connected accounts. `adapter.collectInbox()` talks to official APIs: Telegram `getUpdates` DMs, X mentions and Direct Messages, Facebook Page comments, Instagram media comments, and VK `wall.getComments`.
+- `INBOX` jobs poll connected accounts. `adapter.collectInbox()` talks to official APIs: Telegram `getUpdates` DMs, X mentions and Direct Messages, Facebook Page comments and Messenger conversations, Instagram media comments and Direct Messages, and VK `wall.getComments`.
 - Events are stored in `inbox_events` (unique per account + external id). Unknown senders are kept unmatched and are not turned into leads. X inbox also reads Direct Messages (PHASE 17).
 - Matched CRM profiles record a `REPLY` interaction. Existing contact relationships move to `REPLIED` unless they are `BLOCKED`. `do_not_contact` does not block recording replies.
 - Instagram comment inbox needs `instagram_business_manage_comments` (reconnect). Telegram `getUpdates` is a single Bot API consumer; PHASE 15 shares that stream between inbox and monitoring.
@@ -160,8 +160,16 @@ Safety policy:
 - X OAuth requests `dm.read` and `dm.write` in addition to tweet, user, media, and offline scopes. Existing X accounts must reconnect.
 - Inbox collects mentions (`GET /2/users/:id/mentions`) and inbound DMs (`GET /2/dm_events` with `event_types=MessageCreate`). Unique `inbox_events` still dedup. Outbound DMs from the connected account are skipped. Attachments-only DMs without text are skipped rather than invented.
 - Outbound MESSAGE uses official `POST /2/dm_conversations/with/{participant_id}/messages`. Numeric profile ids are used as `participant_id`. Username-only profiles are resolved through `GET /2/users/by/username/:username`. INVITE stays `UnsupportedActionError`.
-- Campaign start filters CONTACT pairs through adapter capabilities, not `if (platform === …)`. MESSAGE enqueues for Telegram and X. INVITE enqueues for nobody (`invites` is false on every adapter). Zero remaining pairs fail with `ValidationError`.
-- Facebook, Instagram, and VK contact send stay disabled. Telegram INVITE stays disabled.
+- Campaign start filters CONTACT pairs through adapter capabilities, not `if (platform === …)`. MESSAGE enqueues for Telegram and X (PHASE 17) and Facebook/Instagram (PHASE 18). INVITE enqueues for nobody (`invites` is false on every adapter). Zero remaining pairs fail with `ValidationError`.
+- Facebook and Instagram messaging is PHASE 18. VK contact send stays disabled. Telegram INVITE stays disabled.
+
+## Facebook Messenger and Instagram DMs (PHASE 18)
+
+- Facebook OAuth adds `pages_manage_metadata` and `pages_messaging`. Inbox reads Page comments and Messenger conversations (`GET /{page-id}/conversations?platform=MESSENGER`). Outbound MESSAGE uses official `POST /{page-id}/messages` with `messaging_type=RESPONSE` and a Page-scoped recipient id.
+- Instagram OAuth adds `instagram_business_manage_messages`. Inbox reads media comments and Direct Messages (`GET /{ig-user-id}/conversations?platform=instagram`). Outbound MESSAGE uses official `POST /{ig-user-id}/messages` with an Instagram-scoped recipient id.
+- Public usernames cannot be messaged. Recipients must already have opened a conversation (24-hour window). Graph errors fail honestly. INVITE stays `UnsupportedActionError`.
+- Campaign start now enqueues MESSAGE for Facebook and Instagram through the same capability filter. Existing Facebook and Instagram accounts must reconnect.
+- VK user `messages.send` is not implemented: new apps are not granted the user `messages` scope. Community tokens would be a later phase.
 
 ## Social adapters (PHASE 2)
 

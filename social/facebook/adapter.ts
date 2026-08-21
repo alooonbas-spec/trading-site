@@ -1,4 +1,4 @@
-import { AuthenticationError, ValidationError } from "@/lib/errors";
+import { AuthenticationError, UnsupportedActionError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
   BaseSocialAdapter,
@@ -8,6 +8,8 @@ import {
 } from "@/social/core/base-adapter";
 import type {
   ConnectResult,
+  ContactActionInput,
+  ContactActionResult,
   InboxInput,
   InboxResult,
   PublishInput,
@@ -25,6 +27,7 @@ import {
 } from "@/social/facebook/graph";
 import { facebookConnectMetadata, listFacebookPages, resolveFacebookPage } from "@/social/facebook/pages";
 import { collectFacebookInbox } from "@/social/facebook/inbox";
+import { facebookMessengerRecipientId, sendFacebookPageMessage } from "@/social/facebook/contact";
 import { executeFacebookPublish, planFacebookPublish } from "@/social/facebook/publish";
 import { resolveFacebookPublicProfile } from "@/social/facebook/public-profile";
 
@@ -170,7 +173,7 @@ export class FacebookAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true, inbox: true };
+    return { publishing: true, inbox: true, contactActions: true, messaging: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -190,6 +193,36 @@ export class FacebookAdapter extends BaseSocialAdapter {
       throw new AuthenticationError("Facebook account has no access token");
     }
     return collectFacebookInbox(token, this.context.metadata, input);
+  }
+
+  async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {
+    if (input.action !== "MESSAGE") {
+      throw new UnsupportedActionError("Facebook Pages can send Messenger replies but cannot invite contacts");
+    }
+
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Facebook account has no access token");
+    }
+
+    const text = input.body?.trim();
+    if (!text) {
+      throw new ValidationError("Facebook Messenger messages require a body");
+    }
+    if (!input.target) {
+      throw new ValidationError("Facebook contact requires a social profile target");
+    }
+
+    const recipientId = facebookMessengerRecipientId(input.target);
+    const page = await resolveFacebookPage(token, this.context.metadata);
+    const sent = await sendFacebookPageMessage(page, {
+      recipientId,
+      text,
+    });
+    return {
+      status: "SUCCESS",
+      externalMessageId: sent.externalMessageId,
+    };
   }
 
   protected resolvePublicProfile(source: string) {

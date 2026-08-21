@@ -65,8 +65,8 @@ describe("publishing adapters", () => {
     expect((await getSocialAdapter("facebook").getCapabilities()).publishing).toBe(true);
     expect((await getSocialAdapter("instagram").getCapabilities()).publishing).toBe(true);
     expect((await getSocialAdapter("vk").getCapabilities()).contactActions).toBe(false);
-    expect((await getSocialAdapter("facebook").getCapabilities()).contactActions).toBe(false);
-    expect((await getSocialAdapter("instagram").getCapabilities()).contactActions).toBe(false);
+    expect((await getSocialAdapter("facebook").getCapabilities()).contactActions).toBe(true);
+    expect((await getSocialAdapter("instagram").getCapabilities()).contactActions).toBe(true);
   });
 
   it("posts X text through the official tweets endpoint", async () => {

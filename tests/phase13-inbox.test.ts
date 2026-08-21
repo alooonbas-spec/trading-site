@@ -165,14 +165,15 @@ describe("X inbox", () => {
 });
 
 describe("PHASE 13 capabilities and source boundaries", () => {
-  it("enables inbox collection without enabling contact on Meta/VK", async () => {
+  it("enables inbox collection and Meta contact while VK contact stays off", async () => {
     expect((await getSocialAdapter("telegram").getCapabilities()).inbox).toBe(true);
     expect((await getSocialAdapter("x").getCapabilities()).inbox).toBe(true);
     expect((await getSocialAdapter("facebook").getCapabilities()).inbox).toBe(true);
     expect((await getSocialAdapter("instagram").getCapabilities()).inbox).toBe(true);
     expect((await getSocialAdapter("vk").getCapabilities()).inbox).toBe(true);
-    expect((await getSocialAdapter("facebook").getCapabilities()).contactActions).toBe(false);
     expect((await getSocialAdapter("vk").getCapabilities()).contactActions).toBe(false);
+    expect((await getSocialAdapter("facebook").getCapabilities()).contactActions).toBe(true);
+    expect((await getSocialAdapter("instagram").getCapabilities()).contactActions).toBe(true);
   });
 
   it("adds INBOX jobs and REPLY interactions without do_not_contact on inbox tables", () => {

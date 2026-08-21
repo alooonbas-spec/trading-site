@@ -222,15 +222,15 @@ describe("PHASE 17 X Direct Messages", () => {
 });
 
 describe("PHASE 17 campaign contact gating", () => {
-  it("enables X and Telegram MESSAGE and keeps INVITE disabled everywhere", async () => {
+  it("enables X, Telegram, Facebook, and Instagram MESSAGE and keeps INVITE disabled everywhere", async () => {
     expect((await getSocialAdapter("x").getCapabilities()).messaging).toBe(true);
     expect((await getSocialAdapter("x").getCapabilities()).contactActions).toBe(true);
     expect((await getSocialAdapter("x").getCapabilities()).invites).toBe(false);
     expect((await getSocialAdapter("telegram").getCapabilities()).messaging).toBe(true);
     expect((await getSocialAdapter("telegram").getCapabilities()).invites).toBe(false);
     expect((await getSocialAdapter("vk").getCapabilities()).messaging).toBe(false);
-    expect((await getSocialAdapter("facebook").getCapabilities()).messaging).toBe(false);
-    expect((await getSocialAdapter("instagram").getCapabilities()).messaging).toBe(false);
+    expect((await getSocialAdapter("facebook").getCapabilities()).messaging).toBe(true);
+    expect((await getSocialAdapter("instagram").getCapabilities()).messaging).toBe(true);
 
     for (const platform of SOCIAL_PLATFORMS) {
       expect((await getSocialAdapter(platform).getCapabilities()).invites).toBe(false);

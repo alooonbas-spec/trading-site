@@ -57,4 +57,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 17: official X Direct Messages (`dm.read` / `dm.write`) plus campaign start gating by adapter capabilities. Existing X accounts must reconnect for DM scopes.
+PHASE 18: official Facebook Messenger and Instagram Direct Messages (inbox + 24-hour MESSAGE replies). Existing Facebook and Instagram accounts must reconnect for messaging scopes. VK user messaging is not enabled for new apps.
