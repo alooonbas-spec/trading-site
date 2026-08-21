@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 31: campaign, inbox attach, and merge lead pickers search the newest 200 matching leads instead of loading the whole CRM. No new SQL.
+PHASE 32: Campaigns, Posts, and Monitoring indexes filter by status (and monitoring platform identity). Filter forms omit after. No new SQL.

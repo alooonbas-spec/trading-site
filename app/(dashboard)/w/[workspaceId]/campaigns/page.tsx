@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
 import { listCampaignsPage } from "@/services/campaigns/campaign-service";
+import { parseCampaignStatusFilter } from "@/lib/campaigns/filters";
 import { searchPickerLeads } from "@/services/leads/lead-service";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { CreateCampaignForm } from "@/components/campaigns/create-campaign-form";
@@ -10,6 +11,7 @@ import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
 import { toPickerLead } from "@/lib/leads/picker";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -19,25 +21,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { CAMPAIGN_STATUSES } from "@/types/status";
 
 export default async function CampaignsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ after?: string }>;
+  searchParams: Promise<{ after?: string; status?: string }>;
 }) {
   const { workspaceId } = await params;
   const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
   const canMutate = canMutateWorkspaceData(context.role);
+  const status = parseCampaignStatusFilter(query.status);
   const [campaignsPage, picker, accounts] = await Promise.all([
-    listCampaignsPage(workspaceId, query.after),
+    listCampaignsPage(workspaceId, { after: query.after, status }),
     searchPickerLeads(workspaceId),
     listSocialAccounts(workspaceId),
   ]);
   const campaigns = campaignsPage.items;
   const campaignsPath = `/w/${workspaceId}/campaigns`;
+  const filterQuery = { status };
 
   return (
     <div className="space-y-6">
@@ -48,6 +53,23 @@ export default async function CampaignsPage({
           accounts, paused campaigns, and rate-limited accounts.
         </p>
       </div>
+      <form className="grid gap-2 md:grid-cols-[220px_auto]" method="get">
+        <select
+          name="status"
+          defaultValue={status ?? ""}
+          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+        >
+          <option value="">All campaign statuses</option>
+          {CAMPAIGN_STATUSES.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+        <Button type="submit" variant="outline">
+          Filter
+        </Button>
+      </form>
       {canMutate ? (
         <Card>
           <CardHeader>
@@ -70,8 +92,8 @@ export default async function CampaignsPage({
       ) : null}
       {campaigns.length === 0 ? (
         <EmptyState
-          title="No campaigns yet"
-          description="Create a campaign with leads and connected social accounts."
+          title="No campaigns match"
+          description="Create a campaign with leads and connected social accounts, or clear the status filter."
         />
       ) : (
         <Card>
@@ -118,10 +140,10 @@ export default async function CampaignsPage({
             </Table>
             <div className="mt-4">
               <ListPagination
-                newestHref={query.after ? campaignsPath : null}
+                newestHref={query.after ? searchHref(campaignsPath, filterQuery) : null}
                 olderHref={
                   campaignsPage.nextCursor
-                    ? searchHref(campaignsPath, { after: campaignsPage.nextCursor })
+                    ? searchHref(campaignsPath, { ...filterQuery, after: campaignsPage.nextCursor })
                     : null
                 }
               />

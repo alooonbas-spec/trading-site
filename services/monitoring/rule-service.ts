@@ -30,6 +30,7 @@ import { toMonitoringEvent, toMonitoringRule } from "@/services/monitoring/mappe
 import { enqueueMonitorJob } from "@/services/jobs/enqueue-service";
 import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import type { SocialPlatform } from "@/types/social";
+import type { MonitoringRuleStatus } from "@/types/status";
 
 const MONITORING_RULE_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 const MONITORING_EVENT_PAGE_SIZE = DEFAULT_PAGE_SIZE;
@@ -52,11 +53,11 @@ export async function listMonitoringRules(workspaceId: string): Promise<Monitori
 
 export async function listMonitoringRulesPage(
   workspaceId: string,
-  after?: string,
+  options?: { after?: string; status?: MonitoringRuleStatus; platform?: SocialPlatform },
 ): Promise<KeysetPage<MonitoringRule>> {
   await requireWorkspaceContext(workspaceId);
   const supabase = await createClient();
-  const cursor = parseKeysetCursor(after);
+  const cursor = parseKeysetCursor(options?.after);
   let request = supabase
     .from("monitoring_rules")
     .select(MONITORING_RULE_PUBLIC_COLUMNS)
@@ -64,6 +65,12 @@ export async function listMonitoringRulesPage(
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(MONITORING_RULE_PAGE_SIZE + 1);
+  if (options?.status) {
+    request = request.eq("status", options.status);
+  }
+  if (options?.platform) {
+    request = request.eq("platform", options.platform);
+  }
   if (cursor) {
     request = request.or(keysetOrFilter(cursor));
   }

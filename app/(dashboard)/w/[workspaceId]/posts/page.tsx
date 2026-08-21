@@ -2,12 +2,14 @@ import Link from "next/link";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
 import { listPostsPage } from "@/services/posts/post-service";
+import { parsePostStatusFilter } from "@/lib/posts/filters";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { CreatePostForm } from "@/components/posts/create-post-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -17,24 +19,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { POST_STATUSES } from "@/types/status";
 
 export default async function PostsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ after?: string }>;
+  searchParams: Promise<{ after?: string; status?: string }>;
 }) {
   const { workspaceId } = await params;
   const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
   const canMutate = canMutateWorkspaceData(context.role);
+  const status = parsePostStatusFilter(query.status);
   const [postsPage, accounts] = await Promise.all([
-    listPostsPage(workspaceId, query.after),
+    listPostsPage(workspaceId, { after: query.after, status }),
     listSocialAccounts(workspaceId),
   ]);
   const posts = postsPage.items;
   const postsPath = `/w/${workspaceId}/posts`;
+  const filterQuery = { status };
 
   return (
     <div className="space-y-6">
@@ -45,6 +50,23 @@ export default async function PostsPage({
           adapter. Unsupported platforms fail instead of reporting fake success.
         </p>
       </div>
+      <form className="grid gap-2 md:grid-cols-[220px_auto]" method="get">
+        <select
+          name="status"
+          defaultValue={status ?? ""}
+          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+        >
+          <option value="">All post statuses</option>
+          {POST_STATUSES.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+        <Button type="submit" variant="outline">
+          Filter
+        </Button>
+      </form>
       {canMutate ? (
         <Card>
           <CardHeader>
@@ -57,7 +79,10 @@ export default async function PostsPage({
         </Card>
       ) : null}
       {posts.length === 0 ? (
-        <EmptyState title="No posts yet" description="Compose a post and choose one or more connected accounts." />
+        <EmptyState
+          title="No posts match"
+          description="Compose a post and choose one or more connected accounts, or clear the status filter."
+        />
       ) : (
         <Card>
           <CardHeader>
@@ -104,10 +129,10 @@ export default async function PostsPage({
             </Table>
             <div className="mt-4">
               <ListPagination
-                newestHref={query.after ? postsPath : null}
+                newestHref={query.after ? searchHref(postsPath, filterQuery) : null}
                 olderHref={
                   postsPage.nextCursor
-                    ? searchHref(postsPath, { after: postsPage.nextCursor })
+                    ? searchHref(postsPath, { ...filterQuery, after: postsPage.nextCursor })
                     : null
                 }
               />

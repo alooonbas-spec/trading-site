@@ -16,7 +16,7 @@ import { canCancelPost, canDeletePost, canPublishPost, rollupPostStatus } from "
 import { POST_PUBLIC_COLUMNS, POST_TARGET_PUBLIC_COLUMNS, type Post, type PostTarget } from "@/types/post";
 import { toPost, toPostTarget } from "@/services/posts/mapper";
 import { enqueuePublishJobs } from "@/services/jobs/enqueue-service";
-import type { PostTargetStatus } from "@/types/status";
+import type { PostStatus, PostTargetStatus } from "@/types/status";
 
 const POST_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
@@ -36,10 +36,13 @@ export async function listPosts(workspaceId: string): Promise<Post[]> {
   return attachPostCounts(workspaceId, (data ?? []).map((row) => toPost(row)));
 }
 
-export async function listPostsPage(workspaceId: string, after?: string): Promise<KeysetPage<Post>> {
+export async function listPostsPage(
+  workspaceId: string,
+  options?: { after?: string; status?: PostStatus },
+): Promise<KeysetPage<Post>> {
   await requireWorkspaceContext(workspaceId);
   const supabase = await createClient();
-  const cursor = parseKeysetCursor(after);
+  const cursor = parseKeysetCursor(options?.after);
   let request = supabase
     .from("posts")
     .select(POST_PUBLIC_COLUMNS)
@@ -47,6 +50,9 @@ export async function listPostsPage(workspaceId: string, after?: string): Promis
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(POST_PAGE_SIZE + 1);
+  if (options?.status) {
+    request = request.eq("status", options.status);
+  }
   if (cursor) {
     request = request.or(keysetOrFilter(cursor));
   }

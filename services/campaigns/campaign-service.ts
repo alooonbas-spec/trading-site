@@ -19,6 +19,7 @@ import { toCampaign } from "@/services/campaigns/mapper";
 import { enqueueCampaignJobs } from "@/services/jobs/enqueue-service";
 import { listLeadsByIds } from "@/services/leads/lead-service";
 import type { Lead } from "@/types/crm";
+import type { CampaignStatus } from "@/types/status";
 
 const CAMPAIGN_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
@@ -40,11 +41,11 @@ export async function listCampaigns(workspaceId: string): Promise<Campaign[]> {
 
 export async function listCampaignsPage(
   workspaceId: string,
-  after?: string,
+  options?: { after?: string; status?: CampaignStatus },
 ): Promise<KeysetPage<Campaign>> {
   await requireWorkspaceContext(workspaceId);
   const supabase = await createClient();
-  const cursor = parseKeysetCursor(after);
+  const cursor = parseKeysetCursor(options?.after);
   let request = supabase
     .from("campaigns")
     .select(CAMPAIGN_PUBLIC_COLUMNS)
@@ -52,6 +53,9 @@ export async function listCampaignsPage(
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(CAMPAIGN_PAGE_SIZE + 1);
+  if (options?.status) {
+    request = request.eq("status", options.status);
+  }
   if (cursor) {
     request = request.or(keysetOrFilter(cursor));
   }

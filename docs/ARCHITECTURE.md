@@ -235,6 +235,10 @@ Campaign, post, and monitoring rule pages paginate their job lists with the same
 
 Campaign compose, inbox attach, and lead merge no longer call unbounded `listLeads`. They search the newest 200 matching leads (`searchPickerLeads` / `listLeadsPage`). Selected campaign leads stay checked across searches. Inbox `leadQ` and merge `mergeQ` are GET searches that keep the other page cursors. The picker never creates people and does not rewrite `do_not_contact`.
 
+## Index status filters (PHASE 32)
+
+Campaigns, Posts, and Monitoring index pages filter by their own status machines. Monitoring can also filter by stored rule platform (identity, not a business-logic switch). Filter GET forms omit `after` so a new filter starts from the newest keyset page. Filters do not rewrite `LeadStatus` or `do_not_contact`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
