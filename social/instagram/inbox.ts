@@ -44,6 +44,27 @@ const mediaCommentsSchema = z.object({
                       username: z.string().optional(),
                     })
                     .optional(),
+                  replies: z
+                    .object({
+                      data: z
+                        .array(
+                          z.object({
+                            id: z.string().min(1),
+                            text: z.string().optional(),
+                            username: z.string().optional(),
+                            timestamp: z.string().optional(),
+                            from: z
+                              .object({
+                                id: z.union([z.string(), z.number()]).optional(),
+                                username: z.string().optional(),
+                              })
+                              .optional(),
+                          }),
+                        )
+                        .optional(),
+                      paging: graphPagingSchema,
+                    })
+                    .optional(),
                 }),
               )
               .optional(),
@@ -118,9 +139,14 @@ async function collectInstagramComments(
   accessToken: string,
   userId: string,
   after?: string | null,
-): Promise<{ messages: InboxMessage[]; nextAfter: string | null; repliesAfter: GraphRepliesMap }> {
+): Promise<{
+  messages: InboxMessage[];
+  nextAfter: string | null;
+  repliesAfter: GraphRepliesMap;
+  crepliesAfter: GraphRepliesMap;
+}> {
   const url = new URL(`${INSTAGRAM_GRAPH_ORIGIN}/${userId}/media`);
-  url.searchParams.set("fields", "id,comments{id,text,username,timestamp,from}");
+  url.searchParams.set("fields", "id,comments{id,text,username,timestamp,from,replies{id,text,username,timestamp,from}}");
   url.searchParams.set("limit", "10");
   url.searchParams.set("access_token", accessToken);
   if (after) {
@@ -136,30 +162,52 @@ async function collectInstagramComments(
 
   const messages: InboxMessage[] = [];
   const repliesAfter: GraphRepliesMap = {};
+  const crepliesAfter: GraphRepliesMap = {};
   for (const media of parsed.data.data ?? []) {
     const nestedAfter = graphPagingAfter(media.comments);
     if (nestedAfter && GRAPH_OBJECT_ID.test(media.id)) {
       repliesAfter[media.id] = nestedAfter;
     }
     for (const comment of media.comments?.data ?? []) {
-      const text = comment.text?.trim();
-      const username = comment.from?.username ?? comment.username;
-      const fromId = comment.from?.id !== undefined ? String(comment.from.id) : username;
-      if (!text || !fromId) {
-        continue;
+      pushInstagramComment(messages, comment, media.id);
+      const replyAfter = graphPagingAfter(comment.replies);
+      if (replyAfter && GRAPH_OBJECT_ID.test(comment.id)) {
+        crepliesAfter[comment.id] = replyAfter;
       }
-      messages.push({
-        externalId: comment.id,
-        externalProfileId: fromId,
-        username: username ? `@${username.replace(/^@/, "")}` : null,
-        body: text,
-        url: `https://www.instagram.com/p/${media.id}/`,
-        receivedAt: comment.timestamp ?? null,
-        replyKind: "comment",
-      });
+      for (const reply of comment.replies?.data ?? []) {
+        pushInstagramComment(messages, reply, media.id);
+      }
     }
   }
-  return { messages, nextAfter: graphPagingAfter(payload), repliesAfter };
+  return { messages, nextAfter: graphPagingAfter(payload), repliesAfter, crepliesAfter };
+}
+
+function pushInstagramComment(
+  messages: InboxMessage[],
+  comment: {
+    id: string;
+    text?: string;
+    username?: string;
+    timestamp?: string;
+    from?: { id?: string | number; username?: string };
+  },
+  mediaId: string,
+): void {
+  const text = comment.text?.trim();
+  const username = comment.from?.username ?? comment.username;
+  const fromId = comment.from?.id !== undefined ? String(comment.from.id) : username;
+  if (!text || !fromId) {
+    return;
+  }
+  messages.push({
+    externalId: comment.id,
+    externalProfileId: fromId,
+    username: username ? `@${username.replace(/^@/, "")}` : null,
+    body: text,
+    url: mediaId ? `https://www.instagram.com/p/${mediaId}/` : null,
+    receivedAt: comment.timestamp ?? null,
+    replyKind: "comment",
+  });
 }
 
 const instagramCommentEdgeSchema = z.object({
@@ -176,6 +224,27 @@ const instagramCommentEdgeSchema = z.object({
             username: z.string().optional(),
           })
           .optional(),
+        replies: z
+          .object({
+            data: z
+              .array(
+                z.object({
+                  id: z.string().min(1),
+                  text: z.string().optional(),
+                  username: z.string().optional(),
+                  timestamp: z.string().optional(),
+                  from: z
+                    .object({
+                      id: z.union([z.string(), z.number()]).optional(),
+                      username: z.string().optional(),
+                    })
+                    .optional(),
+                }),
+              )
+              .optional(),
+            paging: graphPagingSchema,
+          })
+          .optional(),
       }),
     )
     .optional(),
@@ -185,9 +254,15 @@ const instagramCommentEdgeSchema = z.object({
 async function collectInstagramCommentReplies(
   accessToken: string,
   stored: GraphRepliesMap,
-): Promise<{ messages: InboxMessage[]; nextAfters: GraphRepliesMap; fetchedIds: string[] }> {
+): Promise<{
+  messages: InboxMessage[];
+  nextAfters: GraphRepliesMap;
+  fetchedIds: string[];
+  crepliesAfter: GraphRepliesMap;
+}> {
   const messages: InboxMessage[] = [];
   const nextAfters: GraphRepliesMap = {};
+  const crepliesAfter: GraphRepliesMap = {};
   const ids = Object.keys(stored).filter((id) => GRAPH_OBJECT_ID.test(id)).slice(0, GRAPH_REPLIES_FETCH_LIMIT);
   for (const objectId of ids) {
     const after = stored[objectId];
@@ -195,7 +270,7 @@ async function collectInstagramCommentReplies(
       continue;
     }
     const url = new URL(`${INSTAGRAM_GRAPH_ORIGIN}/${objectId}/comments`);
-    url.searchParams.set("fields", "id,text,username,timestamp,from");
+    url.searchParams.set("fields", "id,text,username,timestamp,from,replies{id,text,username,timestamp,from}");
     url.searchParams.set("limit", "50");
     url.searchParams.set("after", after);
     url.searchParams.set("access_token", accessToken);
@@ -211,21 +286,49 @@ async function collectInstagramCommentReplies(
       nextAfters[objectId] = nextAfter;
     }
     for (const comment of parsed.data.data ?? []) {
-      const text = comment.text?.trim();
-      const username = comment.from?.username ?? comment.username;
-      const fromId = comment.from?.id !== undefined ? String(comment.from.id) : username;
-      if (!text || !fromId) {
-        continue;
+      pushInstagramComment(messages, comment, objectId);
+      const replyAfter = graphPagingAfter(comment.replies);
+      if (replyAfter && GRAPH_OBJECT_ID.test(comment.id)) {
+        crepliesAfter[comment.id] = replyAfter;
       }
-      messages.push({
-        externalId: comment.id,
-        externalProfileId: fromId,
-        username: username ? `@${username.replace(/^@/, "")}` : null,
-        body: text,
-        url: null,
-        receivedAt: comment.timestamp ?? null,
-        replyKind: "comment",
-      });
+      for (const reply of comment.replies?.data ?? []) {
+        pushInstagramComment(messages, reply, objectId);
+      }
+    }
+  }
+  return { messages, nextAfters, fetchedIds: ids, crepliesAfter };
+}
+
+async function collectInstagramNestedCommentReplies(
+  accessToken: string,
+  stored: GraphRepliesMap,
+): Promise<{ messages: InboxMessage[]; nextAfters: GraphRepliesMap; fetchedIds: string[] }> {
+  const messages: InboxMessage[] = [];
+  const nextAfters: GraphRepliesMap = {};
+  const ids = Object.keys(stored).filter((id) => GRAPH_OBJECT_ID.test(id)).slice(0, GRAPH_REPLIES_FETCH_LIMIT);
+  for (const objectId of ids) {
+    const after = stored[objectId];
+    if (!after) {
+      continue;
+    }
+    const url = new URL(`${INSTAGRAM_GRAPH_ORIGIN}/${objectId}/replies`);
+    url.searchParams.set("fields", "id,text,username,timestamp,from");
+    url.searchParams.set("limit", "25");
+    url.searchParams.set("after", after);
+    url.searchParams.set("access_token", accessToken);
+    const response = await socialFetch(url.toString());
+    const payload = await readJson<unknown>(response);
+    throwIfGraphError(payload);
+    const parsed = instagramCommentEdgeSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new SocialError("Instagram comment replies returned an unexpected payload");
+    }
+    const nextAfter = graphPagingAfter(payload);
+    if (nextAfter) {
+      nextAfters[objectId] = nextAfter;
+    }
+    for (const comment of parsed.data.data ?? []) {
+      pushInstagramComment(messages, comment, "");
     }
   }
   return { messages, nextAfters, fetchedIds: ids };
@@ -344,28 +447,43 @@ export async function collectInstagramInbox(
   const olderThreadAfter = decodeGraphAfter(cursor.threads);
   const olderPostsAfter = decodeGraphAfter(cursor.posts);
   const storedReplies = decodeGraphReplies(cursor.replies);
+  const storedCreplies = decodeGraphReplies(cursor.creplies);
   const storedThreadMsgs = decodeGraphReplies(cursor.threadmsgs);
-  const emptyPage = { messages: [] as InboxMessage[], nextAfter: null, repliesAfter: {} as GraphRepliesMap };
+  const emptyPage = {
+    messages: [] as InboxMessage[],
+    nextAfter: null,
+    repliesAfter: {} as GraphRepliesMap,
+    crepliesAfter: {} as GraphRepliesMap,
+  };
   const emptyDirect = { messages: [] as InboxMessage[], nextAfter: null, threadAfters: {} as GraphRepliesMap };
   const emptyReplies = {
     messages: [] as InboxMessage[],
     nextAfters: {} as GraphRepliesMap,
     fetchedIds: [] as string[],
+    crepliesAfter: {} as GraphRepliesMap,
   };
-  const [latestComments, olderComments, extraReplies, latestDirect, olderDirect, extraThreadMsgs] =
+  const emptyNested = {
+    messages: [] as InboxMessage[],
+    nextAfters: {} as GraphRepliesMap,
+    fetchedIds: [] as string[],
+  };
+  const [latestComments, olderComments, extraReplies, extraCreplies, latestDirect, olderDirect, extraThreadMsgs] =
     await Promise.all([
       collectInstagramComments(accessToken, userId),
       olderPostsAfter
         ? collectInstagramComments(accessToken, userId, olderPostsAfter)
         : Promise.resolve(emptyPage),
       storedReplies ? collectInstagramCommentReplies(accessToken, storedReplies) : Promise.resolve(emptyReplies),
+      storedCreplies
+        ? collectInstagramNestedCommentReplies(accessToken, storedCreplies)
+        : Promise.resolve(emptyNested),
       collectInstagramDirectMessages(accessToken, userId),
       olderThreadAfter
         ? collectInstagramDirectMessages(accessToken, userId, olderThreadAfter)
         : Promise.resolve(emptyDirect),
       storedThreadMsgs
         ? collectInstagramThreadMessages(accessToken, userId, storedThreadMsgs)
-        : Promise.resolve(emptyReplies),
+        : Promise.resolve(emptyNested),
     ]);
   const latestMessages = latestDirect.messages;
   const olderMessages = olderDirect.messages;
@@ -375,6 +493,7 @@ export async function collectInstagramInbox(
         ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
         ...olderComments.messages,
         ...extraReplies.messages,
+        ...extraCreplies.messages,
       ]),
       ...uniqueInboxMessages([
         ...filterMessagesAfterCursor(latestMessages, cursor.messages),
@@ -386,7 +505,12 @@ export async function collectInstagramInbox(
       comments:
         laterTimestampString(
           cursor.comments,
-          newestReceivedAt([...latestComments.messages, ...olderComments.messages, ...extraReplies.messages]),
+          newestReceivedAt([
+            ...latestComments.messages,
+            ...olderComments.messages,
+            ...extraReplies.messages,
+            ...extraCreplies.messages,
+          ]),
         ) ?? "",
       messages:
         laterTimestampString(
@@ -404,6 +528,16 @@ export async function collectInstagramInbox(
         nestedAfters: { ...latestComments.repliesAfter, ...olderComments.repliesAfter },
         fetchedNextAfters: extraReplies.nextAfters,
         fetchedIds: extraReplies.fetchedIds,
+      }),
+      creplies: nextGraphRepliesCursor({
+        stored: cursor.creplies,
+        nestedAfters: {
+          ...latestComments.crepliesAfter,
+          ...olderComments.crepliesAfter,
+          ...extraReplies.crepliesAfter,
+        },
+        fetchedNextAfters: extraCreplies.nextAfters,
+        fetchedIds: extraCreplies.fetchedIds,
       }),
       threadmsgs: nextGraphRepliesCursor({
         stored: cursor.threadmsgs,

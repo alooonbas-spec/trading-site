@@ -76,7 +76,7 @@ describe("PHASE 43 Graph feed and media after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-c"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|posts:${encodeGraphAfter("feed-2")}|replies:done|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:done|posts:${encodeGraphAfter("feed-2")}|replies:done|threadmsgs:done|threads:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -85,7 +85,7 @@ describe("PHASE 43 Graph feed and media after paging", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-c"]);
-    expect(second.cursor).toBe("comments:2026-08-21T12:00:00+0000|posts:done|replies:done|threadmsgs:done|threads:done");
+    expect(second.cursor).toBe("comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done");
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/feed"))).toHaveLength(3);
   });
 
@@ -128,10 +128,10 @@ describe("PHASE 43 Graph feed and media after paging", () => {
     }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:2026-08-21T08:00:00+0000|posts:done|threads:done",
+      cursor: "comments:2026-08-21T08:00:00+0000|creplies:done|posts:done|threads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-c"]);
-    expect(result.cursor).toBe("comments:2026-08-21T10:00:00+0000|posts:done|replies:done|threadmsgs:done|threads:done");
+    expect(result.cursor).toBe("comments:2026-08-21T10:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done");
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/ig-1/media"))).toHaveLength(1);
   });
 });

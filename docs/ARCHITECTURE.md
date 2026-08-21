@@ -303,6 +303,10 @@ VK `newsfeed.search` follows official `next_from` as `start_from`. Each poll sti
 
 X monitoring (`GET /2/tweets/search/recent`) follows official `meta.next_token` as `pagination_token`. Each poll still reads the latest page (`max_results=10`). `since_id` still comes from the `tweets` watermark (legacy numeric cursors stay the tweets watermark). If a next token exists, the next poll requests that page once on the same constructed endpoint. Opaque tokens are stored base64url-encoded in `pages`. A short page stores `pages:done`. Extra-page tweets are not dropped by the `tweets` watermark on first sight. Collectors set `pagination_token=` and do not treat `next_token` as a fetch URL.
 
+## Graph comment-to-comment replies (PHASE 49)
+
+Facebook `/{comment-id}/comments` and Instagram `/{comment-id}/replies` follow official Graph `after` for extra nested replies to comments (not paging of comments on a post — that remains `replies` in PHASE 44). The named `creplies` cursor stores `{ commentId: after }` (base64url JSON, at most 20 ids). Feed/media first pages request nested Facebook `comments.limit(25)` and Instagram `replies`. Extra PHASE 44 post/media comment pages also request those nested edges so newly discovered comments can seed `creplies`. Later polls request `GET /{comment-id}/comments?after=` (Facebook, `limit=25`) or `GET /{comment-id}/replies?after=` (Instagram, `limit=25`) with official fields. Extra nested-reply pages are not dropped by the `comments` timestamp watermark. Stored ids are not reset from the nested first-page `after`. An empty map stores `creplies:done` and later polls stay done. Collectors still do not fetch `paging.next` URLs.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

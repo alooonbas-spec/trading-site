@@ -170,11 +170,11 @@ describe("PHASE 21 collector watermarks", () => {
     const result = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:2026-08-21T10:00:00+0000|messages:2026-08-21T09:00:00+0000",
+      cursor: "comments:2026-08-21T10:00:00+0000|creplies:done|messages:2026-08-21T09:00:00+0000",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-c", "new-m"]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|messages:2026-08-21T11:00:00+0000|posts:done|replies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|messages:2026-08-21T11:00:00+0000|posts:done|replies:done|threadmsgs:done|threads:done",
     );
   });
 
@@ -246,11 +246,11 @@ describe("PHASE 21 collector watermarks", () => {
     }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:2026-08-21T08:00:00+0000|messages:2026-08-21T07:00:00+0000",
+      cursor: "comments:2026-08-21T08:00:00+0000|creplies:done|messages:2026-08-21T07:00:00+0000",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-c", "new-m"]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T10:00:00+0000|messages:2026-08-21T09:00:00+0000|posts:done|replies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T10:00:00+0000|creplies:done|messages:2026-08-21T09:00:00+0000|posts:done|replies:done|threadmsgs:done|threads:done",
     );
   });
 

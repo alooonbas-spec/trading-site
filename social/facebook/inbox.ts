@@ -44,6 +44,26 @@ const commentsSchema = z.object({
                       name: z.string().optional(),
                     })
                     .optional(),
+                  comments: z
+                    .object({
+                      data: z
+                        .array(
+                          z.object({
+                            id: z.string().min(1),
+                            message: z.string().optional(),
+                            created_time: z.string().optional(),
+                            from: z
+                              .object({
+                                id: z.string().optional(),
+                                name: z.string().optional(),
+                              })
+                              .optional(),
+                          }),
+                        )
+                        .optional(),
+                      paging: graphPagingSchema,
+                    })
+                    .optional(),
                 }),
               )
               .optional(),
@@ -116,9 +136,14 @@ export function parseFacebookMessengerConversations(payload: unknown, pageId: st
 async function collectFacebookComments(
   page: FacebookPageAuth,
   after?: string | null,
-): Promise<{ messages: InboxMessage[]; nextAfter: string | null; repliesAfter: GraphRepliesMap }> {
+): Promise<{
+  messages: InboxMessage[];
+  nextAfter: string | null;
+  repliesAfter: GraphRepliesMap;
+  crepliesAfter: GraphRepliesMap;
+}> {
   const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/feed`);
-  url.searchParams.set("fields", "id,comments.limit(50){id,from,message,created_time}");
+  url.searchParams.set("fields", "id,comments.limit(50){id,from,message,created_time,comments.limit(25){id,from,message,created_time}}");
   url.searchParams.set("limit", "10");
   url.searchParams.set("access_token", page.accessToken);
   if (after) {
@@ -134,29 +159,50 @@ async function collectFacebookComments(
 
   const messages: InboxMessage[] = [];
   const repliesAfter: GraphRepliesMap = {};
+  const crepliesAfter: GraphRepliesMap = {};
   for (const post of parsed.data.data ?? []) {
     const nestedAfter = graphPagingAfter(post.comments);
     if (nestedAfter && GRAPH_OBJECT_ID.test(post.id)) {
       repliesAfter[post.id] = nestedAfter;
     }
     for (const comment of post.comments?.data ?? []) {
-      const fromId = comment.from?.id;
-      const text = comment.message?.trim();
-      if (!fromId || !text || fromId === page.id) {
-        continue;
+      pushFacebookComment(messages, comment, page.id);
+      const replyAfter = graphPagingAfter(comment.comments);
+      if (replyAfter && GRAPH_OBJECT_ID.test(comment.id)) {
+        crepliesAfter[comment.id] = replyAfter;
       }
-      messages.push({
-        externalId: comment.id,
-        externalProfileId: fromId,
-        username: comment.from?.name ?? null,
-        body: text,
-        url: `https://www.facebook.com/${comment.id}`,
-        receivedAt: comment.created_time ?? null,
-        replyKind: "comment",
-      });
+      for (const reply of comment.comments?.data ?? []) {
+        pushFacebookComment(messages, reply, page.id);
+      }
     }
   }
-  return { messages, nextAfter: graphPagingAfter(payload), repliesAfter };
+  return { messages, nextAfter: graphPagingAfter(payload), repliesAfter, crepliesAfter };
+}
+
+function pushFacebookComment(
+  messages: InboxMessage[],
+  comment: {
+    id: string;
+    message?: string;
+    created_time?: string;
+    from?: { id?: string; name?: string };
+  },
+  pageId: string,
+): void {
+  const fromId = comment.from?.id;
+  const text = comment.message?.trim();
+  if (!fromId || !text || fromId === pageId) {
+    return;
+  }
+  messages.push({
+    externalId: comment.id,
+    externalProfileId: fromId,
+    username: comment.from?.name ?? null,
+    body: text,
+    url: `https://www.facebook.com/${comment.id}`,
+    receivedAt: comment.created_time ?? null,
+    replyKind: "comment",
+  });
 }
 
 const facebookCommentEdgeSchema = z.object({
@@ -172,6 +218,26 @@ const facebookCommentEdgeSchema = z.object({
             name: z.string().optional(),
           })
           .optional(),
+        comments: z
+          .object({
+            data: z
+              .array(
+                z.object({
+                  id: z.string().min(1),
+                  message: z.string().optional(),
+                  created_time: z.string().optional(),
+                  from: z
+                    .object({
+                      id: z.string().optional(),
+                      name: z.string().optional(),
+                    })
+                    .optional(),
+                }),
+              )
+              .optional(),
+            paging: graphPagingSchema,
+          })
+          .optional(),
       }),
     )
     .optional(),
@@ -181,9 +247,15 @@ const facebookCommentEdgeSchema = z.object({
 async function collectFacebookCommentReplies(
   page: FacebookPageAuth,
   stored: GraphRepliesMap,
-): Promise<{ messages: InboxMessage[]; nextAfters: GraphRepliesMap; fetchedIds: string[] }> {
+): Promise<{
+  messages: InboxMessage[];
+  nextAfters: GraphRepliesMap;
+  fetchedIds: string[];
+  crepliesAfter: GraphRepliesMap;
+}> {
   const messages: InboxMessage[] = [];
   const nextAfters: GraphRepliesMap = {};
+  const crepliesAfter: GraphRepliesMap = {};
   const ids = Object.keys(stored).filter((id) => GRAPH_OBJECT_ID.test(id)).slice(0, GRAPH_REPLIES_FETCH_LIMIT);
   for (const objectId of ids) {
     const after = stored[objectId];
@@ -191,7 +263,10 @@ async function collectFacebookCommentReplies(
       continue;
     }
     const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${objectId}/comments`);
-    url.searchParams.set("fields", "id,from,message,created_time");
+    url.searchParams.set(
+      "fields",
+      "id,from,message,created_time,comments.limit(25){id,from,message,created_time}",
+    );
     url.searchParams.set("limit", "50");
     url.searchParams.set("after", after);
     url.searchParams.set("access_token", page.accessToken);
@@ -207,20 +282,49 @@ async function collectFacebookCommentReplies(
       nextAfters[objectId] = nextAfter;
     }
     for (const comment of parsed.data.data ?? []) {
-      const fromId = comment.from?.id;
-      const text = comment.message?.trim();
-      if (!fromId || !text || fromId === page.id) {
-        continue;
+      pushFacebookComment(messages, comment, page.id);
+      const replyAfter = graphPagingAfter(comment.comments);
+      if (replyAfter && GRAPH_OBJECT_ID.test(comment.id)) {
+        crepliesAfter[comment.id] = replyAfter;
       }
-      messages.push({
-        externalId: comment.id,
-        externalProfileId: fromId,
-        username: comment.from?.name ?? null,
-        body: text,
-        url: `https://www.facebook.com/${comment.id}`,
-        receivedAt: comment.created_time ?? null,
-        replyKind: "comment",
-      });
+      for (const reply of comment.comments?.data ?? []) {
+        pushFacebookComment(messages, reply, page.id);
+      }
+    }
+  }
+  return { messages, nextAfters, fetchedIds: ids, crepliesAfter };
+}
+
+async function collectFacebookNestedCommentReplies(
+  page: FacebookPageAuth,
+  stored: GraphRepliesMap,
+): Promise<{ messages: InboxMessage[]; nextAfters: GraphRepliesMap; fetchedIds: string[] }> {
+  const messages: InboxMessage[] = [];
+  const nextAfters: GraphRepliesMap = {};
+  const ids = Object.keys(stored).filter((id) => GRAPH_OBJECT_ID.test(id)).slice(0, GRAPH_REPLIES_FETCH_LIMIT);
+  for (const objectId of ids) {
+    const after = stored[objectId];
+    if (!after) {
+      continue;
+    }
+    const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${objectId}/comments`);
+    url.searchParams.set("fields", "id,from,message,created_time");
+    url.searchParams.set("limit", "25");
+    url.searchParams.set("after", after);
+    url.searchParams.set("access_token", page.accessToken);
+    const response = await socialFetch(url.toString());
+    const payload = await readJson<unknown>(response);
+    throwIfGraphError(payload);
+    const parsed = facebookCommentEdgeSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new SocialError("Facebook comment replies returned an unexpected payload");
+    }
+    const nextAfter = graphPagingAfter(payload);
+    if (nextAfter) {
+      nextAfters[objectId] = nextAfter;
+    }
+    for (const comment of parsed.data.data ?? []) {
+      pushFacebookComment(messages, comment, page.id);
     }
   }
   return { messages, nextAfters, fetchedIds: ids };
@@ -336,29 +440,43 @@ export async function collectFacebookInbox(
   const olderThreadAfter = decodeGraphAfter(cursor.threads);
   const olderPostsAfter = decodeGraphAfter(cursor.posts);
   const storedReplies = decodeGraphReplies(cursor.replies);
+  const storedCreplies = decodeGraphReplies(cursor.creplies);
   const storedThreadMsgs = decodeGraphReplies(cursor.threadmsgs);
-  const emptyPage = { messages: [] as InboxMessage[], nextAfter: null, repliesAfter: {} as GraphRepliesMap };
+  const emptyPage = {
+    messages: [] as InboxMessage[],
+    nextAfter: null,
+    repliesAfter: {} as GraphRepliesMap,
+    crepliesAfter: {} as GraphRepliesMap,
+  };
   const emptyDirect = { messages: [] as InboxMessage[], nextAfter: null, threadAfters: {} as GraphRepliesMap };
   const emptyReplies = {
     messages: [] as InboxMessage[],
     nextAfters: {} as GraphRepliesMap,
     fetchedIds: [] as string[],
+    crepliesAfter: {} as GraphRepliesMap,
   };
-  const [latestComments, olderComments, extraReplies, latestDirect, olderDirect, extraThreadMsgs] =
+  const emptyNested = {
+    messages: [] as InboxMessage[],
+    nextAfters: {} as GraphRepliesMap,
+    fetchedIds: [] as string[],
+  };
+  const [latestComments, olderComments, extraReplies, extraCreplies, latestDirect, olderDirect, extraThreadMsgs] =
     await Promise.all([
       collectFacebookComments(page),
       olderPostsAfter ? collectFacebookComments(page, olderPostsAfter) : Promise.resolve(emptyPage),
       storedReplies ? collectFacebookCommentReplies(page, storedReplies) : Promise.resolve(emptyReplies),
+      storedCreplies ? collectFacebookNestedCommentReplies(page, storedCreplies) : Promise.resolve(emptyNested),
       collectFacebookMessenger(page),
       olderThreadAfter ? collectFacebookMessenger(page, olderThreadAfter) : Promise.resolve(emptyDirect),
       storedThreadMsgs
         ? collectFacebookThreadMessages(page, storedThreadMsgs)
-        : Promise.resolve(emptyReplies),
+        : Promise.resolve(emptyNested),
     ]);
   const comments = uniqueInboxMessages([
     ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
     ...olderComments.messages,
     ...extraReplies.messages,
+    ...extraCreplies.messages,
   ]);
   const latestMessages = latestDirect.messages;
   const olderMessages = olderDirect.messages;
@@ -375,7 +493,12 @@ export async function collectFacebookInbox(
       comments:
         laterTimestampString(
           cursor.comments,
-          newestReceivedAt([...latestComments.messages, ...olderComments.messages, ...extraReplies.messages]),
+          newestReceivedAt([
+            ...latestComments.messages,
+            ...olderComments.messages,
+            ...extraReplies.messages,
+            ...extraCreplies.messages,
+          ]),
         ) ?? "",
       messages:
         laterTimestampString(
@@ -393,6 +516,16 @@ export async function collectFacebookInbox(
         nestedAfters: { ...latestComments.repliesAfter, ...olderComments.repliesAfter },
         fetchedNextAfters: extraReplies.nextAfters,
         fetchedIds: extraReplies.fetchedIds,
+      }),
+      creplies: nextGraphRepliesCursor({
+        stored: cursor.creplies,
+        nestedAfters: {
+          ...latestComments.crepliesAfter,
+          ...olderComments.crepliesAfter,
+          ...extraReplies.crepliesAfter,
+        },
+        fetchedNextAfters: extraCreplies.nextAfters,
+        fetchedIds: extraCreplies.fetchedIds,
       }),
       threadmsgs: nextGraphRepliesCursor({
         stored: cursor.threadmsgs,

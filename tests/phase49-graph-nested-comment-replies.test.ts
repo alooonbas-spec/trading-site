@@ -1,47 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  decodeGraphReplies,
-  encodeGraphAfter,
-  encodeGraphReplies,
-  GRAPH_REPLIES_FETCH_LIMIT,
-  nextGraphRepliesCursor,
-} from "@/social/meta/graph-paging";
+import { encodeGraphReplies } from "@/social/meta/graph-paging";
 import { FACEBOOK_GRAPH_ORIGIN } from "@/social/facebook/graph";
 import { FacebookAdapter } from "@/social/facebook/adapter";
 import { InstagramAdapter } from "@/social/instagram/adapter";
 import { INSTAGRAM_GRAPH_ORIGIN } from "@/social/instagram/publish";
 
-describe("Graph nested comment replies helpers", () => {
-  it("encodes and decodes a per-object after map, and stays done once stored", () => {
-    const encoded = encodeGraphReplies({ "555_1": "cmt-2", media1: "ig-2" });
-    expect(encoded).toBe(encodeGraphAfter(JSON.stringify({ "555_1": "cmt-2", media1: "ig-2" })));
-    expect(decodeGraphReplies(encoded)).toEqual({ "555_1": "cmt-2", media1: "ig-2" });
-    expect(encodeGraphReplies({})).toBe("done");
-    expect(decodeGraphReplies("done")).toBeNull();
-    expect(
-      nextGraphRepliesCursor({
-        stored: "done",
-        nestedAfters: { "555_1": "cmt-2" },
-        fetchedNextAfters: {},
-        fetchedIds: [],
-      }),
-    ).toBe("done");
-    const many: Record<string, string> = {};
-    for (let index = 0; index < GRAPH_REPLIES_FETCH_LIMIT + 5; index += 1) {
-      many[`id${String(index).padStart(2, "0")}`] = `after-${index}`;
-    }
-    expect(Object.keys(decodeGraphReplies(encodeGraphReplies(many)) ?? {})).toHaveLength(
-      GRAPH_REPLIES_FETCH_LIMIT,
-    );
-  });
-});
-
-describe("PHASE 44 Graph nested comment after paging", () => {
+describe("PHASE 49 Graph comment-to-comment reply after paging", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("walks the next official Facebook comment after cursor and keeps older comments", async () => {
+  it("walks the next official Facebook comment replies after cursor and keeps older nested replies", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -54,15 +23,19 @@ describe("PHASE 44 Graph nested comment after paging", () => {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("/555_1/comments")) {
-        expect(target).toContain("after=cmt-2");
+        throw new Error(`unexpected post comments after ${target}`);
+      }
+      if (target.includes("/c1/comments")) {
+        expect(target).toContain("after=reply-2");
+        expect(target).toContain("limit=25");
         expect(target).not.toContain("paging.next");
         return new Response(
           JSON.stringify({
             data: [
               {
-                id: "old-c",
-                message: "older nested comment",
-                from: { id: "800", name: "Commenter" },
+                id: "r-old",
+                message: "older nested reply",
+                from: { id: "801", name: "Replier" },
                 created_time: "2026-08-20T09:00:00+0000",
               },
             ],
@@ -71,6 +44,7 @@ describe("PHASE 44 Graph nested comment after paging", () => {
         );
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/feed`);
+      expect(target).toContain("comments.limit(25)");
       expect(target).not.toContain("after=");
       return new Response(
         JSON.stringify({
@@ -80,13 +54,23 @@ describe("PHASE 44 Graph nested comment after paging", () => {
               comments: {
                 data: [
                   {
-                    id: "new-c",
-                    message: "newer",
+                    id: "c1",
+                    message: "parent",
                     from: { id: "800", name: "Commenter" },
                     created_time: "2026-08-21T12:00:00+0000",
+                    comments: {
+                      data: [
+                        {
+                          id: "r-new",
+                          message: "newer reply",
+                          from: { id: "801", name: "Replier" },
+                          created_time: "2026-08-21T12:00:00+0000",
+                        },
+                      ],
+                      paging: { cursors: { after: "reply-2" } },
+                    },
                   },
                 ],
-                paging: { cursors: { after: "cmt-2" } },
               },
             },
           ],
@@ -100,32 +84,33 @@ describe("PHASE 44 Graph nested comment after paging", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(first.messages.map((item) => item.externalId)).toEqual(["new-c"]);
+    expect(first.messages.map((item) => item.externalId)).toEqual(["c1", "r-new"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:${encodeGraphReplies({ "555_1": "cmt-2" })}|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:${encodeGraphReplies({ c1: "reply-2" })}|posts:done|replies:done|threadmsgs:done|threads:done`,
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/c1/comments"))).toHaveLength(0);
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
       cursor: first.cursor,
     });
-    expect(second.messages.map((item) => item.externalId)).toEqual(["old-c"]);
+    expect(second.messages.map((item) => item.externalId)).toEqual(["r-old"]);
     expect(second.cursor).toBe(
       "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done",
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/c1/comments"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(0);
   });
 
-  it("skips Instagram comment after paging once replies:done is stored", async () => {
+  it("skips Instagram comment reply after paging once creplies:done is stored", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.includes("/ig-1/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("/media-1/comments")) {
-        throw new Error(`unexpected comment after ${target}`);
+      if (target.includes("/c1/replies") || /\/[^/]+\/replies/.test(new URL(target).pathname)) {
+        throw new Error(`unexpected comment replies after ${target}`);
       }
       expect(target).toContain(`${INSTAGRAM_GRAPH_ORIGIN}/ig-1/media`);
       return new Response(
@@ -136,13 +121,16 @@ describe("PHASE 44 Graph nested comment after paging", () => {
               comments: {
                 data: [
                   {
-                    id: "new-c",
+                    id: "c1",
                     text: "newer",
                     from: { id: "80", username: "fan" },
                     timestamp: "2026-08-21T10:00:00+0000",
+                    replies: {
+                      data: [],
+                      paging: { cursors: { after: "ig-reply-2" } },
+                    },
                   },
                 ],
-                paging: { cursors: { after: "ig-cmt-2" } },
               },
             },
           ],
@@ -160,10 +148,10 @@ describe("PHASE 44 Graph nested comment after paging", () => {
       socialAccountId: "a",
       cursor: "comments:2026-08-21T08:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done",
     });
-    expect(result.messages.map((item) => item.externalId)).toEqual(["new-c"]);
+    expect(result.messages.map((item) => item.externalId)).toEqual(["c1"]);
     expect(result.cursor).toBe(
       "comments:2026-08-21T10:00:00+0000|creplies:done|posts:done|replies:done|threadmsgs:done|threads:done",
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/media-1/comments"))).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/c1/replies"))).toHaveLength(0);
   });
 });
