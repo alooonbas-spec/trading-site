@@ -269,7 +269,11 @@ After the first 20-conversation window (`conversations:1`), each later inbox pol
 
 ## VK wall offset (PHASE 40)
 
-After the first 10-post window (`wall:1`), each later inbox poll calls official `wall.get` with `offset = page * 10` (`filter=owner`, count 10). A full 10-item page advances `wall:2`, `wall:3`, and so on. A short page stores `wall:done` and later polls only read the latest 10 posts. Newly discovered older posts still get `wall.getComments` (latest 50, `sort=desc`). Their comments are not dropped by the unix comments watermark on first sight. User OAuth and community accounts share this wall walker. Each post still only reads the latest 50 comments; this is not a full wall archive in one poll.
+After the first 10-post window (`wall:1`), each later inbox poll calls official `wall.get` with `offset = page * 10` (`filter=owner`, count 10). A full 10-item page advances `wall:2`, `wall:3`, and so on. A short page stores `wall:done` and later polls only read the latest 10 posts. Newly discovered older posts still get `wall.getComments`. Their comments are not dropped by the unix comments watermark on first sight. User OAuth and community accounts share this wall walker.
+
+## VK wall comment offset (PHASE 41)
+
+After the first 50-comment window (`wallcomments:1`), each later inbox poll calls official `wall.getComments` with `offset = page * 50` (`sort=desc`, count 50) for the current wall posts (latest 10 plus the current wall offset page). A full 50-item raw page on any of those posts advances `wallcomments:2`, `wallcomments:3`, and so on. A short page stores `wallcomments:done` and later polls only read the latest 50 comments per post. Older comment pages are not dropped by the unix comments watermark. Offset is omitted when it is `0`. This is still not a full wall archive in one poll.
 
 ## Social adapters (PHASE 2)
 

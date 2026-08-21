@@ -25,6 +25,8 @@ describe("VK wall offset cursor", () => {
       conversationsPage: 0,
       wall: true,
       wallPage: 2,
+      wallcomments: false,
+      wallcommentsPage: 0,
     });
     expect(parseVkInboxCursor("comments:1|wall:done")).toEqual({
       comments: "1",
@@ -35,6 +37,8 @@ describe("VK wall offset cursor", () => {
       conversationsPage: 0,
       wall: true,
       wallPage: "done",
+      wallcomments: false,
+      wallcommentsPage: 0,
     });
   });
 });
@@ -93,7 +97,7 @@ describe("PHASE 40 VK wall.get offset", () => {
       cursor: "comments:1710000000|wall:1",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["10:10:1", "10:20:3"]);
-    expect(result.cursor).toBe("comments:1710000200|wall:2");
+    expect(result.cursor).toBe("comments:1710000200|wall:2|wallcomments:1");
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("wall.get"))).toHaveLength(2);
   });
 
@@ -142,7 +146,7 @@ describe("PHASE 40 VK wall.get offset", () => {
       cursor: "comments:1710000000|wall:1",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["10:20:3", "10:9:1"]);
-    expect(result.cursor).toBe("comments:1710000200|wall:done");
+    expect(result.cursor).toBe("comments:1710000200|wall:done|wallcomments:1");
   });
 
   it("skips wall.get offset after wall:done and still filters latest comments by unix watermark", async () => {
@@ -180,7 +184,7 @@ describe("PHASE 40 VK wall.get offset", () => {
       cursor: "comments:1710000000|wall:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["10:20:2"]);
-    expect(result.cursor).toBe("comments:1710000099|wall:done");
+    expect(result.cursor).toBe("comments:1710000099|wall:done|wallcomments:1");
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("wall.get"))).toHaveLength(1);
   });
 });

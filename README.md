@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 40: Official VK `wall.get` offset walks older 10-post windows after `wall:1`. Each post still reads the latest 50 comments. No new SQL.
+PHASE 41: Official VK `wall.getComments` offset walks older 50-comment windows after `wallcomments:1`. No new SQL.
