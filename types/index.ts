@@ -13,3 +13,4 @@ export type { Campaign, Job, CampaignAction, JobType } from "@/types/campaign";
 export { CAMPAIGN_ACTIONS, JOB_TYPES } from "@/types/campaign";
 export type { Post, PostTarget } from "@/types/post";
 export type { MonitoringRule, MonitoringEvent } from "@/types/monitoring";
+export type { WorkspaceAnalytics } from "@/types/analytics";

@@ -53,6 +53,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 7: monitoring rules, events, and the MONITOR worker.
-
-Later phases add analytics.
+PHASE 8: workspace analytics with separate lead, contact, campaign, account, post, monitoring, and job-family metrics.

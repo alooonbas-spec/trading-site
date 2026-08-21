@@ -6,6 +6,7 @@ import { countRunningCampaigns } from "@/services/campaigns/campaign-service";
 import { countSuccessfulContactJobsToday } from "@/services/jobs/worker-service";
 import { countPublishedPostsToday } from "@/services/posts/post-service";
 import { countMonitoringEventsToday } from "@/services/monitoring/rule-service";
+import { countRepliedRelationships } from "@/services/analytics/analytics-service";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
 
@@ -16,7 +17,7 @@ export default async function WorkspaceDashboardPage({
 }) {
   const { workspaceId } = await params;
   const context = await requireWorkspaceContext(workspaceId);
-  const [memberCount, actionsToday, accountCount, newLeadsToday, runningCampaigns, successfulActions, postsToday, monitoringEventsToday] =
+  const [memberCount, actionsToday, accountCount, newLeadsToday, runningCampaigns, successfulActions, postsToday, monitoringEventsToday, repliedCount] =
     await Promise.all([
       countWorkspaceMembers(workspaceId),
       countTodayActivity(workspaceId),
@@ -26,6 +27,7 @@ export default async function WorkspaceDashboardPage({
       countSuccessfulContactJobsToday(workspaceId),
       countPublishedPostsToday(workspaceId),
       countMonitoringEventsToday(workspaceId),
+      countRepliedRelationships(workspaceId),
     ]);
 
   return (
@@ -42,10 +44,10 @@ export default async function WorkspaceDashboardPage({
         <StatCard title="Actions today" value={String(actionsToday)} hint="Workspace activity log" />
         <StatCard title="New leads" value={String(newLeadsToday)} hint="Created today, excluding merged records" />
         <StatCard title="Active campaigns" value={String(runningCampaigns)} hint="Campaigns currently RUNNING" />
-        <StatCard title="Successful actions" value={String(successfulActions)} hint="Contact jobs completed today" />
+        <StatCard title="Successful contact jobs" value={String(successfulActions)} hint="CONTACT jobs completed today" />
         <StatCard title="Posts today" value={String(postsToday)} hint="Posts that reached PUBLISHED or PARTIAL today" />
         <StatCard title="Monitoring events" value={String(monitoringEventsToday)} hint="Events stored today" />
-        <StatCard title="Replies" value="—" hint="Contact metrics appear after PHASE 3" />
+        <StatCard title="Replies" value={String(repliedCount)} hint="Contact relationships currently REPLIED" />
       </div>
       <EmptyState
         title={accountCount === 0 ? "Connect a social account" : "Workspace is ready"}

@@ -91,6 +91,12 @@ Safety policy:
 - TinyFish Search honors HTTP 429 with no tight-loop retry, never sends stealth browser profiles, and never bypasses captcha. Missing `TINYFISH_API_KEY` fails honestly.
 - Keyword matching happens after collection. Non-official source hosts are rejected.
 
+## Analytics (PHASE 8)
+
+- Lead, contact, campaign, account, post, monitoring, and job-family metrics stay on their own machines.
+- Analytics reads live workspace tables. It does not invent a universal success total or copy `do_not_contact` onto other entities.
+- CONTACT, PUBLISH, and MONITOR job counts are tallied separately.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
