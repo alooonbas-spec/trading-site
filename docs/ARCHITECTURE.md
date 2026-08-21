@@ -24,6 +24,9 @@ One workspace has many social accounts. Never assume 1 platform = 1 account.
 | `LeadStatus` | CRM stage of a person |
 | `ContactStatus` | State of one (lead, profile, our account) relationship |
 | `CampaignStatus` | Campaign lifecycle |
+| `PostStatus` | Post lifecycle |
+| `PostTargetStatus` | Per-account publish outcome |
+| `MonitoringRuleStatus` | Monitoring rule lifecycle |
 | `JobStatus` | Queue item |
 | `SocialAccountStatus` | Connected account health |
 
@@ -78,6 +81,15 @@ Safety policy:
 - `adapter.getCapabilities().publishing` decides whether `adapter.publish` runs. X text posts use official `POST https://api.x.com/2/tweets` with `tweet.write`. Other platforms throw `UnsupportedActionError` instead of fake success.
 - Media URLs on X fail honestly until media upload is implemented.
 - Post status (`DRAFT` / `SCHEDULED` / `PUBLISHING` / `PUBLISHED` / `PARTIAL` / `FAILED` / `CANCELLED`) is independent of JobStatus and CampaignStatus. `do_not_contact` is not on posts.
+
+## Monitoring (PHASE 7)
+
+- `monitoring_rules` own `MonitoringRuleStatus` (`ACTIVE` / `PAUSED` / `DISABLED`). `monitoring_events` are append-only and unique per `(workspace_id, rule_id, external_id)`.
+- `do_not_contact` is not on monitoring tables.
+- Workers claim `MONITOR` jobs with `FOR UPDATE SKIP LOCKED` and skip paused/disabled rules. They branch on `job.type`, never `platform ===`.
+- Adapters collect mentions. X uses official `GET https://api.x.com/2/tweets/search/recent` when a token is present. Telegram uses official `getUpdates`. Other platforms and tokenless runs use TinyFish Search (`GET https://api.search.tinyfish.ai`) on official domains only.
+- TinyFish Search honors HTTP 429 with no tight-loop retry, never sends stealth browser profiles, and never bypasses captcha. Missing `TINYFISH_API_KEY` fails honestly.
+- Keyword matching happens after collection. Non-official source hosts are rejected.
 
 ## Social adapters (PHASE 2)
 

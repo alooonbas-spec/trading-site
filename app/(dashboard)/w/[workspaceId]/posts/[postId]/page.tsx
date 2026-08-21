@@ -151,11 +151,11 @@ export default async function PostDetailPage({
               </TableHeader>
               <TableBody>
                 {jobs.map((job) => {
-                  const account = accountMap.get(job.socialAccountId);
+                  const account = job.socialAccountId ? accountMap.get(job.socialAccountId) : undefined;
                   return (
                     <TableRow key={job.id}>
                       <TableCell>
-                        {account ? SOCIAL_PLATFORM_LABELS[account.platform] : job.socialAccountId}
+                        {account ? SOCIAL_PLATFORM_LABELS[account.platform] : (job.socialAccountId ?? "—")}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{job.status}</Badge>

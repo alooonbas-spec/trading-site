@@ -18,6 +18,7 @@ import type {
   AccountRateLimit,
 } from "@/social/core/adapter";
 import { collectResolvedPublicProfile } from "@/social/core/public-collect";
+import { searchPublicMentions } from "@/social/core/public-monitor";
 import type { PublicProfileRef } from "@/social/core/public-profile";
 import type { SocialPlatform } from "@/types/social";
 
@@ -67,6 +68,7 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
     return {
       ...DISABLED_CAPABILITIES,
       publicCollection: isTinyFishConfigured(),
+      monitoring: isTinyFishConfigured(),
       ...this.extraCapabilities(),
     };
   }
@@ -77,7 +79,7 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
 
   async collectPublicData(input: CollectInput): Promise<CollectResult> {
     if (!isTinyFishConfigured()) {
-      throw new ValidationError("TINYFISH_API_KEY is not configured. Public collection is disabled.");
+      throw new ValidationError("TINYFISH_API_KEY is not configured.");
     }
 
     return collectResolvedPublicProfile({
@@ -90,8 +92,16 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
     throw new UnsupportedActionError(`${this.platform} publishing is not enabled yet`);
   }
 
-  async monitor(_input: MonitorInput): Promise<MonitorResult> {
-    throw new UnsupportedActionError(`${this.platform} monitoring is not enabled yet`);
+  async monitor(input: MonitorInput): Promise<MonitorResult> {
+    if (!isTinyFishConfigured()) {
+      throw new UnsupportedActionError(`${this.platform} monitoring is not enabled yet`);
+    }
+
+    return searchPublicMentions({
+      platform: this.platform,
+      keywords: input.keywords,
+      sources: input.sources,
+    });
   }
 
   async executeContactAction(_input: ContactActionInput): Promise<ContactActionResult> {

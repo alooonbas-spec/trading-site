@@ -272,3 +272,58 @@ export async function enqueuePublishJobs(input: {
 
   return inserts.length;
 }
+
+export async function enqueueMonitorJob(input: {
+  workspaceId: string;
+  ruleId: string;
+  runAfter: string;
+}): Promise<number> {
+  const supabase = await createClient();
+  const { data: rule, error: ruleError } = await supabase
+    .from("monitoring_rules")
+    .select("id, social_account_id, status")
+    .eq("id", input.ruleId)
+    .eq("workspace_id", input.workspaceId)
+    .maybeSingle();
+
+  if (ruleError || !rule) {
+    throw new ValidationError(ruleError?.message ?? "Monitoring rule not found");
+  }
+  if (rule.status !== "ACTIVE") {
+    throw new ValidationError("Only ACTIVE monitoring rules can be queued");
+  }
+
+  const { data: existingJobs, error: existingError } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("monitoring_rule_id", input.ruleId)
+    .in("status", ["PENDING", "RETRY", "RUNNING"]);
+  if (existingError) {
+    throw new ValidationError(existingError.message);
+  }
+  if ((existingJobs ?? []).length > 0) {
+    return 0;
+  }
+
+  const { error: insertError } = await supabase.from("jobs").insert({
+    workspace_id: input.workspaceId,
+    campaign_id: null,
+    social_account_id: rule.social_account_id,
+    lead_id: null,
+    social_profile_id: null,
+    relationship_id: null,
+    post_id: null,
+    post_target_id: null,
+    monitoring_rule_id: input.ruleId,
+    type: "MONITOR",
+    action: null,
+    body: null,
+    status: "PENDING",
+    run_after: input.runAfter,
+  });
+  if (insertError) {
+    throw new ValidationError(insertError.message);
+  }
+
+  return 1;
+}

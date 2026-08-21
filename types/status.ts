@@ -81,6 +81,10 @@ export const POST_TARGET_STATUSES = [
 
 export type PostTargetStatus = (typeof POST_TARGET_STATUSES)[number];
 
+export const MONITORING_RULE_STATUSES = ["ACTIVE", "PAUSED", "DISABLED"] as const;
+
+export type MonitoringRuleStatus = (typeof MONITORING_RULE_STATUSES)[number];
+
 export const WORKSPACE_ROLES = [
   "OWNER",
   "ADMIN",

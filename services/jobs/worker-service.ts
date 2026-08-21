@@ -13,7 +13,7 @@ import {
   isAppError,
 } from "@/lib/errors";
 import { AccountRateLimiter } from "@/lib/jobs/account-rate-limiter";
-import { isAdapterContactAction, jobStatusAfterError } from "@/lib/jobs/queue-rules";
+import { isAdapterContactAction, jobStatusAfterError, MONITOR_POLL_INTERVAL_MS } from "@/lib/jobs/queue-rules";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { decryptSecret, getTokenEncryptionKey } from "@/lib/crypto/token-encryption";
 import { assertCanContactLead } from "@/services/leads/do-not-contact";
@@ -24,9 +24,12 @@ import { CAMPAIGN_PUBLIC_COLUMNS, JOB_PUBLIC_COLUMNS, type Job } from "@/types/c
 import { LEAD_PUBLIC_COLUMNS } from "@/types/crm";
 import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import { toJob } from "@/services/campaigns/mapper";
+import { enqueueMonitorJob } from "@/services/jobs/enqueue-service";
+import { toMonitoringRule } from "@/services/monitoring/mapper";
 import { refreshPostRollup } from "@/services/posts/post-service";
 import { POST_PUBLIC_COLUMNS, POST_TARGET_PUBLIC_COLUMNS } from "@/types/post";
 import type { ContactStatus } from "@/types/status";
+import { MONITORING_RULE_PUBLIC_COLUMNS } from "@/types/monitoring";
 
 export async function listCampaignJobs(workspaceId: string, campaignId: string): Promise<Job[]> {
   await requireWorkspaceContext(workspaceId);
@@ -54,6 +57,24 @@ export async function listPostJobs(workspaceId: string, postId: string): Promise
     .eq("workspace_id", workspaceId)
     .eq("post_id", postId)
     .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  return (data ?? []).map(toJob);
+}
+
+export async function listMonitoringJobs(workspaceId: string, ruleId: string): Promise<Job[]> {
+  await requireWorkspaceContext(workspaceId);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("jobs")
+    .select(JOB_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .eq("monitoring_rule_id", ruleId)
+    .order("created_at", { ascending: false })
+    .limit(20);
 
   if (error) {
     throw new ValidationError(error.message);
@@ -113,6 +134,9 @@ export async function countJobsByAccount(
   }
 
   for (const row of data ?? []) {
+    if (!row.social_account_id) {
+      continue;
+    }
     counts.set(row.social_account_id, (counts.get(row.social_account_id) ?? 0) + 1);
   }
   return counts;
@@ -145,6 +169,11 @@ export async function processJobBatch(input: {
 }
 
 async function processClaimedJob(job: Job, userId: string): Promise<void> {
+  if (job.type === "MONITOR") {
+    await processMonitorJob(job, userId);
+    return;
+  }
+
   if (job.type === "PUBLISH") {
     await processPublishJob(job, userId);
     return;
@@ -155,11 +184,12 @@ async function processClaimedJob(job: Job, userId: string): Promise<void> {
 
 async function processContactJob(job: Job, userId: string): Promise<void> {
   const supabase = await createClient();
-  if (!job.leadId || !job.action) {
-    throw new ValidationError("Contact job is missing a lead or action");
+  if (!job.leadId || !job.action || !job.socialAccountId) {
+    throw new ValidationError("Contact job is missing a lead, action, or social account");
   }
   const action = job.action;
   const leadId = job.leadId;
+  const socialAccountId = job.socialAccountId;
 
   try {
     if (job.campaignId) {
@@ -190,7 +220,7 @@ async function processContactJob(job: Job, userId: string): Promise<void> {
     const { data: account } = await supabase
       .from("social_accounts")
       .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
-      .eq("id", job.socialAccountId)
+      .eq("id", socialAccountId)
       .maybeSingle();
     if (
       !account ||
@@ -207,7 +237,7 @@ async function processContactJob(job: Job, userId: string): Promise<void> {
     if (isAdapterContactAction(action)) {
       await markRelationship(job, action === "INVITE" ? "INVITE_PENDING" : "MESSAGE_PENDING");
       const { data: secrets, error: secretError } = await supabase.rpc("read_social_account_secrets", {
-        p_account_id: job.socialAccountId,
+        p_account_id: socialAccountId,
       });
       const secret = secrets?.[0];
       if (secretError || !secret?.access_token_encrypted) {
@@ -229,11 +259,11 @@ async function processContactJob(job: Job, userId: string): Promise<void> {
         }
         return data ?? 0;
       });
-      await limiter.take(job.socialAccountId, adapter.getRateLimit());
+      await limiter.take(socialAccountId, adapter.getRateLimit());
 
       const result = await adapter.executeContactAction({
         workspaceId: job.workspaceId,
-        socialAccountId: job.socialAccountId,
+        socialAccountId,
         socialProfileId: job.socialProfileId,
         leadId,
         action,
@@ -277,9 +307,10 @@ async function processPublishJob(job: Job, userId: string): Promise<void> {
   const supabase = await createClient();
 
   try {
-    if (!job.postId || !job.postTargetId) {
-      throw new ValidationError("Publish job is missing a post target");
+    if (!job.postId || !job.postTargetId || !job.socialAccountId) {
+      throw new ValidationError("Publish job is missing a post target or social account");
     }
+    const socialAccountId = job.socialAccountId;
 
     const { data: post } = await supabase
       .from("posts")
@@ -331,7 +362,7 @@ async function processPublishJob(job: Job, userId: string): Promise<void> {
     const { data: account } = await supabase
       .from("social_accounts")
       .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
-      .eq("id", job.socialAccountId)
+      .eq("id", socialAccountId)
       .maybeSingle();
     if (
       !account ||
@@ -347,7 +378,7 @@ async function processPublishJob(job: Job, userId: string): Promise<void> {
       .eq("id", target.id);
 
     const { data: secrets, error: secretError } = await supabase.rpc("read_social_account_secrets", {
-      p_account_id: job.socialAccountId,
+      p_account_id: socialAccountId,
     });
     const secret = secrets?.[0];
     if (secretError || !secret?.access_token_encrypted) {
@@ -374,14 +405,14 @@ async function processPublishJob(job: Job, userId: string): Promise<void> {
       }
       return data ?? 0;
     });
-    await limiter.take(job.socialAccountId, adapter.getRateLimit());
+    await limiter.take(socialAccountId, adapter.getRateLimit());
 
     const media = Array.isArray(post.media)
       ? post.media.filter((item): item is string => typeof item === "string")
       : [];
     const result = await adapter.publish({
       workspaceId: job.workspaceId,
-      socialAccountId: job.socialAccountId,
+      socialAccountId,
       body: post.body,
       media,
     });
@@ -406,6 +437,141 @@ async function processPublishJob(job: Job, userId: string): Promise<void> {
   }
 }
 
+async function processMonitorJob(job: Job, userId: string): Promise<void> {
+  const supabase = await createClient();
+
+  try {
+    if (!job.monitoringRuleId) {
+      throw new ValidationError("Monitor job is missing a monitoring rule");
+    }
+
+    const { data: ruleRow, error: ruleError } = await supabase
+      .from("monitoring_rules")
+      .select(MONITORING_RULE_PUBLIC_COLUMNS)
+      .eq("id", job.monitoringRuleId)
+      .eq("workspace_id", job.workspaceId)
+      .maybeSingle();
+    if (ruleError) {
+      throw new ValidationError(ruleError.message);
+    }
+    if (!ruleRow || ruleRow.status !== "ACTIVE") {
+      await supabase
+        .from("jobs")
+        .update({ status: "PENDING", locked_at: null, locked_by: null })
+        .eq("id", job.id);
+      return;
+    }
+
+    const rule = toMonitoringRule(ruleRow);
+    const accountId = job.socialAccountId ?? rule.socialAccountId;
+    let adapter = getSocialAdapter(rule.platform);
+
+    if (accountId) {
+      const { data: account } = await supabase
+        .from("social_accounts")
+        .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
+        .eq("id", accountId)
+        .maybeSingle();
+      if (
+        !account ||
+        !isAccountOperable(account.status) ||
+        deriveTokenStatus({ status: account.status, tokenExpiresAt: account.token_expires_at }) !== "CONNECTED"
+      ) {
+        throw new SocialAccountUnavailableError();
+      }
+      if (account.platform !== rule.platform) {
+        throw new ValidationError("Monitoring account platform does not match the rule");
+      }
+
+      const { data: secrets, error: secretError } = await supabase.rpc("read_social_account_secrets", {
+        p_account_id: accountId,
+      });
+      const secret = secrets?.[0];
+      if (secretError || !secret?.access_token_encrypted) {
+        throw new SocialAccountUnavailableError("Social account has no access token");
+      }
+
+      adapter = getSocialAdapter(account.platform, {
+        accessToken: decryptSecret(secret.access_token_encrypted, getTokenEncryptionKey()),
+        metadata: secret.metadata,
+      });
+
+      const limiter = new AccountRateLimiter(async ({ accountId: rateAccountId, windowStart, maxActions }) => {
+        const { data, error: rateError } = await supabase.rpc("increment_account_rate_bucket", {
+          p_account_id: rateAccountId,
+          p_window_start: windowStart,
+          p_max: maxActions,
+        });
+        if (rateError) {
+          throw new ValidationError(rateError.message);
+        }
+        return data ?? 0;
+      });
+      await limiter.take(accountId, adapter.getRateLimit());
+    }
+
+    const capabilities = await adapter.getCapabilities();
+    if (!capabilities.monitoring) {
+      throw new UnsupportedActionError(`${rule.platform} monitoring is not enabled yet`);
+    }
+
+    const result = await adapter.monitor({
+      workspaceId: job.workspaceId,
+      socialAccountId: accountId,
+      keywords: rule.keywords,
+      sources: rule.sources,
+      cursor: rule.cursor,
+    });
+
+    if (result.events.length > 0) {
+      const { error: insertError } = await supabase.from("monitoring_events").upsert(
+        result.events.map((event) => ({
+          workspace_id: job.workspaceId,
+          rule_id: rule.id,
+          social_account_id: accountId,
+          external_id: event.externalId,
+          author: event.author,
+          content: event.content,
+          url: event.url,
+          matched_keywords: event.matchedKeywords,
+        })),
+        { onConflict: "workspace_id,rule_id,external_id", ignoreDuplicates: true },
+      );
+      if (insertError) {
+        throw new ValidationError(insertError.message);
+      }
+    }
+
+    const { error: ruleUpdateError } = await supabase
+      .from("monitoring_rules")
+      .update({
+        last_run_at: new Date().toISOString(),
+        last_error: null,
+        cursor: result.cursor ?? rule.cursor,
+      })
+      .eq("id", rule.id)
+      .eq("workspace_id", job.workspaceId);
+    if (ruleUpdateError) {
+      throw new ValidationError(ruleUpdateError.message);
+    }
+
+    await enqueueMonitorJob({
+      workspaceId: job.workspaceId,
+      ruleId: rule.id,
+      runAfter: new Date(Date.now() + MONITOR_POLL_INTERVAL_MS).toISOString(),
+    });
+
+    await finishJob(job, userId, {
+      status: "SUCCESS",
+      result: { eventCount: result.events.length },
+      activity: "MONITORING_EVENT_CREATED",
+      metadata: { eventCount: result.events.length, ruleId: rule.id },
+    });
+  } catch (caught) {
+    await failOrRetry(job, userId, caught);
+  }
+}
+
 async function markRelationship(job: Job, status: ContactStatus): Promise<void> {
   if (!job.relationshipId) {
     return;
@@ -424,8 +590,15 @@ async function finishJob(
     status: "SUCCESS" | "FAILED";
     relationshipStatus?: ContactStatus;
     result: Record<string, unknown>;
-    activity: "CONTACT_ACTION_SUCCESS" | "CONTACT_ACTION_FAILED" | "POST_PUBLISHED" | "POST_FAILED";
+    activity:
+      | "CONTACT_ACTION_SUCCESS"
+      | "CONTACT_ACTION_FAILED"
+      | "POST_PUBLISHED"
+      | "POST_FAILED"
+      | "MONITORING_EVENT_CREATED"
+      | "MONITORING_FAILED";
     error?: string;
+    metadata?: Record<string, unknown>;
   },
 ): Promise<void> {
   const supabase = await createClient();
@@ -453,13 +626,21 @@ async function finishJob(
       .neq("status", "PUBLISHED");
   }
 
+  if (job.monitoringRuleId && input.status === "FAILED") {
+    await supabase
+      .from("monitoring_rules")
+      .update({ last_error: input.error ?? "Monitoring failed" })
+      .eq("id", job.monitoringRuleId);
+  }
+
   await logActivity({
     workspaceId: job.workspaceId,
     userId,
     action: input.activity,
     socialAccountId: job.socialAccountId,
-    entityType: "job",
-    entityId: job.id,
+    entityType: job.monitoringRuleId ? "monitoring_rule" : "job",
+    entityId: job.monitoringRuleId ?? job.id,
+    metadata: input.metadata ?? {},
   });
 
   if (job.campaignId) {
@@ -493,7 +674,8 @@ async function failOrRetry(job: Job, userId: string, caught: unknown): Promise<v
           ? "FAILED"
           : undefined,
       result: { error: isAppError(caught) ? caught.code : "INTERNAL" },
-      activity: job.type === "PUBLISH" ? "POST_FAILED" : "CONTACT_ACTION_FAILED",
+      activity:
+        job.type === "PUBLISH" ? "POST_FAILED" : job.type === "MONITOR" ? "MONITORING_FAILED" : "CONTACT_ACTION_FAILED",
       error: message,
     });
     return;
@@ -506,6 +688,12 @@ async function failOrRetry(job: Job, userId: string, caught: unknown): Promise<v
       .update({ status: "PENDING", last_error: message })
       .eq("id", job.postTargetId)
       .neq("status", "PUBLISHED");
+  }
+  if (job.monitoringRuleId) {
+    await supabase
+      .from("monitoring_rules")
+      .update({ last_error: message })
+      .eq("id", job.monitoringRuleId);
   }
   await supabase
     .from("jobs")

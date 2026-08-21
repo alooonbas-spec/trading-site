@@ -79,6 +79,7 @@ export type MonitorInput = {
   socialAccountId: string | null;
   keywords: string[];
   sources: string[];
+  cursor?: string | null;
 };
 
 export type MonitorResult = {
@@ -89,6 +90,7 @@ export type MonitorResult = {
     url: string | null;
     matchedKeywords: string[];
   }>;
+  cursor?: string | null;
 };
 
 export type ContactActionInput = {

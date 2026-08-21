@@ -20,12 +20,13 @@ type JobRow = {
   id: string;
   workspace_id: string;
   campaign_id: string | null;
-  social_account_id: string;
+  social_account_id: string | null;
   lead_id: string | null;
   social_profile_id: string | null;
   relationship_id: string | null;
   post_id: string | null;
   post_target_id: string | null;
+  monitoring_rule_id: string | null;
   type: JobType;
   action: CampaignAction | null;
   body: string | null;
@@ -76,6 +77,7 @@ export function toJob(row: JobRow): Job {
     relationshipId: row.relationship_id,
     postId: row.post_id,
     postTargetId: row.post_target_id,
+    monitoringRuleId: row.monitoring_rule_id,
     type: row.type,
     action: row.action,
     body: row.body,

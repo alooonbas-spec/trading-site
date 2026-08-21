@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UnsupportedActionError, ValidationError } from "@/lib/errors";
 import { canCancelPost, canDeletePost, canPublishPost, rollupPostStatus } from "@/lib/posts/status";
 import { createPostSchema, parseMediaList } from "@/lib/validation/post";
-import { DISABLED_CAPABILITIES } from "@/social/core/base-adapter";
 import { getSocialAdapter } from "@/social/core/registry";
 import { XAdapter } from "@/social/x/adapter";
 import { POST_STATUSES, POST_TARGET_STATUSES } from "@/types/status";
@@ -102,7 +101,8 @@ describe("publishing adapters", () => {
     const capabilities = await getSocialAdapter("telegram").getCapabilities();
     expect(capabilities.publicCollection).toBe(true);
     expect(capabilities.publishing).toBe(false);
-    expect(capabilities).toMatchObject({ ...DISABLED_CAPABILITIES, publicCollection: true });
+    expect(capabilities.monitoring).toBe(true);
+    expect(capabilities.contactActions).toBe(false);
   });
 });
 

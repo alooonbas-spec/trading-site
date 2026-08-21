@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AuthenticationError, SocialError, ValidationError } from "@/lib/errors";
+import { matchKeywords, normalizeKeywords } from "@/lib/monitoring/keywords";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
   BaseSocialAdapter,
@@ -7,7 +8,16 @@ import {
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, PublishInput, PublishResult, SocialAccountSnapshot, SocialCapabilities } from "@/social/core/adapter";
+import type {
+  ConnectResult,
+  MonitorInput,
+  MonitorResult,
+  PublishInput,
+  PublishResult,
+  SocialAccountSnapshot,
+  SocialCapabilities,
+} from "@/social/core/adapter";
+import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 import { resolveXPublicProfile } from "@/social/x/public-profile";
 
 const X_AUTHORIZE_URL = "https://twitter.com/i/oauth2/authorize";
@@ -15,6 +25,7 @@ const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
 const X_REVOKE_URL = "https://api.x.com/2/oauth2/revoke";
 const X_ME_URL = "https://api.x.com/2/users/me";
 const X_TWEETS_URL = "https://api.x.com/2/tweets";
+const X_RECENT_SEARCH_URL = "https://api.x.com/2/tweets/search/recent";
 const X_SCOPES = "tweet.read tweet.write users.read offline.access";
 
 type XTokenResponse = {
@@ -31,6 +42,37 @@ const xCreateTweetResponseSchema = z.object({
     id: z.string().min(1),
     text: z.string().optional(),
   }),
+});
+
+const xRecentSearchResponseSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        text: z.string(),
+        author_id: z.string().optional(),
+      }),
+    )
+    .optional(),
+  includes: z
+    .object({
+      users: z
+        .array(
+          z.object({
+            id: z.string(),
+            username: z.string().optional(),
+            name: z.string().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
+  meta: z
+    .object({
+      newest_id: z.string().optional(),
+      result_count: z.number().optional(),
+    })
+    .optional(),
 });
 
 type XMeResponse = {
@@ -71,6 +113,15 @@ export function buildXAuthorizationUrl(input: OAuthBeginInput): string {
   });
 
   return `${X_AUTHORIZE_URL}?${params.toString()}`;
+}
+
+export function buildXRecentSearchQuery(keywords: string[]): string {
+  const normalized = normalizeKeywords(keywords);
+  if (normalized.length === 0) {
+    throw new ValidationError("Monitoring requires at least one keyword");
+  }
+
+  return normalized.map((keyword) => `"${keyword.replaceAll('"', "")}"`).join(" OR ");
 }
 
 export class XAdapter extends BaseSocialAdapter {
@@ -159,7 +210,7 @@ export class XAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true };
+    return { publishing: true, monitoring: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -192,6 +243,55 @@ export class XAdapter extends BaseSocialAdapter {
     return {
       externalPostId: parsed.data.data.id,
       publishedAt: new Date().toISOString(),
+    };
+  }
+
+  async monitor(input: MonitorInput): Promise<MonitorResult> {
+    assertMonitorSourcesAllowed("x", input.sources);
+    const token = this.context.accessToken;
+    if (!token) {
+      return super.monitor(input);
+    }
+
+    const query = buildXRecentSearchQuery(input.keywords);
+    const url = new URL(X_RECENT_SEARCH_URL);
+    url.searchParams.set("query", query);
+    url.searchParams.set("max_results", "10");
+    url.searchParams.set("tweet.fields", "author_id,created_at");
+    url.searchParams.set("expansions", "author_id");
+    url.searchParams.set("user.fields", "username,name");
+    if (input.cursor && /^\d+$/.test(input.cursor)) {
+      url.searchParams.set("since_id", input.cursor);
+    }
+
+    const response = await socialFetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const parsed = xRecentSearchResponseSchema.safeParse(await readJson<unknown>(response));
+    if (!parsed.success) {
+      throw new SocialError("X recent search returned an unexpected payload");
+    }
+
+    const users = new Map((parsed.data.includes?.users ?? []).map((user) => [user.id, user]));
+    const events = [];
+    for (const tweet of parsed.data.data ?? []) {
+      const matchedKeywords = matchKeywords(tweet.text, input.keywords);
+      if (matchedKeywords.length === 0) {
+        continue;
+      }
+      const author = tweet.author_id ? users.get(tweet.author_id) : undefined;
+      events.push({
+        externalId: tweet.id,
+        author: author?.username ? `@${author.username}` : (author?.name ?? null),
+        content: tweet.text,
+        url: author?.username ? `https://x.com/${author.username}/status/${tweet.id}` : `https://x.com/i/web/status/${tweet.id}`,
+        matchedKeywords,
+      });
+    }
+
+    return {
+      events,
+      cursor: parsed.data.meta?.newest_id ?? input.cursor ?? null,
     };
   }
 

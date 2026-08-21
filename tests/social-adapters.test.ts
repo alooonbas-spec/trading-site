@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthenticationError, UnsupportedActionError, ValidationError } from "@/lib/errors";
 import { redactSensitiveUrl } from "@/social/core/http";
 import { getSocialAdapter, listSocialPlatforms } from "@/social/core/registry";
-import { DISABLED_CAPABILITIES } from "@/social/core/base-adapter";
 import { TelegramAdapter, telegramMethodUrl } from "@/social/telegram/adapter";
 import { buildVkAuthorizationUrl } from "@/social/vk/adapter";
 import { buildXAuthorizationUrl } from "@/social/x/adapter";
@@ -30,14 +29,18 @@ describe("PHASE 2 adapter capabilities", () => {
     delete process.env.TINYFISH_API_KEY;
   });
 
-  it("keeps publish, monitor, and contact actions disabled", async () => {
+  it("keeps publish and contact actions disabled", async () => {
     const adapter = getSocialAdapter("telegram");
-    expect(await adapter.getCapabilities()).toEqual(DISABLED_CAPABILITIES);
+    const capabilities = await adapter.getCapabilities();
+    expect(capabilities.publishing).toBe(false);
+    expect(capabilities.contactActions).toBe(false);
+    expect(capabilities.publicCollection).toBe(false);
+    expect(capabilities.monitoring).toBe(true);
     await expect(
       adapter.publish({ workspaceId: "w", socialAccountId: "a", body: "hi", media: [] }),
     ).rejects.toBeInstanceOf(UnsupportedActionError);
     await expect(
-      adapter.monitor({ workspaceId: "w", socialAccountId: null, keywords: [], sources: [] }),
+      adapter.monitor({ workspaceId: "w", socialAccountId: null, keywords: ["hello"], sources: [] }),
     ).rejects.toBeInstanceOf(UnsupportedActionError);
     await expect(
       adapter.executeContactAction({
@@ -65,7 +68,7 @@ describe("PHASE 2 adapter capabilities", () => {
     expect(capabilities.publicCollection).toBe(true);
     expect(capabilities.contactActions).toBe(false);
     expect(capabilities.publishing).toBe(false);
-    expect(capabilities.monitoring).toBe(false);
+    expect(capabilities.monitoring).toBe(true);
   });
 });
 

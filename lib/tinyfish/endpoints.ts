@@ -6,3 +6,6 @@ export const TINYFISH_ENDPOINTS = {
 
 export const SAFE_FETCH_PURPOSE =
   "Extract public social profile title, description, and text for CRM";
+
+export const SAFE_SEARCH_PURPOSE =
+  "Find public posts matching workspace monitoring keywords on official social domains";

@@ -475,12 +475,13 @@ export type Database = {
           id: string;
           workspace_id: string;
           campaign_id: string | null;
-          social_account_id: string;
+          social_account_id: string | null;
           lead_id: string | null;
           social_profile_id: string | null;
           relationship_id: string | null;
           post_id: string | null;
           post_target_id: string | null;
+          monitoring_rule_id: string | null;
           type: import("@/types/campaign").JobType;
           action: import("@/types/campaign").CampaignAction | null;
           body: string | null;
@@ -499,12 +500,13 @@ export type Database = {
         Insert: {
           workspace_id: string;
           campaign_id?: string | null;
-          social_account_id: string;
+          social_account_id?: string | null;
           lead_id?: string | null;
           social_profile_id?: string | null;
           relationship_id?: string | null;
           post_id?: string | null;
           post_target_id?: string | null;
+          monitoring_rule_id?: string | null;
           type?: import("@/types/campaign").JobType;
           action?: import("@/types/campaign").CampaignAction | null;
           body?: string | null;
@@ -524,6 +526,78 @@ export type Database = {
           last_error?: string | null;
           result?: Record<string, unknown>;
           completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      monitoring_rules: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          name: string;
+          keywords: string[];
+          sources: string[];
+          social_account_id: string | null;
+          platform: import("@/types/social").SocialPlatform;
+          status: import("@/types/status").MonitoringRuleStatus;
+          cursor: string | null;
+          last_run_at: string | null;
+          last_error: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          name: string;
+          keywords: string[];
+          sources?: string[];
+          social_account_id?: string | null;
+          platform: import("@/types/social").SocialPlatform;
+          status?: import("@/types/status").MonitoringRuleStatus;
+          cursor?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          name?: string;
+          keywords?: string[];
+          sources?: string[];
+          social_account_id?: string | null;
+          platform?: import("@/types/social").SocialPlatform;
+          status?: import("@/types/status").MonitoringRuleStatus;
+          cursor?: string | null;
+          last_run_at?: string | null;
+          last_error?: string | null;
+        };
+        Relationships: [];
+      };
+      monitoring_events: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          rule_id: string;
+          social_account_id: string | null;
+          external_id: string;
+          author: string | null;
+          content: string;
+          url: string | null;
+          matched_keywords: string[];
+          created_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          rule_id: string;
+          social_account_id?: string | null;
+          external_id: string;
+          author?: string | null;
+          content: string;
+          url?: string | null;
+          matched_keywords?: string[];
+        };
+        Update: {
+          author?: string | null;
+          content?: string;
+          url?: string | null;
+          matched_keywords?: string[];
         };
         Relationships: [];
       };
@@ -594,12 +668,13 @@ export type Database = {
           id: string;
           workspace_id: string;
           campaign_id: string | null;
-          social_account_id: string;
+          social_account_id: string | null;
           lead_id: string | null;
           social_profile_id: string | null;
           relationship_id: string | null;
           post_id: string | null;
           post_target_id: string | null;
+          monitoring_rule_id: string | null;
           type: import("@/types/campaign").JobType;
           action: import("@/types/campaign").CampaignAction | null;
           body: string | null;
@@ -634,6 +709,7 @@ export type Database = {
       job_type: import("@/types/campaign").JobType;
       post_status: import("@/types/status").PostStatus;
       post_target_status: import("@/types/status").PostTargetStatus;
+      monitoring_rule_status: import("@/types/status").MonitoringRuleStatus;
     };
     CompositeTypes: Record<string, never>;
   };

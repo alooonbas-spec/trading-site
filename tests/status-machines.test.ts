@@ -8,6 +8,7 @@ import {
   POST_STATUSES,
   POST_TARGET_STATUSES,
   SOCIAL_ACCOUNT_STATUSES,
+  MONITORING_RULE_STATUSES,
 } from "@/types/status";
 
 describe("independent state machines", () => {
@@ -41,6 +42,8 @@ describe("independent state machines", () => {
     expect(account.has("INTERESTED")).toBe(false);
     expect(POST_STATUSES).not.toContain("MESSAGE_SENT");
     expect(POST_TARGET_STATUSES).not.toContain("DO_NOT_CONTACT");
+    expect(MONITORING_RULE_STATUSES).not.toContain("DO_NOT_CONTACT");
+    expect(MONITORING_RULE_STATUSES).not.toContain("SUCCESS");
   });
 });
 

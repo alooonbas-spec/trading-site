@@ -7,7 +7,7 @@ import {
   ValidationError,
 } from "@/lib/errors";
 import { readTinyFishApiKey } from "@/lib/tinyfish/config";
-import { SAFE_FETCH_PURPOSE, TINYFISH_ENDPOINTS } from "@/lib/tinyfish/endpoints";
+import { SAFE_FETCH_PURPOSE, SAFE_SEARCH_PURPOSE, TINYFISH_ENDPOINTS } from "@/lib/tinyfish/endpoints";
 import { assertTinyFishGoalAllowed } from "@/lib/tinyfish/policy";
 
 const fetchPageSchema = z.object({
@@ -139,6 +139,61 @@ export async function fetchPublicContents(
   const parsed = fetchResponseSchema.safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("TinyFish Fetch returned an unexpected payload");
+  }
+
+  return parsed.data;
+}
+
+const searchResultSchema = z.object({
+  title: z.string().nullable().optional(),
+  snippet: z.string().nullable().optional(),
+  url: z.string(),
+  domain: z.string().nullable().optional(),
+});
+
+const searchResponseSchema = z.object({
+  query: z.string().optional(),
+  results: z.array(searchResultSchema),
+  total_results: z.number().optional(),
+  page: z.number().optional(),
+});
+
+export type TinyFishSearchResult = z.infer<typeof searchResultSchema>;
+export type TinyFishSearchResponse = z.infer<typeof searchResponseSchema>;
+
+export async function searchPublicContents(input: {
+  query: string;
+  includeDomains: string[];
+  purpose?: string;
+}): Promise<TinyFishSearchResponse> {
+  const query = input.query.trim();
+  if (!query) {
+    throw new ValidationError("TinyFish Search requires a query");
+  }
+  if (input.includeDomains.length === 0) {
+    throw new ValidationError("TinyFish Search requires at least one official domain");
+  }
+
+  const purpose = input.purpose ?? SAFE_SEARCH_PURPOSE;
+  assertTinyFishGoalAllowed(purpose);
+
+  const url = new URL(TINYFISH_ENDPOINTS.search);
+  url.searchParams.set("query", query);
+  url.searchParams.set("include_domains", input.includeDomains.join(","));
+  url.searchParams.set("purpose", purpose);
+
+  const response = await tinyFishRequest(url.toString(), { method: "GET" });
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new SocialError("TinyFish Search returned invalid JSON");
+  }
+
+  const parsed = searchResponseSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("TinyFish Search returned an unexpected payload");
   }
 
   return parsed.data;

@@ -57,6 +57,8 @@ export function buildEnqueuePairs(input: {
   return pairs;
 }
 
+export const MONITOR_POLL_INTERVAL_MS = 5 * 60 * 1000;
+
 export function retryDelayMs(attempts: number): number {
   const capped = Math.min(Math.max(attempts, 1), 8);
   return Math.min(60 * 60 * 1000, 30_000 * 2 ** (capped - 1));

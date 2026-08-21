@@ -150,10 +150,10 @@ export default async function CampaignDetailPage({
                     <TableCell>{job.leadId ? (leadMap.get(job.leadId)?.displayName ?? job.leadId) : "—"}</TableCell>
                     <TableCell>
                       {(() => {
-                        const account = accountMap.get(job.socialAccountId);
+                        const account = job.socialAccountId ? accountMap.get(job.socialAccountId) : undefined;
                         return account
                           ? SOCIAL_PLATFORM_LABELS[account.platform]
-                          : job.socialAccountId;
+                          : (job.socialAccountId ?? "—");
                       })()}
                     </TableCell>
                     <TableCell>
