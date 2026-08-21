@@ -223,6 +223,10 @@ Inbox, Jobs, and Activity pages fetch 201 rows and keep 200. If more exist, an o
 
 The lead page paginates matched inbox events (`inbox`) and the interaction timeline (`timeline`) independently with the same keyset. Paginating one list keeps the other cursor. Official replies are still blocked when the lead is `do_not_contact`.
 
+## Operator index pagination (PHASE 29)
+
+Leads, Campaigns, Posts, and Monitoring index pages use the same `created_at` keyset as Inbox. Filter forms omit `after`. Campaign/post compose pickers and inbox/lead-merge `listLeads` stay unbounded. Monitoring rule events replace the previous 100-row cap with a 200-row keyset. There is no SQL `OFFSET`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

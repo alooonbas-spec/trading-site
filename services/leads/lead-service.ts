@@ -2,6 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { assertCanManageWorkspace, assertCanMutateWorkspaceData } from "@/lib/auth/permissions";
 import { ValidationError } from "@/lib/errors";
+import {
+  DEFAULT_PAGE_SIZE,
+  keysetOrFilter,
+  nextKeysetCursor,
+  parseKeysetCursor,
+  splitKeysetRows,
+  type KeysetPage,
+} from "@/lib/pagination/keyset";
 import { logActivity } from "@/services/activity/activity-service";
 import { createLeadSchema, updateLeadSchema } from "@/lib/validation/lead";
 import { LEAD_PUBLIC_COLUMNS, type Lead } from "@/types/crm";
@@ -9,13 +17,17 @@ import { emptyToNull, toLead } from "@/services/leads/mapper";
 import { recordLeadInteraction } from "@/services/leads/interaction-service";
 import type { LeadStatus } from "@/types/status";
 
-export async function listLeads(input: {
+const LEAD_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+
+type LeadListInput = {
   workspaceId: string;
   query?: string;
   status?: LeadStatus | "all";
   doNotContact?: "all" | "yes" | "no";
   includeMerged?: boolean;
-}): Promise<Lead[]> {
+};
+
+export async function listLeads(input: LeadListInput): Promise<Lead[]> {
   await requireWorkspaceContext(input.workspaceId);
   const supabase = await createClient();
   let request = supabase
@@ -23,51 +35,44 @@ export async function listLeads(input: {
     .select(LEAD_PUBLIC_COLUMNS)
     .eq("workspace_id", input.workspaceId)
     .order("created_at", { ascending: false });
-
-  if (!input.includeMerged) {
-    request = request.is("merged_into_id", null);
-  }
-
-  if (input.status && input.status !== "all") {
-    request = request.eq("status", input.status);
-  }
-
-  if (input.doNotContact === "yes") {
-    request = request.eq("do_not_contact", true);
-  } else if (input.doNotContact === "no") {
-    request = request.eq("do_not_contact", false);
-  }
-
-  const query = sanitizeIlike(input.query);
-  if (query) {
-    request = request.or(
-      `display_name.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%`,
-    );
-  }
+  request = applyLeadListFilters(request, input);
 
   const { data, error } = await request;
   if (error) {
     throw new ValidationError(error.message);
   }
 
-  const leads = data ?? [];
-  const ids = leads.map((row) => row.id);
-  const counts = new Map<string, number>();
-  if (ids.length > 0) {
-    const { data: profiles, error: profileError } = await supabase
-      .from("social_profiles")
-      .select("lead_id")
-      .eq("workspace_id", input.workspaceId)
-      .in("lead_id", ids);
-    if (profileError) {
-      throw new ValidationError(profileError.message);
-    }
-    for (const profile of profiles ?? []) {
-      counts.set(profile.lead_id, (counts.get(profile.lead_id) ?? 0) + 1);
-    }
+  return attachLeadProfileCounts(input.workspaceId, data ?? []);
+}
+
+export async function listLeadsPage(
+  input: LeadListInput & { after?: string },
+): Promise<KeysetPage<Lead>> {
+  await requireWorkspaceContext(input.workspaceId);
+  const supabase = await createClient();
+  const cursor = parseKeysetCursor(input.after);
+  let request = supabase
+    .from("leads")
+    .select(LEAD_PUBLIC_COLUMNS)
+    .eq("workspace_id", input.workspaceId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(LEAD_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+  request = applyLeadListFilters(request, input);
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
   }
 
-  return leads.map((row) => toLead(row, counts.get(row.id) ?? 0));
+  const { page, hasMore } = splitKeysetRows(data ?? [], LEAD_PAGE_SIZE);
+  return {
+    items: await attachLeadProfileCounts(input.workspaceId, page),
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }
 
 export async function findLead(workspaceId: string, leadId: string): Promise<Lead | null> {
@@ -287,6 +292,55 @@ export function assertLeadMutable(lead: Lead): void {
   if (lead.mergedIntoId) {
     throw new ValidationError("This lead was merged and can no longer be edited");
   }
+}
+
+function applyLeadListFilters<
+  T extends {
+    is: (column: string, value: null) => T;
+    eq: (column: string, value: string | boolean) => T;
+    or: (filters: string) => T;
+  },
+>(request: T, input: Omit<LeadListInput, "workspaceId">): T {
+  let next = request;
+  if (!input.includeMerged) {
+    next = next.is("merged_into_id", null);
+  }
+  if (input.status && input.status !== "all") {
+    next = next.eq("status", input.status);
+  }
+  if (input.doNotContact === "yes") {
+    next = next.eq("do_not_contact", true);
+  } else if (input.doNotContact === "no") {
+    next = next.eq("do_not_contact", false);
+  }
+  const query = sanitizeIlike(input.query);
+  if (query) {
+    next = next.or(`display_name.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%`);
+  }
+  return next;
+}
+
+async function attachLeadProfileCounts(
+  workspaceId: string,
+  rows: Array<{ id: string } & Parameters<typeof toLead>[0]>,
+): Promise<Lead[]> {
+  const supabase = await createClient();
+  const ids = rows.map((row) => row.id);
+  const counts = new Map<string, number>();
+  if (ids.length > 0) {
+    const { data: profiles, error: profileError } = await supabase
+      .from("social_profiles")
+      .select("lead_id")
+      .eq("workspace_id", workspaceId)
+      .in("lead_id", ids);
+    if (profileError) {
+      throw new ValidationError(profileError.message);
+    }
+    for (const profile of profiles ?? []) {
+      counts.set(profile.lead_id, (counts.get(profile.lead_id) ?? 0) + 1);
+    }
+  }
+  return rows.map((row) => toLead(row, counts.get(row.id) ?? 0));
 }
 
 function sanitizeIlike(value: string | undefined): string {

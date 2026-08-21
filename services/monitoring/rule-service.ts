@@ -2,6 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { assertCanManageWorkspace, assertCanMutateWorkspaceData } from "@/lib/auth/permissions";
 import { ValidationError } from "@/lib/errors";
+import {
+  DEFAULT_PAGE_SIZE,
+  keysetOrFilter,
+  nextKeysetCursor,
+  parseKeysetCursor,
+  splitKeysetRows,
+  type KeysetPage,
+} from "@/lib/pagination/keyset";
 import { logActivity } from "@/services/activity/activity-service";
 import { createMonitoringRuleSchema } from "@/lib/validation/monitoring";
 import { normalizeKeywords } from "@/lib/monitoring/keywords";
@@ -23,6 +31,9 @@ import { enqueueMonitorJob } from "@/services/jobs/enqueue-service";
 import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import type { SocialPlatform } from "@/types/social";
 
+const MONITORING_RULE_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+const MONITORING_EVENT_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+
 export async function listMonitoringRules(workspaceId: string): Promise<MonitoringRule[]> {
   await requireWorkspaceContext(workspaceId);
   const supabase = await createClient();
@@ -37,6 +48,39 @@ export async function listMonitoringRules(workspaceId: string): Promise<Monitori
   }
 
   return attachRuleCounts(workspaceId, (data ?? []).map((row) => toMonitoringRule(row)));
+}
+
+export async function listMonitoringRulesPage(
+  workspaceId: string,
+  after?: string,
+): Promise<KeysetPage<MonitoringRule>> {
+  await requireWorkspaceContext(workspaceId);
+  const supabase = await createClient();
+  const cursor = parseKeysetCursor(after);
+  let request = supabase
+    .from("monitoring_rules")
+    .select(MONITORING_RULE_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(MONITORING_RULE_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  const { page, hasMore } = splitKeysetRows(data ?? [], MONITORING_RULE_PAGE_SIZE);
+  return {
+    items: await attachRuleCounts(
+      workspaceId,
+      page.map((row) => toMonitoringRule(row)),
+    ),
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }
 
 export async function getMonitoringRule(workspaceId: string, ruleId: string): Promise<MonitoringRule> {
@@ -63,22 +107,36 @@ export async function getMonitoringRule(workspaceId: string, ruleId: string): Pr
   return rule;
 }
 
-export async function listMonitoringEvents(workspaceId: string, ruleId: string): Promise<MonitoringEvent[]> {
+export async function listMonitoringEventsPage(
+  workspaceId: string,
+  ruleId: string,
+  after?: string,
+): Promise<KeysetPage<MonitoringEvent>> {
   await requireWorkspaceContext(workspaceId);
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const cursor = parseKeysetCursor(after);
+  let request = supabase
     .from("monitoring_events")
     .select(MONITORING_EVENT_PUBLIC_COLUMNS)
     .eq("workspace_id", workspaceId)
     .eq("rule_id", ruleId)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .order("id", { ascending: false })
+    .limit(MONITORING_EVENT_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
 
+  const { data, error } = await request;
   if (error) {
     throw new ValidationError(error.message);
   }
 
-  return (data ?? []).map(toMonitoringEvent);
+  const { page, hasMore } = splitKeysetRows(data ?? [], MONITORING_EVENT_PAGE_SIZE);
+  return {
+    items: page.map(toMonitoringEvent),
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }
 
 export async function countMonitoringEventsToday(workspaceId: string): Promise<number> {

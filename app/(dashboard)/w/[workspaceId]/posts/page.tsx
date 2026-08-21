@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
-import { listPosts } from "@/services/posts/post-service";
+import { listPostsPage } from "@/services/posts/post-service";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { CreatePostForm } from "@/components/posts/create-post-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,13 +20,21 @@ import {
 
 export default async function PostsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
+  searchParams: Promise<{ after?: string }>;
 }) {
   const { workspaceId } = await params;
+  const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
   const canMutate = canMutateWorkspaceData(context.role);
-  const [posts, accounts] = await Promise.all([listPosts(workspaceId), listSocialAccounts(workspaceId)]);
+  const [postsPage, accounts] = await Promise.all([
+    listPostsPage(workspaceId, query.after),
+    listSocialAccounts(workspaceId),
+  ]);
+  const posts = postsPage.items;
+  const postsPath = `/w/${workspaceId}/posts`;
 
   return (
     <div className="space-y-6">
@@ -52,6 +62,10 @@ export default async function PostsPage({
         <Card>
           <CardHeader>
             <CardTitle>All posts</CardTitle>
+            <CardDescription>
+              Showing {posts.length} post{posts.length === 1 ? "" : "s"} on this page. Older pages use a
+              created_at keyset, not OFFSET.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -88,6 +102,16 @@ export default async function PostsPage({
                 ))}
               </TableBody>
             </Table>
+            <div className="mt-4">
+              <ListPagination
+                newestHref={query.after ? postsPath : null}
+                olderHref={
+                  postsPage.nextCursor
+                    ? searchHref(postsPath, { after: postsPage.nextCursor })
+                    : null
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       )}

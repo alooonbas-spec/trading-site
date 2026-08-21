@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 28: lead inbox and interaction timeline use the same created_at keyset pagination. No new SQL.
+PHASE 29: Leads, Campaigns, Posts, Monitoring rules, and monitoring events use created_at keyset pagination. Picker `listLeads` stays unbounded. No new SQL.

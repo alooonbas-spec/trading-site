@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
-import { listCampaigns } from "@/services/campaigns/campaign-service";
+import { listCampaignsPage } from "@/services/campaigns/campaign-service";
 import { listLeads } from "@/services/leads/lead-service";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { CreateCampaignForm } from "@/components/campaigns/create-campaign-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -19,17 +21,22 @@ import {
 
 export default async function CampaignsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
+  searchParams: Promise<{ after?: string }>;
 }) {
   const { workspaceId } = await params;
+  const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
   const canMutate = canMutateWorkspaceData(context.role);
-  const [campaigns, leads, accounts] = await Promise.all([
-    listCampaigns(workspaceId),
+  const [campaignsPage, leads, accounts] = await Promise.all([
+    listCampaignsPage(workspaceId, query.after),
     listLeads({ workspaceId }),
     listSocialAccounts(workspaceId),
   ]);
+  const campaigns = campaignsPage.items;
+  const campaignsPath = `/w/${workspaceId}/campaigns`;
 
   return (
     <div className="space-y-6">
@@ -64,6 +71,10 @@ export default async function CampaignsPage({
         <Card>
           <CardHeader>
             <CardTitle>All campaigns</CardTitle>
+            <CardDescription>
+              Showing {campaigns.length} campaign{campaigns.length === 1 ? "" : "s"} on this page. Older
+              pages use a created_at keyset, not OFFSET.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -99,6 +110,16 @@ export default async function CampaignsPage({
                 ))}
               </TableBody>
             </Table>
+            <div className="mt-4">
+              <ListPagination
+                newestHref={query.after ? campaignsPath : null}
+                olderHref={
+                  campaignsPage.nextCursor
+                    ? searchHref(campaignsPath, { after: campaignsPage.nextCursor })
+                    : null
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       )}

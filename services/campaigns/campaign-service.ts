@@ -2,6 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { assertCanManageWorkspace, assertCanMutateWorkspaceData } from "@/lib/auth/permissions";
 import { ValidationError } from "@/lib/errors";
+import {
+  DEFAULT_PAGE_SIZE,
+  keysetOrFilter,
+  nextKeysetCursor,
+  parseKeysetCursor,
+  splitKeysetRows,
+  type KeysetPage,
+} from "@/lib/pagination/keyset";
 import { logActivity } from "@/services/activity/activity-service";
 import { createCampaignSchema } from "@/lib/validation/campaign";
 import { canCancelCampaign, canPauseCampaign, canStartCampaign } from "@/lib/jobs/queue-rules";
@@ -9,6 +17,8 @@ import { CAMPAIGN_PUBLIC_COLUMNS, type Campaign, type CampaignAction } from "@/t
 import { emptyToNull } from "@/services/leads/mapper";
 import { toCampaign } from "@/services/campaigns/mapper";
 import { enqueueCampaignJobs } from "@/services/jobs/enqueue-service";
+
+const CAMPAIGN_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export async function listCampaigns(workspaceId: string): Promise<Campaign[]> {
   await requireWorkspaceContext(workspaceId);
@@ -24,6 +34,39 @@ export async function listCampaigns(workspaceId: string): Promise<Campaign[]> {
   }
 
   return attachCampaignCounts(workspaceId, (data ?? []).map((row) => toCampaign(row)));
+}
+
+export async function listCampaignsPage(
+  workspaceId: string,
+  after?: string,
+): Promise<KeysetPage<Campaign>> {
+  await requireWorkspaceContext(workspaceId);
+  const supabase = await createClient();
+  const cursor = parseKeysetCursor(after);
+  let request = supabase
+    .from("campaigns")
+    .select(CAMPAIGN_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(CAMPAIGN_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  const { page, hasMore } = splitKeysetRows(data ?? [], CAMPAIGN_PAGE_SIZE);
+  return {
+    items: await attachCampaignCounts(
+      workspaceId,
+      page.map((row) => toCampaign(row)),
+    ),
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }
 
 export async function getCampaign(workspaceId: string, campaignId: string): Promise<Campaign> {

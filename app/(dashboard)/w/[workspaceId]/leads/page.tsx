@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
-import { listLeads } from "@/services/leads/lead-service";
+import { parseLeadDncFilter, parseLeadStatusFilter } from "@/lib/leads/filters";
+import { listLeadsPage } from "@/services/leads/lead-service";
 import { CreateLeadForm } from "@/components/leads/create-lead-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,44 +19,35 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { LEAD_STATUSES, type LeadStatus } from "@/types/status";
-
-function parseStatus(value: string | undefined): LeadStatus | "all" {
-  if (!value || value === "all") {
-    return "all";
-  }
-  if ((LEAD_STATUSES as readonly string[]).includes(value)) {
-    return value as LeadStatus;
-  }
-  return "all";
-}
-
-function parseDnc(value: string | undefined): "all" | "yes" | "no" {
-  if (value === "yes" || value === "no") {
-    return value;
-  }
-  return "all";
-}
+import { LEAD_STATUSES } from "@/types/status";
 
 export default async function LeadsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ q?: string; status?: string; dnc?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; dnc?: string; after?: string }>;
 }) {
   const { workspaceId } = await params;
   const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
   const canMutate = canMutateWorkspaceData(context.role);
-  const status = parseStatus(query.status);
-  const doNotContact = parseDnc(query.dnc);
-  const leads = await listLeads({
+  const status = parseLeadStatusFilter(query.status);
+  const doNotContact = parseLeadDncFilter(query.dnc);
+  const leadsPage = await listLeadsPage({
     workspaceId,
     query: query.q,
     status,
     doNotContact,
+    after: query.after,
   });
+  const leads = leadsPage.items;
+  const leadsPath = `/w/${workspaceId}/leads`;
+  const filterQuery = {
+    q: query.q,
+    status: status === "all" ? undefined : status,
+    dnc: doNotContact === "all" ? undefined : doNotContact,
+  };
 
   return (
     <div className="space-y-6">
@@ -111,7 +105,10 @@ export default async function LeadsPage({
         <Card>
           <CardHeader>
             <CardTitle>People</CardTitle>
-            <CardDescription>{leads.length} active leads in this workspace.</CardDescription>
+            <CardDescription>
+              Showing {leads.length} lead{leads.length === 1 ? "" : "s"} on this page. Older pages use a
+              created_at keyset, not OFFSET.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -145,6 +142,16 @@ export default async function LeadsPage({
                 ))}
               </TableBody>
             </Table>
+            <div className="mt-4">
+              <ListPagination
+                newestHref={query.after ? searchHref(leadsPath, filterQuery) : null}
+                olderHref={
+                  leadsPage.nextCursor
+                    ? searchHref(leadsPath, { ...filterQuery, after: leadsPage.nextCursor })
+                    : null
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       )}

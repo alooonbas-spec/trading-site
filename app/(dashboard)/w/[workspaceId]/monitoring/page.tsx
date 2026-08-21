@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
-import { listMonitoringRules } from "@/services/monitoring/rule-service";
+import { listMonitoringRulesPage } from "@/services/monitoring/rule-service";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { CreateMonitoringRuleForm } from "@/components/monitoring/create-monitoring-rule-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -19,16 +21,21 @@ import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
 
 export default async function MonitoringPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
+  searchParams: Promise<{ after?: string }>;
 }) {
   const { workspaceId } = await params;
+  const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
   const canMutate = canMutateWorkspaceData(context.role);
-  const [rules, accounts] = await Promise.all([
-    listMonitoringRules(workspaceId),
+  const [rulesPage, accounts] = await Promise.all([
+    listMonitoringRulesPage(workspaceId, query.after),
     listSocialAccounts(workspaceId),
   ]);
+  const rules = rulesPage.items;
+  const monitoringPath = `/w/${workspaceId}/monitoring`;
 
   return (
     <div className="space-y-6">
@@ -62,6 +69,10 @@ export default async function MonitoringPage({
         <Card>
           <CardHeader>
             <CardTitle>Rules</CardTitle>
+            <CardDescription>
+              Showing {rules.length} rule{rules.length === 1 ? "" : "s"} on this page. Older pages use a
+              created_at keyset, not OFFSET.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -97,6 +108,16 @@ export default async function MonitoringPage({
                 ))}
               </TableBody>
             </Table>
+            <div className="mt-4">
+              <ListPagination
+                newestHref={query.after ? monitoringPath : null}
+                olderHref={
+                  rulesPage.nextCursor
+                    ? searchHref(monitoringPath, { after: rulesPage.nextCursor })
+                    : null
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       )}

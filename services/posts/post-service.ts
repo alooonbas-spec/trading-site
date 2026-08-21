@@ -2,6 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { assertCanManageWorkspace, assertCanMutateWorkspaceData } from "@/lib/auth/permissions";
 import { ValidationError } from "@/lib/errors";
+import {
+  DEFAULT_PAGE_SIZE,
+  keysetOrFilter,
+  nextKeysetCursor,
+  parseKeysetCursor,
+  splitKeysetRows,
+  type KeysetPage,
+} from "@/lib/pagination/keyset";
 import { logActivity } from "@/services/activity/activity-service";
 import { createPostSchema } from "@/lib/validation/post";
 import { canCancelPost, canDeletePost, canPublishPost, rollupPostStatus } from "@/lib/posts/status";
@@ -9,6 +17,8 @@ import { POST_PUBLIC_COLUMNS, POST_TARGET_PUBLIC_COLUMNS, type Post, type PostTa
 import { toPost, toPostTarget } from "@/services/posts/mapper";
 import { enqueuePublishJobs } from "@/services/jobs/enqueue-service";
 import type { PostTargetStatus } from "@/types/status";
+
+const POST_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export async function listPosts(workspaceId: string): Promise<Post[]> {
   await requireWorkspaceContext(workspaceId);
@@ -24,6 +34,36 @@ export async function listPosts(workspaceId: string): Promise<Post[]> {
   }
 
   return attachPostCounts(workspaceId, (data ?? []).map((row) => toPost(row)));
+}
+
+export async function listPostsPage(workspaceId: string, after?: string): Promise<KeysetPage<Post>> {
+  await requireWorkspaceContext(workspaceId);
+  const supabase = await createClient();
+  const cursor = parseKeysetCursor(after);
+  let request = supabase
+    .from("posts")
+    .select(POST_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(POST_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  const { page, hasMore } = splitKeysetRows(data ?? [], POST_PAGE_SIZE);
+  return {
+    items: await attachPostCounts(
+      workspaceId,
+      page.map((row) => toPost(row)),
+    ),
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }
 
 export async function getPost(workspaceId: string, postId: string): Promise<Post> {

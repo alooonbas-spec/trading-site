@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canManageWorkspace, canMutateWorkspaceData } from "@/lib/auth/permissions";
-import { getMonitoringRule, listMonitoringEvents } from "@/services/monitoring/rule-service";
+import { getMonitoringRule, listMonitoringEventsPage } from "@/services/monitoring/rule-service";
 import { listMonitoringJobs } from "@/services/jobs/worker-service";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { MonitoringRuleControls } from "@/components/monitoring/monitoring-rule-controls";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -21,10 +23,13 @@ import { ValidationError } from "@/lib/errors";
 
 export default async function MonitoringRuleDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceId: string; ruleId: string }>;
+  searchParams: Promise<{ after?: string }>;
 }) {
   const { workspaceId, ruleId } = await params;
+  const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
 
   let rule;
@@ -37,11 +42,13 @@ export default async function MonitoringRuleDetailPage({
     throw error;
   }
 
-  const [events, jobs, accounts] = await Promise.all([
-    listMonitoringEvents(workspaceId, ruleId),
+  const [eventsPage, jobs, accounts] = await Promise.all([
+    listMonitoringEventsPage(workspaceId, ruleId, query.after),
     listMonitoringJobs(workspaceId, ruleId),
     listSocialAccounts(workspaceId),
   ]);
+  const events = eventsPage.items;
+  const rulePath = `/w/${workspaceId}/monitoring/${ruleId}`;
   const account = rule.socialAccountId
     ? accounts.find((item) => item.id === rule.socialAccountId)
     : undefined;
@@ -97,7 +104,10 @@ export default async function MonitoringRuleDetailPage({
       <Card>
         <CardHeader>
           <CardTitle>Events</CardTitle>
-          <CardDescription>{rule.eventCount} stored events. Duplicates are ignored.</CardDescription>
+          <CardDescription>
+            {rule.eventCount} stored events. Duplicates are ignored. Older pages use a created_at keyset,
+            not OFFSET.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {events.length === 0 ? (
@@ -136,6 +146,14 @@ export default async function MonitoringRuleDetailPage({
               </TableBody>
             </Table>
           )}
+          <div className="mt-4">
+            <ListPagination
+              newestHref={query.after ? rulePath : null}
+              olderHref={
+                eventsPage.nextCursor ? searchHref(rulePath, { after: eventsPage.nextCursor }) : null
+              }
+            />
+          </div>
         </CardContent>
       </Card>
       <Card>
