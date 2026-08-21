@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 37: Workspace Settings members list uses created_at keyset pagination. Unbounded `listWorkspaceMembers` remains for programmatic use. No new SQL.
+PHASE 38: Campaign accounts and post targets on detail pages use created_at keyset pagination. Unbounded `listCampaignAccountIds` and `listPostTargets` remain for enqueue. No new SQL.

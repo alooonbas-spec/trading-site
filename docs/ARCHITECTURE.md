@@ -259,6 +259,10 @@ After the first 50-message window (`history:1`), each later inbox poll calls off
 
 The Settings members table uses the same `created_at` keyset as other operator lists (newest first, 200 per page). Unbounded `listWorkspaceMembers` remains for programmatic use. Membership changes do not rewrite `LeadStatus` or `do_not_contact`.
 
+## Detail membership pagination (PHASE 38)
+
+Campaign accounts (`accounts`) and post targets (`targets`) paginate independently from jobs (`after`) and campaign leads (`leads`) with the same `created_at` keyset. JobStatus filter forms keep the other cursors in hidden fields and omit the jobs cursor. Unbounded `listCampaignAccountIds` and `listPostTargets` remain for enqueue. Paginating membership lists does not rewrite `LeadStatus`, `PostTargetStatus`, or `do_not_contact`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

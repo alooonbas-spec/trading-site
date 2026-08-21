@@ -113,6 +113,38 @@ export async function listPostTargets(workspaceId: string, postId: string): Prom
   return (data ?? []).map(toPostTarget);
 }
 
+export async function listPostTargetsPage(
+  workspaceId: string,
+  postId: string,
+  after?: string,
+): Promise<KeysetPage<PostTarget>> {
+  await requireWorkspaceContext(workspaceId);
+  const supabase = await createClient();
+  const cursor = parseKeysetCursor(after);
+  let request = supabase
+    .from("post_targets")
+    .select(POST_TARGET_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .eq("post_id", postId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(POST_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  const { page, hasMore } = splitKeysetRows(data ?? [], POST_PAGE_SIZE);
+  return {
+    items: page.map(toPostTarget),
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
+}
+
 export async function countPublishedPostsToday(workspaceId: string): Promise<number> {
   const supabase = await createClient();
   const startOfDay = new Date();

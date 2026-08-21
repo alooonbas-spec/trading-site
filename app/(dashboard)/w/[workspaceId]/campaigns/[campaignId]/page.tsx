@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canManageWorkspace, canMutateWorkspaceData } from "@/lib/auth/permissions";
-import { getCampaign, listCampaignAccountIds, listCampaignLeadsPage } from "@/services/campaigns/campaign-service";
+import { getCampaign, listCampaignAccountsPage, listCampaignLeadsPage } from "@/services/campaigns/campaign-service";
 import { listCampaignJobsPage } from "@/services/jobs/query-service";
 import { listLeadsByIds } from "@/services/leads/lead-service";
 import { listSocialAccountsByIds } from "@/services/social-accounts/account-service";
@@ -30,7 +30,7 @@ export default async function CampaignDetailPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string; campaignId: string }>;
-  searchParams: Promise<{ after?: string; leads?: string; status?: string }>;
+  searchParams: Promise<{ after?: string; leads?: string; accounts?: string; status?: string }>;
 }) {
   const { workspaceId, campaignId } = await params;
   const query = await searchParams;
@@ -47,26 +47,28 @@ export default async function CampaignDetailPage({
     throw error;
   }
 
-  const [leadsPage, accountIds, jobsPage] = await Promise.all([
+  const [leadsPage, accountsPage, jobsPage] = await Promise.all([
     listCampaignLeadsPage(workspaceId, campaignId, query.leads),
-    listCampaignAccountIds(workspaceId, campaignId),
+    listCampaignAccountsPage(workspaceId, campaignId, query.accounts),
     listCampaignJobsPage(workspaceId, campaignId, { after: query.after, status }),
   ]);
   const jobs = jobsPage.items;
   const campaignLeads = leadsPage.items;
+  const campaignAccounts = accountsPage.items;
   const jobLeadIds = jobs
     .map((job) => job.leadId)
     .filter((id): id is string => id !== null)
     .filter((id) => !campaignLeads.some((lead) => lead.id === id));
   const jobAccountIds = jobs
     .map((job) => job.socialAccountId)
-    .filter((id): id is string => id !== null);
-  const [jobLeads, accounts] = await Promise.all([
+    .filter((id): id is string => id !== null)
+    .filter((id) => !campaignAccounts.some((account) => account.id === id));
+  const [jobLeads, jobAccounts] = await Promise.all([
     listLeadsByIds(workspaceId, jobLeadIds),
-    listSocialAccountsByIds(workspaceId, [...accountIds, ...jobAccountIds]),
+    listSocialAccountsByIds(workspaceId, jobAccountIds),
   ]);
   const leadMap = new Map([...campaignLeads, ...jobLeads].map((lead) => [lead.id, lead]));
-  const accountMap = new Map(accounts.map((account) => [account.id, account]));
+  const accountMap = new Map([...campaignAccounts, ...jobAccounts].map((account) => [account.id, account]));
   const campaignPath = `/w/${workspaceId}/campaigns/${campaignId}`;
 
   return (
@@ -127,11 +129,16 @@ export default async function CampaignDetailPage({
               ))
             )}
             <ListPagination
-              newestHref={query.leads ? searchHref(campaignPath, { after: query.after, status }) : null}
+              newestHref={
+                query.leads
+                  ? searchHref(campaignPath, { after: query.after, accounts: query.accounts, status })
+                  : null
+              }
               olderHref={
                 leadsPage.nextCursor
                   ? searchHref(campaignPath, {
                       after: query.after,
+                      accounts: query.accounts,
                       status,
                       leads: leadsPage.nextCursor,
                     })
@@ -143,22 +150,38 @@ export default async function CampaignDetailPage({
         <Card>
           <CardHeader>
             <CardTitle>Accounts</CardTitle>
+            <CardDescription>
+              {campaign.accountCount} selected. This page does not load every campaign account. Older pages
+              use a created_at keyset, not OFFSET.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {accountIds.length === 0 ? (
-              <p className="text-muted-foreground">No accounts selected.</p>
+            {campaignAccounts.length === 0 ? (
+              <p className="text-muted-foreground">No accounts on this page.</p>
             ) : (
-              accountIds.map((id) => {
-                const account = accountMap.get(id);
-                return (
-                  <p key={id}>
-                    {account
-                      ? `${SOCIAL_PLATFORM_LABELS[account.platform]} ${account.username ?? account.externalAccountId}`
-                      : id}
-                  </p>
-                );
-              })
+              campaignAccounts.map((account) => (
+                <p key={account.id}>
+                  {`${SOCIAL_PLATFORM_LABELS[account.platform]} ${account.username ?? account.externalAccountId}`}
+                </p>
+              ))
             )}
+            <ListPagination
+              newestHref={
+                query.accounts
+                  ? searchHref(campaignPath, { after: query.after, leads: query.leads, status })
+                  : null
+              }
+              olderHref={
+                accountsPage.nextCursor
+                  ? searchHref(campaignPath, {
+                      after: query.after,
+                      leads: query.leads,
+                      status,
+                      accounts: accountsPage.nextCursor,
+                    })
+                  : null
+              }
+            />
           </CardContent>
         </Card>
       </div>
@@ -174,6 +197,7 @@ export default async function CampaignDetailPage({
         <CardContent>
           <form className="mb-4 grid gap-2 md:grid-cols-[220px_auto]" method="get">
             {query.leads ? <input type="hidden" name="leads" value={query.leads} /> : null}
+            {query.accounts ? <input type="hidden" name="accounts" value={query.accounts} /> : null}
             <select
               name="status"
               defaultValue={status ?? ""}
@@ -235,12 +259,17 @@ export default async function CampaignDetailPage({
           )}
           <div className="mt-4">
             <ListPagination
-              newestHref={query.after ? searchHref(campaignPath, { leads: query.leads, status }) : null}
+              newestHref={
+                query.after
+                  ? searchHref(campaignPath, { leads: query.leads, accounts: query.accounts, status })
+                  : null
+              }
               olderHref={
                 jobsPage.nextCursor
                   ? searchHref(campaignPath, {
                       after: jobsPage.nextCursor,
                       leads: query.leads,
+                      accounts: query.accounts,
                       status,
                     })
                   : null

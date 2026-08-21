@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canManageWorkspace, canMutateWorkspaceData } from "@/lib/auth/permissions";
-import { getPost, listPostTargets } from "@/services/posts/post-service";
+import { getPost, listPostTargetsPage } from "@/services/posts/post-service";
 import { listPostJobsPage } from "@/services/jobs/query-service";
 import { listSocialAccountsByIds } from "@/services/social-accounts/account-service";
 import { parseJobStatusFilter } from "@/lib/jobs/filters";
@@ -29,7 +29,7 @@ export default async function PostDetailPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string; postId: string }>;
-  searchParams: Promise<{ after?: string; status?: string }>;
+  searchParams: Promise<{ after?: string; targets?: string; status?: string }>;
 }) {
   const { workspaceId, postId } = await params;
   const query = await searchParams;
@@ -46,11 +46,12 @@ export default async function PostDetailPage({
     throw error;
   }
 
-  const [targets, jobsPage] = await Promise.all([
-    listPostTargets(workspaceId, postId),
+  const [targetsPage, jobsPage] = await Promise.all([
+    listPostTargetsPage(workspaceId, postId, query.targets),
     listPostJobsPage(workspaceId, postId, { after: query.after, status }),
   ]);
   const jobs = jobsPage.items;
+  const targets = targetsPage.items;
   const accountIds = [
     ...targets.map((target) => target.socialAccountId),
     ...jobs.map((job) => job.socialAccountId).filter((id): id is string => id !== null),
@@ -58,7 +59,7 @@ export default async function PostDetailPage({
   const accounts = await listSocialAccountsByIds(workspaceId, accountIds);
   const accountMap = new Map(accounts.map((account) => [account.id, account]));
   const postPath = `/w/${workspaceId}/posts/${postId}`;
-  const filterQuery = { status };
+  const filterQuery = { status, targets: query.targets };
 
   return (
     <div className="space-y-6">
@@ -113,39 +114,58 @@ export default async function PostDetailPage({
           <CardTitle>Targets</CardTitle>
           <CardDescription>
             {post.publishedTargetCount} published · {post.failedTargetCount} failed · {post.targetCount}{" "}
-            total
+            total. Older pages use a created_at keyset, not OFFSET. PostTargetStatus stays on its own
+            machine.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Account</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>External id</TableHead>
-                <TableHead>Error</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {targets.map((target) => {
-                const account = accountMap.get(target.socialAccountId);
-                return (
-                  <TableRow key={target.id}>
-                    <TableCell>
-                      {account
-                        ? `${SOCIAL_PLATFORM_LABELS[account.platform]} ${account.username ?? account.externalAccountId}`
-                        : target.socialAccountId}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{target.status}</Badge>
-                    </TableCell>
-                    <TableCell>{target.externalPostId ?? "—"}</TableCell>
-                    <TableCell className="max-w-xs truncate">{target.lastError ?? "—"}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          {targets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No targets on this page.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Account</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>External id</TableHead>
+                  <TableHead>Error</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {targets.map((target) => {
+                  const account = accountMap.get(target.socialAccountId);
+                  return (
+                    <TableRow key={target.id}>
+                      <TableCell>
+                        {account
+                          ? `${SOCIAL_PLATFORM_LABELS[account.platform]} ${account.username ?? account.externalAccountId}`
+                          : target.socialAccountId}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{target.status}</Badge>
+                      </TableCell>
+                      <TableCell>{target.externalPostId ?? "—"}</TableCell>
+                      <TableCell className="max-w-xs truncate">{target.lastError ?? "—"}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+          <div className="mt-4">
+            <ListPagination
+              newestHref={query.targets ? searchHref(postPath, { after: query.after, status }) : null}
+              olderHref={
+                targetsPage.nextCursor
+                  ? searchHref(postPath, {
+                      after: query.after,
+                      status,
+                      targets: targetsPage.nextCursor,
+                    })
+                  : null
+              }
+            />
+          </div>
         </CardContent>
       </Card>
       <Card>
@@ -158,6 +178,7 @@ export default async function PostDetailPage({
         </CardHeader>
         <CardContent>
           <form className="mb-4 grid gap-2 md:grid-cols-[220px_auto]" method="get">
+            {query.targets ? <input type="hidden" name="targets" value={query.targets} /> : null}
             <select
               name="status"
               defaultValue={status ?? ""}
