@@ -13,7 +13,7 @@ import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapte
 import { FACEBOOK_GRAPH_ORIGIN } from "@/social/facebook/graph";
 import { resolveFacebookPage, type FacebookPageAuth } from "@/social/facebook/pages";
 import { throwIfGraphError } from "@/social/meta/graph-error";
-import { decodeGraphAfter, graphPagingAfter, nextGraphThreadsCursor } from "@/social/meta/graph-paging";
+import { decodeGraphAfter, graphPagingAfter, nextGraphAfterCursor } from "@/social/meta/graph-paging";
 
 const commentsSchema = z.object({
   data: z
@@ -101,11 +101,17 @@ export function parseFacebookMessengerConversations(payload: unknown, pageId: st
   return messages;
 }
 
-async function collectFacebookComments(page: FacebookPageAuth): Promise<InboxMessage[]> {
+async function collectFacebookComments(
+  page: FacebookPageAuth,
+  after?: string | null,
+): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
   const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/feed`);
   url.searchParams.set("fields", "id,comments.limit(50){id,from,message,created_time}");
   url.searchParams.set("limit", "10");
   url.searchParams.set("access_token", page.accessToken);
+  if (after) {
+    url.searchParams.set("after", after);
+  }
   const response = await socialFetch(url.toString());
   const payload = await readJson<unknown>(response);
   throwIfGraphError(payload);
@@ -133,7 +139,7 @@ async function collectFacebookComments(page: FacebookPageAuth): Promise<InboxMes
       });
     }
   }
-  return messages;
+  return { messages, nextAfter: graphPagingAfter(payload) };
 }
 
 async function collectFacebookMessenger(
@@ -164,33 +170,44 @@ export async function collectFacebookInbox(
 ): Promise<InboxResult> {
   const page = await resolveFacebookPage(userAccessToken, metadata);
   const cursor = parseNamedInboxCursor(input.cursor);
-  const olderAfter = decodeGraphAfter(cursor.threads);
-  const [comments, latestDirect, olderDirect] = await Promise.all([
+  const olderThreadAfter = decodeGraphAfter(cursor.threads);
+  const olderPostsAfter = decodeGraphAfter(cursor.posts);
+  const emptyPage = { messages: [] as InboxMessage[], nextAfter: null };
+  const [latestComments, olderComments, latestDirect, olderDirect] = await Promise.all([
     collectFacebookComments(page),
+    olderPostsAfter ? collectFacebookComments(page, olderPostsAfter) : Promise.resolve(emptyPage),
     collectFacebookMessenger(page),
-    olderAfter
-      ? collectFacebookMessenger(page, olderAfter)
-      : Promise.resolve({ messages: [] as InboxMessage[], nextAfter: null }),
+    olderThreadAfter ? collectFacebookMessenger(page, olderThreadAfter) : Promise.resolve(emptyPage),
+  ]);
+  const comments = uniqueInboxMessages([
+    ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
+    ...olderComments.messages,
   ]);
   const latestMessages = latestDirect.messages;
   const olderMessages = olderDirect.messages;
   return {
     messages: [
-      ...filterMessagesAfterCursor(comments, cursor.comments),
+      ...comments,
       ...uniqueInboxMessages([
         ...filterMessagesAfterCursor(latestMessages, cursor.messages),
         ...olderMessages,
       ]),
     ],
     cursor: serializeNamedInboxCursor({
-      comments: laterTimestampString(cursor.comments, newestReceivedAt(comments)) ?? "",
+      comments: laterTimestampString(cursor.comments, newestReceivedAt([...latestComments.messages, ...olderComments.messages])) ?? "",
       messages:
         laterTimestampString(cursor.messages, newestReceivedAt([...latestMessages, ...olderMessages])) ?? "",
-      threads: nextGraphThreadsCursor({
+      posts: nextGraphAfterCursor({
+        stored: cursor.posts,
+        firstPageAfter: latestComments.nextAfter,
+        olderPageAfter: olderComments.nextAfter,
+        fetchedOlder: Boolean(olderPostsAfter),
+      }),
+      threads: nextGraphAfterCursor({
         stored: cursor.threads,
         firstPageAfter: latestDirect.nextAfter,
         olderPageAfter: olderDirect.nextAfter,
-        fetchedOlder: Boolean(olderAfter),
+        fetchedOlder: Boolean(olderThreadAfter),
       }),
     }),
   };

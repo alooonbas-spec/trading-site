@@ -51,7 +51,7 @@ export function graphPagingAfter(payload: unknown): string | null {
   }
 }
 
-export function nextGraphThreadsCursor(input: {
+export function nextGraphAfterCursor(input: {
   stored?: string;
   firstPageAfter: string | null;
   olderPageAfter: string | null;

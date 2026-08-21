@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 42: Official Facebook and Instagram Graph conversation paging walks one `after` page per poll. No new SQL.
+PHASE 43: Official Facebook feed and Instagram media Graph paging walks one `after` page per poll. Nested comments stay first-page. No new SQL.

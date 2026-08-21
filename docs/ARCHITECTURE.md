@@ -277,7 +277,11 @@ After the first 50-comment window (`wallcomments:1`), each later inbox poll call
 
 ## Graph conversation paging (PHASE 42)
 
-Facebook Messenger and Instagram Direct Message collectors follow official Graph `paging.cursors.after` (or `after` on `paging.next`) for `/conversations`. The first page stays `limit=15` with `messages.limit(20)`. If a next `after` exists, the next poll requests that page once. The opaque `after` value is stored base64url-encoded in `threads` so named cursors cannot split on `:` or `|`. A short page stores `threads:done` and later polls only read the latest conversations page. Older-page Direct Messages are not dropped by the `messages` timestamp watermark on first sight. Collectors do not fetch `paging.next` URLs, so Graph tokens never ride an untrusted next link. Feed/media comment lists are still the first page only.
+Facebook Messenger and Instagram Direct Message collectors follow official Graph `paging.cursors.after` (or `after` on `paging.next`) for `/conversations`. The first page stays `limit=15` with `messages.limit(20)`. If a next `after` exists, the next poll requests that page once. The opaque `after` value is stored base64url-encoded in `threads` so named cursors cannot split on `:` or `|`. A short page stores `threads:done` and later polls only read the latest conversations page. Older-page Direct Messages are not dropped by the `messages` timestamp watermark on first sight. Collectors do not fetch `paging.next` URLs, so Graph tokens never ride an untrusted next link.
+
+## Graph feed and media paging (PHASE 43)
+
+Facebook Page `/{page-id}/feed` and Instagram `/{ig-user-id}/media` follow the same official Graph `after` walker as conversations. Each poll still reads the latest 10 posts/media items. If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `posts`. A short page stores `posts:done`. Comments on newly discovered older posts are not dropped by the `comments` timestamp watermark on first sight. Nested `comments.limit(50)` (Facebook) and first nested comments page (Instagram) are unchanged. Collectors still do not fetch `paging.next` URLs.
 
 ## Social adapters (PHASE 2)
 

@@ -12,7 +12,7 @@ import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { INSTAGRAM_GRAPH_ORIGIN, resolveInstagramUserId } from "@/social/instagram/publish";
 import { throwIfGraphError } from "@/social/meta/graph-error";
-import { decodeGraphAfter, graphPagingAfter, nextGraphThreadsCursor } from "@/social/meta/graph-paging";
+import { decodeGraphAfter, graphPagingAfter, nextGraphAfterCursor } from "@/social/meta/graph-paging";
 
 const mediaCommentsSchema = z.object({
   data: z
@@ -102,11 +102,18 @@ export function parseInstagramDirectConversations(payload: unknown, ownUserId: s
   return messages;
 }
 
-async function collectInstagramComments(accessToken: string, userId: string): Promise<InboxMessage[]> {
+async function collectInstagramComments(
+  accessToken: string,
+  userId: string,
+  after?: string | null,
+): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
   const url = new URL(`${INSTAGRAM_GRAPH_ORIGIN}/${userId}/media`);
   url.searchParams.set("fields", "id,comments{id,text,username,timestamp,from}");
   url.searchParams.set("limit", "10");
   url.searchParams.set("access_token", accessToken);
+  if (after) {
+    url.searchParams.set("after", after);
+  }
   const response = await socialFetch(url.toString());
   const payload = await readJson<unknown>(response);
   throwIfGraphError(payload);
@@ -135,7 +142,7 @@ async function collectInstagramComments(accessToken: string, userId: string): Pr
       });
     }
   }
-  return messages;
+  return { messages, nextAfter: graphPagingAfter(payload) };
 }
 
 async function collectInstagramDirectMessages(
@@ -167,33 +174,49 @@ export async function collectInstagramInbox(
 ): Promise<InboxResult> {
   const userId = await resolveInstagramUserId(accessToken, metadata);
   const cursor = parseNamedInboxCursor(input.cursor);
-  const olderAfter = decodeGraphAfter(cursor.threads);
-  const [comments, latestDirect, olderDirect] = await Promise.all([
+  const olderThreadAfter = decodeGraphAfter(cursor.threads);
+  const olderPostsAfter = decodeGraphAfter(cursor.posts);
+  const emptyPage = { messages: [] as InboxMessage[], nextAfter: null };
+  const [latestComments, olderComments, latestDirect, olderDirect] = await Promise.all([
     collectInstagramComments(accessToken, userId),
+    olderPostsAfter
+      ? collectInstagramComments(accessToken, userId, olderPostsAfter)
+      : Promise.resolve(emptyPage),
     collectInstagramDirectMessages(accessToken, userId),
-    olderAfter
-      ? collectInstagramDirectMessages(accessToken, userId, olderAfter)
-      : Promise.resolve({ messages: [] as InboxMessage[], nextAfter: null }),
+    olderThreadAfter
+      ? collectInstagramDirectMessages(accessToken, userId, olderThreadAfter)
+      : Promise.resolve(emptyPage),
   ]);
   const latestMessages = latestDirect.messages;
   const olderMessages = olderDirect.messages;
   return {
     messages: [
-      ...filterMessagesAfterCursor(comments, cursor.comments),
+      ...uniqueInboxMessages([
+        ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
+        ...olderComments.messages,
+      ]),
       ...uniqueInboxMessages([
         ...filterMessagesAfterCursor(latestMessages, cursor.messages),
         ...olderMessages,
       ]),
     ],
     cursor: serializeNamedInboxCursor({
-      comments: laterTimestampString(cursor.comments, newestReceivedAt(comments)) ?? "",
+      comments:
+        laterTimestampString(cursor.comments, newestReceivedAt([...latestComments.messages, ...olderComments.messages])) ??
+        "",
       messages:
         laterTimestampString(cursor.messages, newestReceivedAt([...latestMessages, ...olderMessages])) ?? "",
-      threads: nextGraphThreadsCursor({
+      posts: nextGraphAfterCursor({
+        stored: cursor.posts,
+        firstPageAfter: latestComments.nextAfter,
+        olderPageAfter: olderComments.nextAfter,
+        fetchedOlder: Boolean(olderPostsAfter),
+      }),
+      threads: nextGraphAfterCursor({
         stored: cursor.threads,
         firstPageAfter: latestDirect.nextAfter,
         olderPageAfter: olderDirect.nextAfter,
-        fetchedOlder: Boolean(olderAfter),
+        fetchedOlder: Boolean(olderThreadAfter),
       }),
     }),
   };
