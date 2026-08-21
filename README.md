@@ -57,4 +57,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 16: VK wall video via official `video.save` upload and `wall.post` attachment. Existing VK accounts must reconnect for the `video` scope.
+PHASE 17: official X Direct Messages (`dm.read` / `dm.write`) plus campaign start gating by adapter capabilities. Existing X accounts must reconnect for DM scopes.

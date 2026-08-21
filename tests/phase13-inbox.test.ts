@@ -136,15 +136,18 @@ describe("X inbox", () => {
       if (target.startsWith("https://api.x.com/2/users/me")) {
         return new Response(JSON.stringify({ data: { id: "100", username: "hub" } }), { status: 200 });
       }
-      expect(target).toContain("https://api.x.com/2/users/100/mentions");
-      return new Response(
-        JSON.stringify({
-          data: [{ id: "tweet-1", text: "@hub hello", author_id: "200" }],
-          includes: { users: [{ id: "200", username: "lead" }] },
-          meta: { newest_id: "tweet-1" },
-        }),
-        { status: 200 },
-      );
+      if (target.includes("https://api.x.com/2/users/100/mentions")) {
+        return new Response(
+          JSON.stringify({
+            data: [{ id: "tweet-1", text: "@hub hello", author_id: "200" }],
+            includes: { users: [{ id: "200", username: "lead" }] },
+            meta: { newest_id: "tweet-1" },
+          }),
+          { status: 200 },
+        );
+      }
+      expect(target).toContain("https://api.x.com/2/dm_events");
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 

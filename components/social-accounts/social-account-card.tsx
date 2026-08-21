@@ -75,6 +75,12 @@ export function SocialAccountCard({
             hint="Leave empty to post on the user wall. Negative ids post to a community. Reconnect to grant wall, photos, and video."
           />
         ) : null}
+        {account.platform === "x" ? (
+          <p className="text-xs text-muted-foreground">
+            Mentions and Direct Messages need dm.read. Outbound campaign MESSAGE needs dm.write.
+            Reconnect if this account was connected before those scopes.
+          </p>
+        ) : null}
         {canManage && account.platform === "telegram" ? (
           <PublishDestinationForm
             workspaceId={workspaceId}

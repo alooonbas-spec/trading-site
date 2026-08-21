@@ -51,10 +51,11 @@ Outbound contact status changes (`QUEUED`, invite/message pending/sent) are bloc
 
 ## Campaigns and jobs (PHASE 4)
 
-- Campaigns select many leads and many social accounts. Start enqueues one CONTACT job per matching (lead profile, our account) pair on the same platform.
+- Campaigns select many leads and many social accounts. Start enqueues one CONTACT job per matching (lead profile, our account) pair on the same platform when that account's adapter can perform the campaign action.
+- MESSAGE requires `messaging`. INVITE requires `invites` (no adapter enables invites yet). OPEN_PROFILE and MANUAL_ACTION_REQUIRED still enqueue without an adapter send.
 - Workers claim jobs with `FOR UPDATE SKIP LOCKED`. They skip paused campaigns, `do_not_contact` leads, and inoperable accounts.
 - `AccountRateLimiter` consumes per-account windows via `increment_account_rate_bucket`. Limits come from `adapter.getRateLimit()`, not from `if (platform === …)` in the worker.
-- INVITE/MESSAGE call `adapter.executeContactAction`. Until adapters enable contact actions, those jobs fail with `UnsupportedActionError` instead of fake success.
+- INVITE/MESSAGE call `adapter.executeContactAction`. Capability gating at start avoids queuing jobs that would only throw `UnsupportedActionError`.
 
 ## Public collection (PHASE 5)
 
@@ -126,8 +127,8 @@ Safety policy:
 
 ## Inbox replies (PHASE 13)
 
-- `INBOX` jobs poll connected accounts. `adapter.collectInbox()` talks to official APIs: Telegram `getUpdates` DMs, X `GET /2/users/:id/mentions`, Facebook Page comments, Instagram media comments, and VK `wall.getComments`.
-- Events are stored in `inbox_events` (unique per account + external id). Unknown senders are kept unmatched and are not turned into leads.
+- `INBOX` jobs poll connected accounts. `adapter.collectInbox()` talks to official APIs: Telegram `getUpdates` DMs, X mentions and Direct Messages, Facebook Page comments, Instagram media comments, and VK `wall.getComments`.
+- Events are stored in `inbox_events` (unique per account + external id). Unknown senders are kept unmatched and are not turned into leads. X inbox also reads Direct Messages (PHASE 17).
 - Matched CRM profiles record a `REPLY` interaction. Existing contact relationships move to `REPLIED` unless they are `BLOCKED`. `do_not_contact` does not block recording replies.
 - Instagram comment inbox needs `instagram_business_manage_comments` (reconnect). Telegram `getUpdates` is a single Bot API consumer; PHASE 15 shares that stream between inbox and monitoring.
 - The worker still branches on `job.type`, never `platform ===`.
@@ -153,6 +154,14 @@ Safety policy:
 - VK videos use official `video.save` to get an upload URL, then `POST` the public mp4/mov file as `video_file`, then `wall.post` with a `video{owner_id}_{video_id}` attachment.
 - Photos and videos cannot be mixed in one post. webm, documents, private hosts, and mixed media fail honestly. Existing VK accounts must reconnect to grant the `video` scope.
 - Community walls still use `metadata.publishOwnerId`. Contact actions on VK stay `UnsupportedActionError`.
+
+## X Direct Messages and campaign gating (PHASE 17)
+
+- X OAuth requests `dm.read` and `dm.write` in addition to tweet, user, media, and offline scopes. Existing X accounts must reconnect.
+- Inbox collects mentions (`GET /2/users/:id/mentions`) and inbound DMs (`GET /2/dm_events` with `event_types=MessageCreate`). Unique `inbox_events` still dedup. Outbound DMs from the connected account are skipped. Attachments-only DMs without text are skipped rather than invented.
+- Outbound MESSAGE uses official `POST /2/dm_conversations/with/{participant_id}/messages`. Numeric profile ids are used as `participant_id`. Username-only profiles are resolved through `GET /2/users/by/username/:username`. INVITE stays `UnsupportedActionError`.
+- Campaign start filters CONTACT pairs through adapter capabilities, not `if (platform === …)`. MESSAGE enqueues for Telegram and X. INVITE enqueues for nobody (`invites` is false on every adapter). Zero remaining pairs fail with `ValidationError`.
+- Facebook, Instagram, and VK contact send stay disabled. Telegram INVITE stays disabled.
 
 ## Social adapters (PHASE 2)
 

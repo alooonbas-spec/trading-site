@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AuthenticationError, SocialError, ValidationError } from "@/lib/errors";
+import { AuthenticationError, SocialError, UnsupportedActionError, ValidationError } from "@/lib/errors";
 import { matchKeywords, normalizeKeywords } from "@/lib/monitoring/keywords";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
@@ -10,6 +10,8 @@ import {
 } from "@/social/core/base-adapter";
 import type {
   ConnectResult,
+  ContactActionInput,
+  ContactActionResult,
   InboxInput,
   InboxResult,
   MonitorInput,
@@ -24,6 +26,7 @@ import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 import { resolveXPublicProfile } from "@/social/x/public-profile";
 import { uploadXMediaFromUrls } from "@/social/x/media-upload";
 import { collectXInbox } from "@/social/x/inbox";
+import { resolveXDmParticipantId, sendXDirectMessage } from "@/social/x/contact";
 
 const X_AUTHORIZE_URL = "https://twitter.com/i/oauth2/authorize";
 const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
@@ -31,7 +34,7 @@ const X_REVOKE_URL = "https://api.x.com/2/oauth2/revoke";
 const X_ME_URL = "https://api.x.com/2/users/me";
 const X_TWEETS_URL = "https://api.x.com/2/tweets";
 const X_RECENT_SEARCH_URL = "https://api.x.com/2/tweets/search/recent";
-const X_SCOPES = "tweet.read tweet.write users.read media.write offline.access";
+export const X_SCOPES = "tweet.read tweet.write users.read media.write dm.read dm.write offline.access";
 
 type XTokenResponse = {
   access_token?: string;
@@ -215,7 +218,13 @@ export class XAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true, monitoring: true, inbox: true };
+    return {
+      publishing: true,
+      monitoring: true,
+      inbox: true,
+      contactActions: true,
+      messaging: true,
+    };
   }
 
   async refreshTokens(): Promise<TokenRefreshResult> {
@@ -342,6 +351,32 @@ export class XAdapter extends BaseSocialAdapter {
       throw new AuthenticationError("X account has no access token");
     }
     return collectXInbox(token, input);
+  }
+
+  async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {
+    if (input.action !== "MESSAGE") {
+      throw new UnsupportedActionError("X can send Direct Messages but cannot invite contacts");
+    }
+
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("X account has no access token");
+    }
+
+    const text = input.body?.trim();
+    if (!text) {
+      throw new ValidationError("X Direct Messages require a body");
+    }
+    if (!input.target) {
+      throw new ValidationError("X contact requires a social profile target");
+    }
+
+    const participantId = await resolveXDmParticipantId(token, input.target);
+    const sent = await sendXDirectMessage(token, { participantId, text });
+    return {
+      status: "SUCCESS",
+      externalMessageId: sent.externalMessageId,
+    };
   }
 
   protected resolvePublicProfile(source: string) {

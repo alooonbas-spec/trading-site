@@ -97,6 +97,12 @@ describe("OAuth URL builders", () => {
     expect(
       buildXAuthorizationUrl({ ...input, redirectUri: "http://localhost:3000/api/social/x/callback" }),
     ).toContain("media.write");
+    expect(
+      buildXAuthorizationUrl({ ...input, redirectUri: "http://localhost:3000/api/social/x/callback" }),
+    ).toContain("dm.read");
+    expect(
+      buildXAuthorizationUrl({ ...input, redirectUri: "http://localhost:3000/api/social/x/callback" }),
+    ).toContain("dm.write");
     expect(buildVkAuthorizationUrl(input)).toContain("wall");
     expect(buildVkAuthorizationUrl(input)).toContain("photos");
     expect(

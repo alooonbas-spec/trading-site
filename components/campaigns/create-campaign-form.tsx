@@ -56,8 +56,10 @@ export function CreateCampaignForm({
         <Label htmlFor="campaign-body">Message body</Label>
         <Textarea id="campaign-body" name="body" />
         <p className="text-xs text-muted-foreground">
-          INVITE and MESSAGE jobs call the platform adapter. Until adapters enable contact actions,
-          those jobs fail instead of reporting fake success.
+          MESSAGE starts only for accounts whose adapter can message (Telegram bots and X Direct
+          Messages). INVITE is not enabled on any adapter yet, so start fails instead of queuing
+          jobs that cannot send. OPEN_PROFILE and MANUAL_ACTION_REQUIRED still enqueue without an
+          adapter send.
         </p>
       </div>
       <div className="space-y-2">

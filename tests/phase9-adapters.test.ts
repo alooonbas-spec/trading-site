@@ -33,7 +33,7 @@ describe("PHASE 9 token refresh", () => {
           access_token: "new-access",
           refresh_token: "new-refresh",
           expires_in: 7200,
-          scope: "tweet.read tweet.write users.read media.write offline.access",
+          scope: "tweet.read tweet.write users.read media.write dm.read dm.write offline.access",
         }),
         { status: 200 },
       );

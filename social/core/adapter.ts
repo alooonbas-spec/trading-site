@@ -8,6 +8,7 @@ export type SocialCapabilities = {
   publicCollection: boolean;
   contactActions: boolean;
   messaging: boolean;
+  invites: boolean;
   inbox: boolean;
   sharedUpdateStream: boolean;
 };

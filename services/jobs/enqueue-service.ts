@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { ValidationError } from "@/lib/errors";
+import {
+  platformsSupportingCampaignAction,
+  unsupportedCampaignActionMessage,
+} from "@/lib/campaigns/contact-capabilities";
 import { buildEnqueuePairs } from "@/lib/jobs/queue-rules";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { logActivity } from "@/services/activity/activity-service";
@@ -79,7 +83,7 @@ export async function enqueueCampaignJobs(input: {
       deriveTokenStatus({ status: account.status, tokenExpiresAt: account.token_expires_at }) === "CONNECTED",
   );
 
-  const pairs = buildEnqueuePairs({
+  const matchingPairs = buildEnqueuePairs({
     leadIds,
     skippedLeadIds,
     accounts: operableAccounts.map((account) => ({ id: account.id, platform: account.platform })),
@@ -90,10 +94,24 @@ export async function enqueueCampaignJobs(input: {
     })),
   });
 
-  if (pairs.length === 0) {
+  if (matchingPairs.length === 0) {
     throw new ValidationError(
       "No jobs to enqueue. Each selected lead needs a social profile on the same platform as a connected campaign account, and must not be do_not_contact.",
     );
+  }
+
+  const supportedPlatforms = await platformsSupportingCampaignAction(
+    operableAccounts.map((account) => account.platform),
+    campaign.action,
+  );
+  const accountPlatform = new Map(operableAccounts.map((account) => [account.id, account.platform]));
+  const pairs = matchingPairs.filter((pair) => {
+    const platform = accountPlatform.get(pair.socialAccountId);
+    return platform !== undefined && supportedPlatforms.has(platform);
+  });
+
+  if (pairs.length === 0) {
+    throw new ValidationError(unsupportedCampaignActionMessage(campaign.action));
   }
 
   const { data: existingJobs, error: existingError } = await supabase

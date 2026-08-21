@@ -42,6 +42,7 @@ export const DISABLED_CAPABILITIES: SocialCapabilities = {
   publicCollection: false,
   contactActions: false,
   messaging: false,
+  invites: false,
   inbox: false,
   sharedUpdateStream: false,
 };
