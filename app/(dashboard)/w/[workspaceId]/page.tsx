@@ -41,7 +41,12 @@ export default async function WorkspaceDashboardPage({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Members" value={String(memberCount)} hint="People in this workspace" />
         <StatCard title="Social accounts" value={String(accountCount)} hint="Connected and disconnected accounts" />
-        <StatCard title="Actions today" value={String(actionsToday)} hint="Workspace activity log" />
+        <StatCard
+          title="Actions today"
+          value={String(actionsToday)}
+          hint="Workspace activity log"
+          href={`/w/${workspaceId}/activity`}
+        />
         <StatCard title="New leads" value={String(newLeadsToday)} hint="Created today, excluding merged records" />
         <StatCard title="Active campaigns" value={String(runningCampaigns)} hint="Campaigns currently RUNNING" />
         <StatCard title="Successful contact jobs" value={String(successfulActions)} hint="CONTACT jobs completed today" />

@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  History,
   Inbox,
   LayoutDashboard,
   ListTodo,
@@ -31,6 +32,7 @@ export function workspaceNav(workspaceId: string): NavItem[] {
     { title: "Monitoring", href: `${base}/monitoring`, icon: Radio },
     { title: "Social Accounts", href: `${base}/social-accounts`, icon: Wallet },
     { title: "Analytics", href: `${base}/analytics`, icon: BarChart3 },
+    { title: "Activity", href: `${base}/activity`, icon: History },
     { title: "Settings", href: `${base}/settings`, icon: Settings },
   ];
 }

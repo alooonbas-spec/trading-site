@@ -2,8 +2,8 @@ export { LEAD_STATUSES, CONTACT_STATUSES, CAMPAIGN_STATUSES, JOB_STATUSES, SOCIA
 export type { LeadStatus, ContactStatus, CampaignStatus, JobStatus, SocialAccountStatus, WorkspaceRole, PostStatus, PostTargetStatus, MonitoringRuleStatus } from "@/types/status";
 export { SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS } from "@/types/social";
 export type { SocialPlatform } from "@/types/social";
-export { ACTIVITY_ACTIONS } from "@/types/activity";
-export type { ActivityAction } from "@/types/activity";
+export { ACTIVITY_ACTIONS, ACTIVITY_ENTITY_TYPES } from "@/types/activity";
+export type { ActivityAction, ActivityEntityType, ActivityLogItem } from "@/types/activity";
 export type { Profile, Workspace, WorkspaceMember, WorkspaceMembership, SessionWorkspaceContext } from "@/types/workspace";
 export type { Database } from "@/types/database";
 export type { SocialAccountPublic, SocialAccountHealth, AccountGroup } from "@/types/social-account";

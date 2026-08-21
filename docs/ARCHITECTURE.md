@@ -195,6 +195,22 @@ Safety policy:
 - Facebook and Instagram keep independent `comments` and `messages` timestamps so a newer DM cannot hide a later comment (or the reverse). Graph `since` is not applied to Page feed: that would drop comments on older posts.
 - VK wall comments use a unix `date` watermark. `wall.get` / `wall.getComments` still read the recent window; older comments in that window are skipped. Unique constraints remain the safety net if two events share a timestamp.
 
+## Inbox operations (PHASE 22)
+
+Inbox filters by receiving account, account platform, match state, and stored `reply_kind`. Owners and admins can poll inbox-capable accounts from Inbox. Process queue still claims the shared workspace jobs with SKIP LOCKED.
+
+## VK community Direct Messages (PHASE 23)
+
+VK community tokens connect through the existing `VkAdapter`. Tokens stay encrypted at rest. Inbox uses `messages.getConversations` plus wall comments. Outbound MESSAGE uses `messages.send`. User OAuth still cannot DM.
+
+## Jobs queue (PHASE 24)
+
+The Jobs page lists CONTACT, PUBLISH, MONITOR, and INBOX jobs. Operators retry FAILED jobs and cancel PENDING/RETRY jobs. Retry does not rewrite `LeadStatus` or `do_not_contact`. Process queue remains shared SKIP LOCKED.
+
+## Activity log (PHASE 25)
+
+The Activity page lists `activity_log` rows with action, entity, account, and platform filters. Platform is account identity. Metadata is passed through `logger.redact` before display so tokens and secrets never reach the client. The log is append-only; viewing it does not rewrite any status machine.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

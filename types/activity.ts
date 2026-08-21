@@ -1,3 +1,5 @@
+import type { SocialPlatform } from "@/types/social";
+
 export const ACTIVITY_ACTIONS = [
   "WORKSPACE_CREATED",
   "WORKSPACE_UPDATED",
@@ -33,3 +35,37 @@ export const ACTIVITY_ACTIONS = [
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
+
+export const ACTIVITY_ENTITY_TYPES = [
+  "job",
+  "campaign",
+  "social_account",
+  "monitoring_rule",
+  "inbox_event",
+  "lead",
+  "post",
+  "social_profile",
+  "contact_relationship",
+] as const;
+
+export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
+
+export const ACTIVITY_PUBLIC_COLUMNS =
+  "id, workspace_id, user_id, action, platform, social_account_id, entity_type, entity_id, metadata, created_at" as const;
+
+export type ActivityLogItem = {
+  id: string;
+  workspaceId: string;
+  userId: string | null;
+  userEmail: string | null;
+  userDisplayName: string | null;
+  action: string;
+  platform: SocialPlatform | null;
+  socialAccountId: string | null;
+  accountUsername: string | null;
+  accountDisplayName: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
