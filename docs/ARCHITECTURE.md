@@ -275,6 +275,10 @@ After the first 10-post window (`wall:1`), each later inbox poll calls official 
 
 After the first 50-comment window (`wallcomments:1`), each later inbox poll calls official `wall.getComments` with `offset = page * 50` (`sort=desc`, count 50) for the current wall posts (latest 10 plus the current wall offset page). A full 50-item raw page on any of those posts advances `wallcomments:2`, `wallcomments:3`, and so on. A short page stores `wallcomments:done` and later polls only read the latest 50 comments per post. Older comment pages are not dropped by the unix comments watermark. Offset is omitted when it is `0`. This is still not a full wall archive in one poll.
 
+## Graph conversation paging (PHASE 42)
+
+Facebook Messenger and Instagram Direct Message collectors follow official Graph `paging.cursors.after` (or `after` on `paging.next`) for `/conversations`. The first page stays `limit=15` with `messages.limit(20)`. If a next `after` exists, the next poll requests that page once. The opaque `after` value is stored base64url-encoded in `threads` so named cursors cannot split on `:` or `|`. A short page stores `threads:done` and later polls only read the latest conversations page. Older-page Direct Messages are not dropped by the `messages` timestamp watermark on first sight. Collectors do not fetch `paging.next` URLs, so Graph tokens never ride an untrusted next link. Feed/media comment lists are still the first page only.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

@@ -155,3 +155,16 @@ export function newestReceivedAt(messages: Array<{ receivedAt: string | null }>)
     null,
   );
 }
+
+export function uniqueInboxMessages<T extends { externalId: string }>(messages: T[]): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const message of messages) {
+    if (seen.has(message.externalId)) {
+      continue;
+    }
+    seen.add(message.externalId);
+    unique.push(message);
+  }
+  return unique;
+}

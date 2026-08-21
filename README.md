@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 41: Official VK `wall.getComments` offset walks older 50-comment windows after `wallcomments:1`. No new SQL.
+PHASE 42: Official Facebook and Instagram Graph conversation paging walks one `after` page per poll. No new SQL.

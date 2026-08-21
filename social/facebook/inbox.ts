@@ -6,12 +6,14 @@ import {
   serializeNamedInboxCursor,
   parseNamedInboxCursor,
   laterTimestampString,
+  uniqueInboxMessages,
 } from "@/lib/inbox/cursor";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { FACEBOOK_GRAPH_ORIGIN } from "@/social/facebook/graph";
 import { resolveFacebookPage, type FacebookPageAuth } from "@/social/facebook/pages";
 import { throwIfGraphError } from "@/social/meta/graph-error";
+import { decodeGraphAfter, graphPagingAfter, nextGraphThreadsCursor } from "@/social/meta/graph-paging";
 
 const commentsSchema = z.object({
   data: z
@@ -134,16 +136,25 @@ async function collectFacebookComments(page: FacebookPageAuth): Promise<InboxMes
   return messages;
 }
 
-async function collectFacebookMessenger(page: FacebookPageAuth): Promise<InboxMessage[]> {
+async function collectFacebookMessenger(
+  page: FacebookPageAuth,
+  after?: string | null,
+): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
   const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/conversations`);
   url.searchParams.set("platform", "MESSENGER");
   url.searchParams.set("fields", "id,messages.limit(20){id,message,from,created_time}");
   url.searchParams.set("limit", "15");
   url.searchParams.set("access_token", page.accessToken);
+  if (after) {
+    url.searchParams.set("after", after);
+  }
   const response = await socialFetch(url.toString());
   const payload = await readJson<unknown>(response);
   throwIfGraphError(payload);
-  return parseFacebookMessengerConversations(payload, page.id);
+  return {
+    messages: parseFacebookMessengerConversations(payload, page.id),
+    nextAfter: graphPagingAfter(payload),
+  };
 }
 
 export async function collectFacebookInbox(
@@ -152,19 +163,35 @@ export async function collectFacebookInbox(
   input: InboxInput,
 ): Promise<InboxResult> {
   const page = await resolveFacebookPage(userAccessToken, metadata);
-  const [comments, directMessages] = await Promise.all([
+  const cursor = parseNamedInboxCursor(input.cursor);
+  const olderAfter = decodeGraphAfter(cursor.threads);
+  const [comments, latestDirect, olderDirect] = await Promise.all([
     collectFacebookComments(page),
     collectFacebookMessenger(page),
+    olderAfter
+      ? collectFacebookMessenger(page, olderAfter)
+      : Promise.resolve({ messages: [] as InboxMessage[], nextAfter: null }),
   ]);
-  const cursor = parseNamedInboxCursor(input.cursor);
+  const latestMessages = latestDirect.messages;
+  const olderMessages = olderDirect.messages;
   return {
     messages: [
       ...filterMessagesAfterCursor(comments, cursor.comments),
-      ...filterMessagesAfterCursor(directMessages, cursor.messages),
+      ...uniqueInboxMessages([
+        ...filterMessagesAfterCursor(latestMessages, cursor.messages),
+        ...olderMessages,
+      ]),
     ],
     cursor: serializeNamedInboxCursor({
       comments: laterTimestampString(cursor.comments, newestReceivedAt(comments)) ?? "",
-      messages: laterTimestampString(cursor.messages, newestReceivedAt(directMessages)) ?? "",
+      messages:
+        laterTimestampString(cursor.messages, newestReceivedAt([...latestMessages, ...olderMessages])) ?? "",
+      threads: nextGraphThreadsCursor({
+        stored: cursor.threads,
+        firstPageAfter: latestDirect.nextAfter,
+        olderPageAfter: olderDirect.nextAfter,
+        fetchedOlder: Boolean(olderAfter),
+      }),
     }),
   };
 }

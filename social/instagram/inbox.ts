@@ -6,11 +6,13 @@ import {
   newestReceivedAt,
   parseNamedInboxCursor,
   serializeNamedInboxCursor,
+  uniqueInboxMessages,
 } from "@/lib/inbox/cursor";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { INSTAGRAM_GRAPH_ORIGIN, resolveInstagramUserId } from "@/social/instagram/publish";
 import { throwIfGraphError } from "@/social/meta/graph-error";
+import { decodeGraphAfter, graphPagingAfter, nextGraphThreadsCursor } from "@/social/meta/graph-paging";
 
 const mediaCommentsSchema = z.object({
   data: z
@@ -136,16 +138,26 @@ async function collectInstagramComments(accessToken: string, userId: string): Pr
   return messages;
 }
 
-async function collectInstagramDirectMessages(accessToken: string, userId: string): Promise<InboxMessage[]> {
+async function collectInstagramDirectMessages(
+  accessToken: string,
+  userId: string,
+  after?: string | null,
+): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
   const url = new URL(`${INSTAGRAM_GRAPH_ORIGIN}/${userId}/conversations`);
   url.searchParams.set("platform", "instagram");
   url.searchParams.set("fields", "id,messages.limit(20){id,created_time,from,message}");
   url.searchParams.set("limit", "15");
   url.searchParams.set("access_token", accessToken);
+  if (after) {
+    url.searchParams.set("after", after);
+  }
   const response = await socialFetch(url.toString());
   const payload = await readJson<unknown>(response);
   throwIfGraphError(payload);
-  return parseInstagramDirectConversations(payload, userId);
+  return {
+    messages: parseInstagramDirectConversations(payload, userId),
+    nextAfter: graphPagingAfter(payload),
+  };
 }
 
 export async function collectInstagramInbox(
@@ -154,19 +166,35 @@ export async function collectInstagramInbox(
   input: InboxInput,
 ): Promise<InboxResult> {
   const userId = await resolveInstagramUserId(accessToken, metadata);
-  const [comments, directMessages] = await Promise.all([
+  const cursor = parseNamedInboxCursor(input.cursor);
+  const olderAfter = decodeGraphAfter(cursor.threads);
+  const [comments, latestDirect, olderDirect] = await Promise.all([
     collectInstagramComments(accessToken, userId),
     collectInstagramDirectMessages(accessToken, userId),
+    olderAfter
+      ? collectInstagramDirectMessages(accessToken, userId, olderAfter)
+      : Promise.resolve({ messages: [] as InboxMessage[], nextAfter: null }),
   ]);
-  const cursor = parseNamedInboxCursor(input.cursor);
+  const latestMessages = latestDirect.messages;
+  const olderMessages = olderDirect.messages;
   return {
     messages: [
       ...filterMessagesAfterCursor(comments, cursor.comments),
-      ...filterMessagesAfterCursor(directMessages, cursor.messages),
+      ...uniqueInboxMessages([
+        ...filterMessagesAfterCursor(latestMessages, cursor.messages),
+        ...olderMessages,
+      ]),
     ],
     cursor: serializeNamedInboxCursor({
       comments: laterTimestampString(cursor.comments, newestReceivedAt(comments)) ?? "",
-      messages: laterTimestampString(cursor.messages, newestReceivedAt(directMessages)) ?? "",
+      messages:
+        laterTimestampString(cursor.messages, newestReceivedAt([...latestMessages, ...olderMessages])) ?? "",
+      threads: nextGraphThreadsCursor({
+        stored: cursor.threads,
+        firstPageAfter: latestDirect.nextAfter,
+        olderPageAfter: olderDirect.nextAfter,
+        fetchedOlder: Boolean(olderAfter),
+      }),
     }),
   };
 }
