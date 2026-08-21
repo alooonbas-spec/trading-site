@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 45: Official Facebook and Instagram nested conversation message Graph paging walks one `after` page per stored thread id (cap 20). No new SQL.
+PHASE 46: Official X mentions and DM inbox paging walks one `pagination_token` page per poll. No new SQL.

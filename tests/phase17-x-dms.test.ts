@@ -96,7 +96,7 @@ describe("PHASE 17 X Direct Messages", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(result.cursor).toBe("dms:dm-1|mentions:tweet-1");
+    expect(result.cursor).toBe("dmpages:done|dms:dm-1|mentionpages:done|mentions:tweet-1");
     expect(result.messages).toEqual([
       expect.objectContaining({
         externalId: "tweet-1",

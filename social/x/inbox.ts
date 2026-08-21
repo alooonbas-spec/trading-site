@@ -5,9 +5,11 @@ import {
   laterDigitId,
   parseNamedInboxCursor,
   serializeNamedInboxCursor,
+  uniqueInboxMessages,
 } from "@/lib/inbox/cursor";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
+import { decodeXPageToken, nextXPageCursor } from "@/social/x/paging";
 
 const mentionsSchema = z.object({
   data: z
@@ -35,6 +37,7 @@ const mentionsSchema = z.object({
   meta: z
     .object({
       newest_id: z.string().optional(),
+      next_token: z.string().optional(),
     })
     .optional(),
 });
@@ -61,6 +64,11 @@ const dmEventsSchema = z.object({
           }),
         )
         .optional(),
+    })
+    .optional(),
+  meta: z
+    .object({
+      next_token: z.string().optional(),
     })
     .optional(),
 });
@@ -135,50 +143,21 @@ export function parseXDirectMessageEvents(
   return messages;
 }
 
-export async function collectXInbox(accessToken: string, input: InboxInput): Promise<InboxResult> {
-  const headers = { Authorization: `Bearer ${accessToken}` };
-  const meResponse = await socialFetch("https://api.x.com/2/users/me", { headers });
-  const me = meSchema.safeParse(await readJson<unknown>(meResponse));
-  if (!me.success) {
-    throw new AuthenticationError("X users/me failed");
-  }
-
-  const cursor = parseXInboxCursor(input.cursor);
-  const mentionsUrl = new URL(`https://api.x.com/2/users/${me.data.data.id}/mentions`);
-  mentionsUrl.searchParams.set("max_results", "10");
-  mentionsUrl.searchParams.set("tweet.fields", "author_id,created_at");
-  mentionsUrl.searchParams.set("expansions", "author_id");
-  mentionsUrl.searchParams.set("user.fields", "username");
-  if (cursor.mentions && /^\d+$/.test(cursor.mentions)) {
-    mentionsUrl.searchParams.set("since_id", cursor.mentions);
-  }
-
-  const dmUrl = new URL("https://api.x.com/2/dm_events");
-  dmUrl.searchParams.set("event_types", "MessageCreate");
-  dmUrl.searchParams.set("max_results", "50");
-  dmUrl.searchParams.set("dm_event.fields", "id,text,created_at,sender_id,dm_conversation_id");
-  dmUrl.searchParams.set("expansions", "sender_id");
-  dmUrl.searchParams.set("user.fields", "username");
-
-  const [mentionsResponse, dmResponse] = await Promise.all([
-    socialFetch(mentionsUrl.toString(), { headers }),
-    socialFetch(dmUrl.toString(), { headers }),
-  ]);
-
-  const parsed = mentionsSchema.safeParse(await readJson<unknown>(mentionsResponse));
+export function parseXMentionTweets(payload: unknown, ownUserId: string): InboxMessage[] {
+  const parsed = mentionsSchema.safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("X mentions returned an unexpected payload");
   }
 
   const users = new Map((parsed.data.includes?.users ?? []).map((user) => [user.id, user]));
-  const mentionMessages: InboxMessage[] = [];
+  const messages: InboxMessage[] = [];
   for (const tweet of parsed.data.data ?? []) {
-    if (!tweet.author_id || tweet.author_id === me.data.data.id) {
+    if (!tweet.author_id || tweet.author_id === ownUserId) {
       continue;
     }
     const author = users.get(tweet.author_id);
     const username = author?.username ? `@${author.username}` : null;
-    mentionMessages.push({
+    messages.push({
       externalId: tweet.id,
       externalProfileId: tweet.author_id,
       username,
@@ -190,16 +169,114 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
       replyKind: "mention",
     });
   }
+  return messages;
+}
 
-  const dmPayload = await readJson<unknown>(dmResponse);
-  const dmMessages = parseXDirectMessageEvents(dmPayload, me.data.data.id, cursor.dms);
-  const newestDmId = newestXDirectMessageEventId(dmPayload);
+function xNextToken(meta?: { next_token?: string }): string | null {
+  const token = meta?.next_token?.trim();
+  return token ? token : null;
+}
+
+async function collectXMentions(
+  accessToken: string,
+  userId: string,
+  input: { sinceId?: string | null; paginationToken?: string | null },
+): Promise<{ messages: InboxMessage[]; newestId: string | null; nextToken: string | null }> {
+  const url = new URL(`https://api.x.com/2/users/${userId}/mentions`);
+  url.searchParams.set("max_results", "10");
+  url.searchParams.set("tweet.fields", "author_id,created_at");
+  url.searchParams.set("expansions", "author_id");
+  url.searchParams.set("user.fields", "username");
+  if (input.paginationToken) {
+    url.searchParams.set("pagination_token", input.paginationToken);
+  } else if (input.sinceId && /^\d+$/.test(input.sinceId)) {
+    url.searchParams.set("since_id", input.sinceId);
+  }
+  const response = await socialFetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+  const payload = await readJson<unknown>(response);
+  const parsed = mentionsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("X mentions returned an unexpected payload");
+  }
+  return {
+    messages: parseXMentionTweets(payload, userId),
+    newestId: parsed.data.meta?.newest_id ?? null,
+    nextToken: xNextToken(parsed.data.meta),
+  };
+}
+
+async function collectXDirectMessages(
+  accessToken: string,
+  ownUserId: string,
+  input: { sinceEventId?: string | null; paginationToken?: string | null },
+): Promise<{ messages: InboxMessage[]; newestId: string | null; nextToken: string | null }> {
+  const url = new URL("https://api.x.com/2/dm_events");
+  url.searchParams.set("event_types", "MessageCreate");
+  url.searchParams.set("max_results", "50");
+  url.searchParams.set("dm_event.fields", "id,text,created_at,sender_id,dm_conversation_id");
+  url.searchParams.set("expansions", "sender_id");
+  url.searchParams.set("user.fields", "username");
+  if (input.paginationToken) {
+    url.searchParams.set("pagination_token", input.paginationToken);
+  }
+  const response = await socialFetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+  const payload = await readJson<unknown>(response);
+  const parsed = dmEventsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("X dm_events returned an unexpected payload");
+  }
+  return {
+    messages: parseXDirectMessageEvents(payload, ownUserId, input.paginationToken ? null : input.sinceEventId),
+    newestId: newestXDirectMessageEventId(payload),
+    nextToken: xNextToken(parsed.data.meta),
+  };
+}
+
+export async function collectXInbox(accessToken: string, input: InboxInput): Promise<InboxResult> {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const meResponse = await socialFetch("https://api.x.com/2/users/me", { headers });
+  const me = meSchema.safeParse(await readJson<unknown>(meResponse));
+  if (!me.success) {
+    throw new AuthenticationError("X users/me failed");
+  }
+
+  const named = parseNamedInboxCursor(input.cursor);
+  const cursor = parseXInboxCursor(input.cursor);
+  const olderMentionToken = decodeXPageToken(named.mentionpages);
+  const olderDmToken = decodeXPageToken(named.dmpages);
+  const emptyPage = { messages: [] as InboxMessage[], newestId: null as string | null, nextToken: null as string | null };
+  const userId = me.data.data.id;
+  const [latestMentions, olderMentions, latestDms, olderDms] = await Promise.all([
+    collectXMentions(accessToken, userId, { sinceId: cursor.mentions }),
+    olderMentionToken
+      ? collectXMentions(accessToken, userId, { paginationToken: olderMentionToken })
+      : Promise.resolve(emptyPage),
+    collectXDirectMessages(accessToken, userId, { sinceEventId: cursor.dms }),
+    olderDmToken
+      ? collectXDirectMessages(accessToken, userId, { paginationToken: olderDmToken })
+      : Promise.resolve(emptyPage),
+  ]);
 
   return {
-    messages: [...mentionMessages, ...dmMessages],
+    messages: [
+      ...uniqueInboxMessages([...latestMentions.messages, ...olderMentions.messages]),
+      ...uniqueInboxMessages([...latestDms.messages, ...olderDms.messages]),
+    ],
     cursor: serializeNamedInboxCursor({
-      mentions: laterDigitId(cursor.mentions, parsed.data.meta?.newest_id) ?? "",
-      dms: laterDigitId(cursor.dms, newestDmId) ?? "",
+      dmpages: nextXPageCursor({
+        stored: named.dmpages,
+        firstPageToken: latestDms.nextToken,
+        olderPageToken: olderDms.nextToken,
+        fetchedOlder: Boolean(olderDmToken),
+      }),
+      dms: laterDigitId(cursor.dms, laterDigitId(latestDms.newestId, olderDms.newestId)) ?? "",
+      mentionpages: nextXPageCursor({
+        stored: named.mentionpages,
+        firstPageToken: latestMentions.nextToken,
+        olderPageToken: olderMentions.nextToken,
+        fetchedOlder: Boolean(olderMentionToken),
+      }),
+      mentions: laterDigitId(cursor.mentions, laterDigitId(latestMentions.newestId, olderMentions.newestId)) ?? "",
     }),
   };
 }

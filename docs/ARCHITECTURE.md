@@ -291,6 +291,10 @@ Facebook `/{post-id}/comments` and Instagram `/{media-id}/comments` follow offic
 
 Facebook `/{conversation-id}/messages` and Instagram `/{conversation-id}/messages` follow the same per-object Graph `after` walker as nested comments. The named `threadmsgs` cursor stores `{ conversationId: after }` (base64url JSON, at most 20 ids). The first collect reads nested `messages.paging.cursors.after` from the current conversations pages. Later polls request `GET /{conversation-id}/messages?after=` with official fields and `limit=20`. Extra thread messages are not dropped by the `messages` timestamp watermark. An empty map stores `threadmsgs:done`. Collectors still do not fetch `paging.next` URLs.
 
+## X mention and DM pagination (PHASE 46)
+
+X mentions (`GET /2/users/:id/mentions`) and Direct Messages (`GET /2/dm_events`) follow official `meta.next_token` as `pagination_token`. Each poll still reads the latest page (`max_results=10` mentions, `max_results=50` DMs). Mentions still send `since_id` on the latest page. If a next token exists, the next poll requests that page once on the same constructed endpoint. Opaque tokens are stored base64url-encoded in `mentionpages` and `dmpages` so named cursors cannot split on `:` or `|`. A short page stores `mentionpages:done` / `dmpages:done`. Extra DM pages are not dropped by the `dms` event-id watermark on first sight. Collectors set `pagination_token=` on the official path and do not treat `next_token` as a fetch URL.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

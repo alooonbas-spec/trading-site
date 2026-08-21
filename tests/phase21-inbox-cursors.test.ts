@@ -96,7 +96,7 @@ describe("PHASE 21 collector watermarks", () => {
       socialAccountId: "a",
       cursor: "mentions:50|dms:70",
     });
-    expect(result.cursor).toBe("dms:80|mentions:60");
+    expect(result.cursor).toBe("dmpages:done|dms:80|mentionpages:done|mentions:60");
     expect(result.messages.map((item) => item.externalId)).toEqual(["60", "80"]);
   });
 
