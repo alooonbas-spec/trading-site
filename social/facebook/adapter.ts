@@ -8,6 +8,8 @@ import {
 } from "@/social/core/base-adapter";
 import type {
   ConnectResult,
+  InboxInput,
+  InboxResult,
   PublishInput,
   PublishResult,
   SocialAccountSnapshot,
@@ -22,6 +24,7 @@ import {
   FACEBOOK_TOKEN_URL,
 } from "@/social/facebook/graph";
 import { facebookConnectMetadata, listFacebookPages, resolveFacebookPage } from "@/social/facebook/pages";
+import { collectFacebookInbox } from "@/social/facebook/inbox";
 import { executeFacebookPublish, planFacebookPublish } from "@/social/facebook/publish";
 import { resolveFacebookPublicProfile } from "@/social/facebook/public-profile";
 
@@ -167,7 +170,7 @@ export class FacebookAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true };
+    return { publishing: true, inbox: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -179,6 +182,14 @@ export class FacebookAdapter extends BaseSocialAdapter {
     const plan = planFacebookPublish(input);
     const page = await resolveFacebookPage(token, this.context.metadata);
     return executeFacebookPublish(page, plan);
+  }
+
+  async collectInbox(input: InboxInput): Promise<InboxResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Facebook account has no access token");
+    }
+    return collectFacebookInbox(token, this.context.metadata, input);
   }
 
   protected resolvePublicProfile(source: string) {

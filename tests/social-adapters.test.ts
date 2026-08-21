@@ -123,6 +123,12 @@ describe("OAuth URL builders", () => {
         redirectUri: "http://localhost:3000/api/social/instagram/callback",
       }),
     ).toContain("instagram_business_content_publish");
+    expect(
+      buildInstagramAuthorizationUrl({
+        ...input,
+        redirectUri: "http://localhost:3000/api/social/instagram/callback",
+      }),
+    ).toContain("instagram_business_manage_comments");
   });
 
   it("refuses OAuth when platform credentials are missing", () => {

@@ -7,6 +7,8 @@ import type {
   ConnectResult,
   ContactActionInput,
   ContactActionResult,
+  InboxInput,
+  InboxResult,
   MonitorInput,
   MonitorResult,
   PublishInput,
@@ -16,6 +18,7 @@ import type {
 } from "@/social/core/adapter";
 import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 import { resolveTelegramPublicProfile } from "@/social/telegram/public-profile";
+import { parseTelegramInboxUpdates } from "@/social/telegram/inbox";
 import { buildTelegramMediaPayload } from "@/social/telegram/media";
 
 const TELEGRAM_API_ORIGIN = "https://api.telegram.org";
@@ -183,7 +186,7 @@ export class TelegramAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { monitoring: true, publishing: true, contactActions: true, messaging: true };
+    return { monitoring: true, publishing: true, contactActions: true, messaging: true, inbox: true };
   }
 
   protected resolvePublicProfile(source: string) {
@@ -256,6 +259,23 @@ export class TelegramAdapter extends BaseSocialAdapter {
       events,
       cursor: updates.length > 0 ? String(maxUpdateId + 1) : (input.cursor ?? null),
     };
+  }
+
+  async collectInbox(input: InboxInput): Promise<InboxResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Telegram account has no access token");
+    }
+
+    const url = new URL(telegramMethodUrl(token, "getUpdates"));
+    url.searchParams.set("timeout", "0");
+    url.searchParams.set("allowed_updates", JSON.stringify(["message"]));
+    if (input.cursor && /^-?\d+$/.test(input.cursor)) {
+      url.searchParams.set("offset", input.cursor);
+    }
+
+    const response = await socialFetch(url.toString());
+    return parseTelegramInboxUpdates(await readJson<unknown>(response), input.cursor);
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {

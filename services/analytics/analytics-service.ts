@@ -51,7 +51,7 @@ function isJobStatus(value: string): value is JobStatus {
 }
 
 function isJobType(value: string): value is JobType {
-  return value === "CONTACT" || value === "PUBLISH" || value === "MONITOR";
+  return value === "CONTACT" || value === "PUBLISH" || value === "MONITOR" || value === "INBOX";
 }
 
 export async function getWorkspaceAnalytics(workspaceId: string): Promise<WorkspaceAnalytics> {
@@ -73,6 +73,8 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     contactSuccessToday,
     contactFailedToday,
     postsPublishedToday,
+    inboxTodayResult,
+    inboxMatchedTodayResult,
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -114,6 +116,17 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
       .eq("workspace_id", workspaceId)
       .in("status", ["PUBLISHED", "PARTIAL"])
       .gte("published_at", today),
+    supabase
+      .from("inbox_events")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .gte("created_at", today),
+    supabase
+      .from("inbox_events")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("matched", true)
+      .gte("created_at", today),
   ]);
 
   const queryError =
@@ -128,7 +141,9 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     jobsResult.error ??
     contactSuccessToday.error ??
     contactFailedToday.error ??
-    postsPublishedToday.error;
+    postsPublishedToday.error ??
+    inboxTodayResult.error ??
+    inboxMatchedTodayResult.error;
   if (queryError) {
     throw new ValidationError(queryError.message);
   }
@@ -144,6 +159,7 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
   const contactJobStatuses: JobStatus[] = [];
   const publishJobStatuses: JobStatus[] = [];
   const monitorJobStatuses: JobStatus[] = [];
+  const inboxJobStatuses: JobStatus[] = [];
   for (const job of jobsResult.data ?? []) {
     if (!isJobType(job.type) || !isJobStatus(job.status)) {
       continue;
@@ -152,8 +168,10 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
       contactJobStatuses.push(job.status);
     } else if (job.type === "PUBLISH") {
       publishJobStatuses.push(job.status);
-    } else {
+    } else if (job.type === "MONITOR") {
       monitorJobStatuses.push(job.status);
+    } else {
+      inboxJobStatuses.push(job.status);
     }
   }
 
@@ -193,10 +211,15 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
       eventsToday: eventsTodayResult.count ?? 0,
       eventsLast7Days: eventsWeekResult.count ?? 0,
     },
+    inbox: {
+      eventsToday: inboxTodayResult.count ?? 0,
+      matchedToday: inboxMatchedTodayResult.count ?? 0,
+    },
     jobs: {
       contactByStatus: tallyByStatus(JOB_STATUSES, contactJobStatuses),
       publishByStatus: tallyByStatus(JOB_STATUSES, publishJobStatuses),
       monitorByStatus: tallyByStatus(JOB_STATUSES, monitorJobStatuses),
+      inboxByStatus: tallyByStatus(JOB_STATUSES, inboxJobStatuses),
     },
   };
 }

@@ -9,7 +9,7 @@ export const CAMPAIGN_ACTIONS = [
 
 export type CampaignAction = (typeof CAMPAIGN_ACTIONS)[number];
 
-export const JOB_TYPES = ["CONTACT", "PUBLISH", "MONITOR"] as const;
+export const JOB_TYPES = ["CONTACT", "PUBLISH", "MONITOR", "INBOX"] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
 export type Campaign = {

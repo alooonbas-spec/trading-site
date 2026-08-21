@@ -63,6 +63,7 @@ describe("PHASE 8 source boundaries", () => {
     expect(service).toContain("tallyByStatus(SOCIAL_ACCOUNT_STATUSES");
     expect(service).toContain("tallyByStatus(POST_STATUSES");
     expect(service).toContain("tallyByStatus(MONITORING_RULE_STATUSES");
+    expect(service).toContain("inboxByStatus");
     expect(service).toContain('eq("type", "CONTACT")');
     expect(service).not.toMatch(/platform\s*===\s*["']telegram["']/);
     expect(service).not.toMatch(/do_not_contact boolean/);
@@ -77,6 +78,8 @@ describe("PHASE 8 source boundaries", () => {
       "supabase/migrations/20260821180000_phase5_tinyfish.sql",
       "supabase/migrations/20260821200000_phase6_posts.sql",
       "supabase/migrations/20260821220000_phase7_monitoring.sql",
+      "supabase/migrations/20260821240000_phase10_worker.sql",
+      "supabase/migrations/20260821260000_phase13_inbox.sql",
     ];
     for (const file of files) {
       const sql = readFileSync(file, "utf8");

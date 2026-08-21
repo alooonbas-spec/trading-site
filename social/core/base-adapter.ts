@@ -7,6 +7,8 @@ import type {
   ConnectResult,
   ContactActionInput,
   ContactActionResult,
+  InboxInput,
+  InboxResult,
   MonitorInput,
   MonitorResult,
   OAuthBeginInput,
@@ -38,6 +40,7 @@ export const DISABLED_CAPABILITIES: SocialCapabilities = {
   publicCollection: false,
   contactActions: false,
   messaging: false,
+  inbox: false,
 };
 
 export const DEFAULT_ACCOUNT_RATE_LIMIT: AccountRateLimit = {
@@ -103,6 +106,10 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
       keywords: input.keywords,
       sources: input.sources,
     });
+  }
+
+  async collectInbox(_input: InboxInput): Promise<InboxResult> {
+    throw new UnsupportedActionError(`${this.platform} inbox collection is not enabled yet`);
   }
 
   async executeContactAction(_input: ContactActionInput): Promise<ContactActionResult> {

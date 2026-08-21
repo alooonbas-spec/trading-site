@@ -41,6 +41,12 @@ export type JobFamilyAnalytics = {
   contactByStatus: StatusCount<JobStatus>[];
   publishByStatus: StatusCount<JobStatus>[];
   monitorByStatus: StatusCount<JobStatus>[];
+  inboxByStatus: StatusCount<JobStatus>[];
+};
+
+export type InboxAnalytics = {
+  eventsToday: number;
+  matchedToday: number;
 };
 
 export type WorkspaceAnalytics = {
@@ -51,5 +57,6 @@ export type WorkspaceAnalytics = {
   accounts: AccountAnalytics;
   posts: PostAnalytics;
   monitoring: MonitoringAnalytics;
+  inbox: InboxAnalytics;
   jobs: JobFamilyAnalytics;
 };

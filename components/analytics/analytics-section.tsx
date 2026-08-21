@@ -36,6 +36,7 @@ export function AnalyticsSection({
             ))}
           </div>
         ) : null}
+        {counts.length > 0 ? (
         <Table>
           <TableHeader>
             <TableRow>
@@ -54,6 +55,7 @@ export function AnalyticsSection({
             ))}
           </TableBody>
         </Table>
+        ) : null}
       </CardContent>
     </Card>
   );

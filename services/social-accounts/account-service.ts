@@ -19,6 +19,7 @@ import type { SocialAccountHealth, SocialAccountPublic } from "@/types/social-ac
 import type { SocialPlatform } from "@/types/social";
 import { SOCIAL_PLATFORMS } from "@/types/social";
 import { isPublishDestinationKey } from "@/lib/social/publish-destination";
+import { enqueueInboxJob } from "@/services/jobs/enqueue-service";
 import { countJobsByAccount } from "@/services/jobs/worker-service";
 
 function isSocialPlatform(value: string): value is SocialPlatform {
@@ -113,7 +114,43 @@ export async function connectSocialAccount(input: {
     entityId: data.id,
   });
 
+  if ((await adapter.getCapabilities()).inbox) {
+    await enqueueInboxJob({ workspaceId: input.workspaceId, socialAccountId: data.id });
+  }
+
   return toPublicSocialAccount(data);
+}
+
+export async function startInboxPolling(input: {
+  workspaceId: string;
+  accountId: string;
+}): Promise<{ queued: number }> {
+  const context = await requireWorkspaceContext(input.workspaceId);
+  if (!canManageAccounts(context.role)) {
+    throw new PermissionError("Only owners and admins can start inbox polling");
+  }
+
+  const supabase = await createClient();
+  const { data: account, error } = await supabase
+    .from("social_accounts")
+    .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
+    .eq("id", input.accountId)
+    .eq("workspace_id", input.workspaceId)
+    .maybeSingle();
+  if (error || !account) {
+    throw new ValidationError(error?.message ?? "Social account not found");
+  }
+
+  const adapter = getSocialAdapter(account.platform);
+  if (!(await adapter.getCapabilities()).inbox) {
+    throw new UnsupportedActionError(`${account.platform} inbox collection is not enabled yet`);
+  }
+
+  const queued = await enqueueInboxJob({
+    workspaceId: input.workspaceId,
+    socialAccountId: input.accountId,
+  });
+  return { queued };
 }
 
 export async function updateSocialAccountPublishDestination(input: {

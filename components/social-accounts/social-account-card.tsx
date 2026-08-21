@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { disconnectAccountAction, refreshAccountAction } from "@/app/actions/social-accounts";
+import { disconnectAccountAction, refreshAccountAction, startInboxPollingAction } from "@/app/actions/social-accounts";
 import { PublishDestinationForm } from "@/components/social-accounts/publish-destination-form";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
 import type { SocialAccountHealth } from "@/types/social-account";
@@ -20,15 +20,21 @@ export function SocialAccountCard({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const account = health.account;
   const label = account.username ?? account.displayName ?? account.externalAccountId;
 
-  function run(action: () => Promise<{ error: string | null }>) {
+  function run(action: () => Promise<{ error: string | null; success?: string | null }>) {
     setError(null);
+    setSuccess(null);
     startTransition(async () => {
       const result = await action();
       if (result.error) {
         setError(result.error);
+        return;
+      }
+      if (result.success) {
+        setSuccess(result.success);
       }
     });
   }
@@ -80,8 +86,9 @@ export function SocialAccountCard({
           />
         ) : null}
         {error ? <p className="text-destructive">{error}</p> : null}
+        {success ? <p>{success}</p> : null}
         {canManage ? (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -89,6 +96,14 @@ export function SocialAccountCard({
               onClick={() => run(() => refreshAccountAction(workspaceId, account.id))}
             >
               Refresh health
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pending || account.status === "DISCONNECTED"}
+              onClick={() => run(() => startInboxPollingAction(workspaceId, account.id))}
+            >
+              Poll inbox
             </Button>
             <Button
               variant="ghost"

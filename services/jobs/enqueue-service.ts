@@ -327,3 +327,45 @@ export async function enqueueMonitorJob(input: {
 
   return 1;
 }
+
+export async function enqueueInboxJob(input: {
+  workspaceId: string;
+  socialAccountId: string;
+  runAfter?: string;
+}): Promise<number> {
+  const supabase = await createClient();
+  const { data: existingJobs, error: existingError } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("social_account_id", input.socialAccountId)
+    .eq("type", "INBOX")
+    .in("status", ["PENDING", "RETRY"]);
+  if (existingError) {
+    throw new ValidationError(existingError.message);
+  }
+  if ((existingJobs ?? []).length > 0) {
+    return 0;
+  }
+
+  const { error: insertError } = await supabase.from("jobs").insert({
+    workspace_id: input.workspaceId,
+    campaign_id: null,
+    social_account_id: input.socialAccountId,
+    lead_id: null,
+    social_profile_id: null,
+    relationship_id: null,
+    post_id: null,
+    post_target_id: null,
+    monitoring_rule_id: null,
+    type: "INBOX",
+    action: null,
+    body: null,
+    status: "PENDING",
+    run_after: input.runAfter ?? new Date().toISOString(),
+  });
+  if (insertError) {
+    throw new ValidationError(insertError.message);
+  }
+
+  return 1;
+}

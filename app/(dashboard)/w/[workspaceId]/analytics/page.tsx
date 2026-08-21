@@ -69,6 +69,15 @@ export default async function AnalyticsPage({
         counts={analytics.monitoring.rulesByStatus}
       />
       <AnalyticsSection
+        title="Inbox"
+        description="Inbound messages stored from official APIs. Matched events update ContactStatus to REPLIED. Unmatched senders are not turned into leads."
+        stats={[
+          { title: "Events today", value: String(analytics.inbox.eventsToday) },
+          { title: "Matched today", value: String(analytics.inbox.matchedToday) },
+        ]}
+        counts={[]}
+      />
+      <AnalyticsSection
         title="CONTACT jobs"
         description="JobStatus for CONTACT jobs only."
         stats={[]}
@@ -85,6 +94,12 @@ export default async function AnalyticsPage({
         description="JobStatus for MONITOR jobs only."
         stats={[]}
         counts={analytics.jobs.monitorByStatus}
+      />
+      <AnalyticsSection
+        title="INBOX jobs"
+        description="JobStatus for INBOX jobs only."
+        stats={[]}
+        counts={analytics.jobs.inboxByStatus}
       />
     </div>
   );

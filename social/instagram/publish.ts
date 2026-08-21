@@ -7,7 +7,8 @@ import type { PublishResult } from "@/social/core/adapter";
 import { throwIfGraphError } from "@/social/meta/graph-error";
 
 export const INSTAGRAM_GRAPH_ORIGIN = "https://graph.instagram.com";
-export const INSTAGRAM_SCOPES = "instagram_business_basic,instagram_business_content_publish";
+export const INSTAGRAM_SCOPES =
+  "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments";
 
 const containerSchema = z.object({
   id: z.string().min(1),

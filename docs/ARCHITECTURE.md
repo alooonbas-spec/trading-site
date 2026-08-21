@@ -123,6 +123,14 @@ Safety policy:
 - VK uses official `wall.post`. Photos go through `photos.getWallUploadServer` → upload → `photos.saveWallPhoto`. OAuth now requests `wall photos offline`. Optional `metadata.publishOwnerId` targets a community wall.
 - Existing Facebook, Instagram, and VK accounts must reconnect to grant the new scopes. Contact actions on these platforms stay `UnsupportedActionError`. App Review still applies; tester/admin tokens work before review.
 
+## Inbox replies (PHASE 13)
+
+- `INBOX` jobs poll connected accounts. `adapter.collectInbox()` talks to official APIs: Telegram `getUpdates` DMs, X `GET /2/users/:id/mentions`, Facebook Page comments, Instagram media comments, and VK `wall.getComments`.
+- Events are stored in `inbox_events` (unique per account + external id). Unknown senders are kept unmatched and are not turned into leads.
+- Matched CRM profiles record a `REPLY` interaction. Existing contact relationships move to `REPLIED` unless they are `BLOCKED`. `do_not_contact` does not block recording replies.
+- Instagram comment inbox needs `instagram_business_manage_comments` (reconnect). Telegram `getUpdates` is a single Bot API consumer; running inbox and Telegram monitoring together can skip updates.
+- The worker still branches on `job.type`, never `platform ===`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

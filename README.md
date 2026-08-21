@@ -19,6 +19,7 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
    - `supabase/migrations/20260821200000_phase6_posts.sql`
    - `supabase/migrations/20260821220000_phase7_monitoring.sql`
    - `supabase/migrations/20260821240000_phase10_worker.sql`
+   - `supabase/migrations/20260821260000_phase13_inbox.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
@@ -55,4 +56,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 12: official Facebook Page, Instagram, and VK publishing. Reconnect those accounts to grant publish scopes.
+PHASE 13: inbound replies from official APIs. Matched messages set ContactStatus to REPLIED.

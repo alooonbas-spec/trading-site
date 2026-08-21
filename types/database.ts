@@ -601,6 +601,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      inbox_events: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          social_account_id: string;
+          external_id: string;
+          external_profile_id: string;
+          username: string | null;
+          body: string;
+          url: string | null;
+          received_at: string | null;
+          lead_id: string | null;
+          social_profile_id: string | null;
+          relationship_id: string | null;
+          matched: boolean;
+          created_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          social_account_id: string;
+          external_id: string;
+          external_profile_id: string;
+          username?: string | null;
+          body: string;
+          url?: string | null;
+          received_at?: string | null;
+          lead_id?: string | null;
+          social_profile_id?: string | null;
+          relationship_id?: string | null;
+          matched?: boolean;
+        };
+        Update: {
+          lead_id?: string | null;
+          social_profile_id?: string | null;
+          relationship_id?: string | null;
+          matched?: boolean;
+        };
+        Relationships: [];
+      };
       account_rate_buckets: {
         Row: {
           social_account_id: string;

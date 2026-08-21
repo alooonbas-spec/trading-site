@@ -10,6 +10,8 @@ import {
 } from "@/social/core/base-adapter";
 import type {
   ConnectResult,
+  InboxInput,
+  InboxResult,
   MonitorInput,
   MonitorResult,
   PublishInput,
@@ -21,6 +23,7 @@ import type {
 import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 import { resolveXPublicProfile } from "@/social/x/public-profile";
 import { uploadXMediaFromUrls } from "@/social/x/media-upload";
+import { collectXInbox } from "@/social/x/inbox";
 
 const X_AUTHORIZE_URL = "https://twitter.com/i/oauth2/authorize";
 const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
@@ -212,7 +215,7 @@ export class XAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true, monitoring: true };
+    return { publishing: true, monitoring: true, inbox: true };
   }
 
   async refreshTokens(): Promise<TokenRefreshResult> {
@@ -331,6 +334,14 @@ export class XAdapter extends BaseSocialAdapter {
       events,
       cursor: parsed.data.meta?.newest_id ?? input.cursor ?? null,
     };
+  }
+
+  async collectInbox(input: InboxInput): Promise<InboxResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("X account has no access token");
+    }
+    return collectXInbox(token, input);
   }
 
   protected resolvePublicProfile(source: string) {

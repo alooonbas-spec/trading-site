@@ -14,11 +14,13 @@ import {
   isAppError,
 } from "@/lib/errors";
 import { AccountRateLimiter } from "@/lib/jobs/account-rate-limiter";
-import { isAdapterContactAction, jobStatusAfterError, MONITOR_POLL_INTERVAL_MS } from "@/lib/jobs/queue-rules";
+import { isAdapterContactAction, jobStatusAfterError, INBOX_POLL_INTERVAL_MS, MONITOR_POLL_INTERVAL_MS } from "@/lib/jobs/queue-rules";
+import { inboxCursorFromMetadata } from "@/lib/inbox/match-profile";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { prepareAccountAdapter } from "@/services/social-accounts/token-refresh-service";
 import { assertCanContactLead } from "@/services/leads/do-not-contact";
 import { recordLeadInteraction } from "@/services/leads/interaction-service";
+import { ingestInboxMessages } from "@/services/inbox/ingest-service";
 import { logActivity } from "@/services/activity/activity-service";
 import type { SocialAdapter } from "@/social/core/adapter";
 import { getSocialAdapter } from "@/social/core/registry";
@@ -27,7 +29,7 @@ import { LEAD_PUBLIC_COLUMNS } from "@/types/crm";
 import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import { SOCIAL_PROFILE_PUBLIC_COLUMNS } from "@/types/crm";
 import { toJob } from "@/services/campaigns/mapper";
-import { enqueueMonitorJob } from "@/services/jobs/enqueue-service";
+import { enqueueInboxJob, enqueueMonitorJob } from "@/services/jobs/enqueue-service";
 import { toMonitoringRule } from "@/services/monitoring/mapper";
 import { refreshPostRollup } from "@/services/posts/post-service";
 import { POST_PUBLIC_COLUMNS, POST_TARGET_PUBLIC_COLUMNS } from "@/types/post";
@@ -202,6 +204,11 @@ async function processClaimedJob(job: Job, userId: string | null): Promise<void>
 
   if (job.type === "PUBLISH") {
     await processPublishJob(job, userId);
+    return;
+  }
+
+  if (job.type === "INBOX") {
+    await processInboxJob(job, userId);
     return;
   }
 
@@ -526,6 +533,77 @@ async function processMonitorJob(job: Job, userId: string | null): Promise<void>
   }
 }
 
+async function processInboxJob(job: Job, userId: string | null): Promise<void> {
+  const supabase = await createClient();
+
+  try {
+    if (!job.socialAccountId) {
+      throw new ValidationError("Inbox job is missing a social account");
+    }
+    const socialAccountId = job.socialAccountId;
+
+    const { data: account, error: accountError } = await supabase
+      .from("social_accounts")
+      .select("id, metadata")
+      .eq("id", socialAccountId)
+      .eq("workspace_id", job.workspaceId)
+      .maybeSingle();
+    if (accountError || !account) {
+      throw new ValidationError(accountError?.message ?? "Social account not found");
+    }
+
+    const prepared = await prepareAccountAdapter(socialAccountId, { userId });
+    const capabilities = await prepared.adapter.getCapabilities();
+    if (!capabilities.inbox) {
+      throw new UnsupportedActionError(`${prepared.platform} inbox collection is not enabled yet`);
+    }
+
+    await takeAdapterRate(socialAccountId, prepared.adapter);
+    const cursor = inboxCursorFromMetadata(account.metadata);
+    const collected = await prepared.adapter.collectInbox({
+      workspaceId: job.workspaceId,
+      socialAccountId,
+      cursor,
+    });
+    const ingested = await ingestInboxMessages({
+      workspaceId: job.workspaceId,
+      socialAccountId,
+      platform: prepared.platform,
+      messages: collected.messages,
+      userId,
+    });
+
+    const nextMetadata = {
+      ...(account.metadata && typeof account.metadata === "object" && !Array.isArray(account.metadata)
+        ? account.metadata
+        : {}),
+      ...(collected.cursor ? { inboxCursor: collected.cursor } : {}),
+    };
+    const { error: metadataError } = await supabase
+      .from("social_accounts")
+      .update({ metadata: nextMetadata })
+      .eq("id", socialAccountId);
+    if (metadataError) {
+      throw new ValidationError(metadataError.message);
+    }
+
+    await enqueueInboxJob({
+      workspaceId: job.workspaceId,
+      socialAccountId,
+      runAfter: new Date(Date.now() + INBOX_POLL_INTERVAL_MS).toISOString(),
+    });
+
+    await finishJob(job, userId, {
+      status: "SUCCESS",
+      result: ingested,
+      activity: "INBOX_EVENT_CREATED",
+      metadata: ingested,
+    });
+  } catch (caught) {
+    await failOrRetry(job, userId, caught);
+  }
+}
+
 async function takeAdapterRate(accountId: string, adapter: SocialAdapter): Promise<void> {
   const supabase = await createClient();
   const limiter = new AccountRateLimiter(async ({ accountId: rateAccountId, windowStart, maxActions }) => {
@@ -566,7 +644,9 @@ async function finishJob(
       | "POST_PUBLISHED"
       | "POST_FAILED"
       | "MONITORING_EVENT_CREATED"
-      | "MONITORING_FAILED";
+      | "MONITORING_FAILED"
+      | "INBOX_EVENT_CREATED"
+      | "INBOX_FAILED";
     error?: string;
     metadata?: Record<string, unknown>;
   },
@@ -645,7 +725,13 @@ async function failOrRetry(job: Job, userId: string | null, caught: unknown): Pr
           : undefined,
       result: { error: isAppError(caught) ? caught.code : "INTERNAL" },
       activity:
-        job.type === "PUBLISH" ? "POST_FAILED" : job.type === "MONITOR" ? "MONITORING_FAILED" : "CONTACT_ACTION_FAILED",
+        job.type === "PUBLISH"
+          ? "POST_FAILED"
+          : job.type === "MONITOR"
+            ? "MONITORING_FAILED"
+            : job.type === "INBOX"
+              ? "INBOX_FAILED"
+              : "CONTACT_ACTION_FAILED",
       error: message,
     });
     return;

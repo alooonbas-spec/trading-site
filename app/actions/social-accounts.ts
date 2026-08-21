@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { errorMessage } from "@/lib/errors";
-import { connectSocialAccount, disconnectSocialAccount, parsePlatform, refreshSocialAccountHealth, updateSocialAccountPublishDestination } from "@/services/social-accounts/account-service";
+import { connectSocialAccount, disconnectSocialAccount, parsePlatform, refreshSocialAccountHealth, startInboxPolling, updateSocialAccountPublishDestination } from "@/services/social-accounts/account-service";
 import { startOAuthConnect } from "@/services/social-accounts/oauth-service";
 import { createAccountGroup, deleteAccountGroup } from "@/services/social-accounts/group-service";
 import { normalizeTelegramChatId } from "@/social/telegram/adapter";
@@ -65,6 +65,19 @@ export async function updatePublishDestinationAction(
 
   revalidatePath(`/w/${workspaceId}/social-accounts`);
   return { error: null, success: "Publish destination saved" };
+}
+
+export async function startInboxPollingAction(workspaceId: string, accountId: string): Promise<ActionState> {
+  try {
+    const result = await startInboxPolling({ workspaceId, accountId });
+    revalidatePath(`/w/${workspaceId}/social-accounts`);
+    return {
+      error: null,
+      success: result.queued > 0 ? "Inbox polling queued" : "Inbox polling is already queued",
+    };
+  } catch (error) {
+    return { error: errorMessage(error, "Unable to start inbox polling"), success: null };
+  }
 }
 
 export async function startOAuthAction(workspaceId: string, platform: string): Promise<ActionState> {

@@ -9,6 +9,7 @@ export const INTERACTION_TYPES = [
   "RELATIONSHIP_CREATED",
   "RELATIONSHIP_UPDATED",
   "MERGE",
+  "REPLY",
 ] as const;
 
 export type InteractionType = (typeof INTERACTION_TYPES)[number];

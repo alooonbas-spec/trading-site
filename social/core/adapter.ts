@@ -8,6 +8,7 @@ export type SocialCapabilities = {
   publicCollection: boolean;
   contactActions: boolean;
   messaging: boolean;
+  inbox: boolean;
 };
 
 export type ConnectInput = {
@@ -112,6 +113,26 @@ export type ContactActionResult = {
   externalMessageId: string | null;
 };
 
+export type InboxInput = {
+  workspaceId: string;
+  socialAccountId: string;
+  cursor?: string | null;
+};
+
+export type InboxMessage = {
+  externalId: string;
+  externalProfileId: string;
+  username: string | null;
+  body: string;
+  url: string | null;
+  receivedAt: string | null;
+};
+
+export type InboxResult = {
+  messages: InboxMessage[];
+  cursor?: string | null;
+};
+
 export type TokenRefreshResult = {
   accessToken: string;
   refreshToken: string | null;
@@ -136,6 +157,7 @@ export interface SocialAdapter {
   collectPublicData(input: CollectInput): Promise<CollectResult>;
   publish(input: PublishInput): Promise<PublishResult>;
   monitor(input: MonitorInput): Promise<MonitorResult>;
+  collectInbox(input: InboxInput): Promise<InboxResult>;
   executeContactAction(input: ContactActionInput): Promise<ContactActionResult>;
   refreshTokens(): Promise<TokenRefreshResult>;
 }

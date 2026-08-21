@@ -8,6 +8,8 @@ import {
 } from "@/social/core/base-adapter";
 import type {
   ConnectResult,
+  InboxInput,
+  InboxResult,
   PublishInput,
   PublishResult,
   SocialAccountSnapshot,
@@ -15,6 +17,7 @@ import type {
   TokenRefreshResult,
 } from "@/social/core/adapter";
 import { INSTAGRAM_SCOPES, executeInstagramPublish, planInstagramPublish, resolveInstagramUserId } from "@/social/instagram/publish";
+import { collectInstagramInbox } from "@/social/instagram/inbox";
 import { resolveInstagramPublicProfile } from "@/social/instagram/public-profile";
 
 const INSTAGRAM_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize";
@@ -171,7 +174,7 @@ export class InstagramAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true };
+    return { publishing: true, inbox: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -183,6 +186,14 @@ export class InstagramAdapter extends BaseSocialAdapter {
     const plan = planInstagramPublish(input);
     const userId = await resolveInstagramUserId(token, this.context.metadata);
     return executeInstagramPublish(token, userId, plan);
+  }
+
+  async collectInbox(input: InboxInput): Promise<InboxResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Instagram account has no access token");
+    }
+    return collectInstagramInbox(token, this.context.metadata, input);
   }
 
   protected resolvePublicProfile(source: string) {

@@ -8,6 +8,8 @@ import {
 } from "@/social/core/base-adapter";
 import type {
   ConnectResult,
+  InboxInput,
+  InboxResult,
   PublishInput,
   PublishResult,
   SocialAccountSnapshot,
@@ -16,6 +18,7 @@ import type {
 } from "@/social/core/adapter";
 import { VK_SCOPES } from "@/social/vk/api";
 import { executeVkPublish, planVkPublish } from "@/social/vk/publish";
+import { collectVkInbox } from "@/social/vk/inbox";
 import { resolveVkPublicProfile } from "@/social/vk/public-profile";
 
 export { VK_SCOPES } from "@/social/vk/api";
@@ -207,7 +210,7 @@ export class VkAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true };
+    return { publishing: true, inbox: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -218,6 +221,14 @@ export class VkAdapter extends BaseSocialAdapter {
 
     const plan = planVkPublish(input);
     return executeVkPublish(token, plan, this.context.metadata);
+  }
+
+  async collectInbox(input: InboxInput): Promise<InboxResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("VK account has no access token");
+    }
+    return collectVkInbox(token, this.context.metadata, input);
   }
 
   protected resolvePublicProfile(source: string) {
