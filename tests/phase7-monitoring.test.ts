@@ -132,7 +132,7 @@ describe("monitoring adapters", () => {
     expect(result.events).toHaveLength(1);
     expect(result.events[0]?.externalId).toBe("1");
     expect(result.events[0]?.author).toBe("@jack");
-    expect(result.cursor).toBe("2");
+    expect(result.cursor).toBe("pages:done|tweets:2");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

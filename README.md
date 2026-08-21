@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 47: Official VK `newsfeed.search` monitoring walks one `start_from` page per poll. No new SQL.
+PHASE 48: Official X recent search monitoring walks one `pagination_token` page per poll. No new SQL.

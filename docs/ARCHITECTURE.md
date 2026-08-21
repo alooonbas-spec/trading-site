@@ -299,6 +299,10 @@ X mentions (`GET /2/users/:id/mentions`) and Direct Messages (`GET /2/dm_events`
 
 VK `newsfeed.search` follows official `next_from` as `start_from`. Each poll still reads the latest 30 posts with `extended=1`. `start_time` still comes from the unix `time` watermark (legacy 10-digit cursors stay the time watermark). If `next_from` exists, the next poll requests that page once. Opaque `start_from` values are stored base64url-encoded in `pages`. A short page stores `pages:done`. Extra-page posts are not dropped by the `time` watermark on first sight. `start_from` is omitted when it is not set.
 
+## X recent search paging (PHASE 48)
+
+X monitoring (`GET /2/tweets/search/recent`) follows official `meta.next_token` as `pagination_token`. Each poll still reads the latest page (`max_results=10`). `since_id` still comes from the `tweets` watermark (legacy numeric cursors stay the tweets watermark). If a next token exists, the next poll requests that page once on the same constructed endpoint. Opaque tokens are stored base64url-encoded in `pages`. A short page stores `pages:done`. Extra-page tweets are not dropped by the `tweets` watermark on first sight. Collectors set `pagination_token=` and do not treat `next_token` as a fetch URL.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
