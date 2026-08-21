@@ -136,6 +136,7 @@ const VK_MENTIONS_COUNT = "20";
 const VK_PHOTO_COMMENT_COUNT = "50";
 const VK_VIDEO_COUNT = "10";
 const VK_VIDEO_COMMENT_COUNT = "50";
+const VK_VIDEO_THREAD_COUNT = "10";
 const VK_CHAT_PEER_FLOOR = 2_000_000_000;
 
 type VkOffsetPage = number | "done";
@@ -382,7 +383,7 @@ async function collectVkWallCommentInbox(
       photoOffset === null
         ? Promise.resolve(emptyVkMentionPage(true))
         : collectVkPhotoComments(accessToken, photoOffset),
-      collectVkVideoComments(accessToken, videoPage.page, videocommentsPage.page),
+      collectVkVideoComments(accessToken, videoPage.page, videocommentsPage.page, named.videothreads),
     ]);
   return {
     messages: [
@@ -411,6 +412,7 @@ async function collectVkWallCommentInbox(
         laterDigitId(named.video, newestVkCommentUnix([...videoComments.latest, ...videoComments.older])) ?? "",
       videocomments: nextVkOffsetCursor(videocommentsPage.page, videoComments.commentsReachedEnd),
       videos: nextVkOffsetCursor(videoPage.page, videoComments.reachedEnd),
+      videothreads: videoComments.videothreads,
       wall: nextVkOffsetCursor(parsed.wallPage, wallComments.reachedEnd),
       wallcomments: nextVkOffsetCursor(parsed.wallcommentsPage, wallComments.commentsReachedEnd),
       wallthreads: wallComments.wallthreads,
@@ -506,11 +508,13 @@ async function collectVkVideoComments(
   accessToken: string,
   videoPage: VkOffsetPage,
   videocommentsPage: VkOffsetPage,
+  videothreadsStored?: string,
 ): Promise<{
   latest: InboxMessage[];
   older: InboxMessage[];
   reachedEnd: boolean;
   commentsReachedEnd: boolean;
+  videothreads: string;
 }> {
   const videoOffset =
     videoPage !== 0 && videoPage !== "done" ? videoPage * Number(VK_VIDEO_COUNT) : null;
@@ -532,11 +536,26 @@ async function collectVkVideoComments(
       ? Promise.resolve(emptyVkCommentPage(true))
       : collectVkCommentsForVideos(accessToken, commentVideos, commentOffset),
   ]);
+  const storedThreads = decodeVkThreadMap(videothreadsStored);
+  const extraThreads =
+    storedThreads === null
+      ? { messages: [] as InboxMessage[], nextAfters: {} as VkThreadMap, fetchedIds: [] as string[] }
+      : await collectVkVideoThreads(accessToken, storedThreads);
   return {
     latest: latest.messages,
-    older: uniqueInboxMessages([...olderVideo.messages, ...olderComments.messages]),
+    older: uniqueInboxMessages([...olderVideo.messages, ...olderComments.messages, ...extraThreads.messages]),
     reachedEnd: olderVideos.reachedEnd,
     commentsReachedEnd: olderComments.reachedEnd,
+    videothreads: nextVkThreadCursor({
+      stored: videothreadsStored,
+      nestedAfters: {
+        ...latest.nestedAfters,
+        ...olderVideo.nestedAfters,
+        ...olderComments.nestedAfters,
+      },
+      fetchedNextAfters: extraThreads.nextAfters,
+      fetchedIds: extraThreads.fetchedIds,
+    }),
   };
 }
 
@@ -569,9 +588,10 @@ async function collectVkCommentsForVideos(
   accessToken: string,
   videos: VkVideo[],
   offset: number,
-): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean; nestedAfters: VkThreadMap }> {
   const pageSize = Number(VK_VIDEO_COMMENT_COUNT);
   const messages: InboxMessage[] = [];
+  const nestedAfters: VkThreadMap = {};
   let reachedEnd = true;
   for (const video of videos) {
     const ownerId = video.owner_id;
@@ -584,6 +604,7 @@ async function collectVkCommentsForVideos(
       video_id: String(video.id),
       count: VK_VIDEO_COMMENT_COUNT,
       sort: "desc",
+      thread_items_count: VK_VIDEO_THREAD_COUNT,
     };
     if (offset > 0) {
       params.offset = String(offset);
@@ -596,23 +617,109 @@ async function collectVkCommentsForVideos(
     if ((comments.data.items ?? []).length >= pageSize) {
       reachedEnd = false;
     }
-    for (const comment of comments.data.items ?? []) {
-      const text = comment.text?.trim();
-      if (!text || comment.from_id === undefined || comment.from_id === ownerId) {
-        continue;
+    const parsed = vkVideoCommentsToInbox(comments.data.items ?? [], ownerId, video.id);
+    messages.push(...parsed.messages);
+    Object.assign(nestedAfters, parsed.nestedAfters);
+  }
+  return { messages, reachedEnd: videos.length === 0 ? true : reachedEnd, nestedAfters };
+}
+
+function vkVideoCommentsToInbox(
+  comments: Array<{
+    id: number;
+    from_id?: number;
+    text?: string;
+    date?: number;
+    thread?: { count?: number; items?: Array<{ id: number; from_id?: number; text?: string; date?: number }> };
+  }>,
+  ownerId: number,
+  videoId: number,
+): { messages: InboxMessage[]; nestedAfters: VkThreadMap } {
+  const messages: InboxMessage[] = [];
+  const nestedAfters: VkThreadMap = {};
+  for (const comment of comments) {
+    const message = vkVideoCommentMessage(comment, ownerId, videoId);
+    if (message) {
+      messages.push(message);
+    }
+    const threadItems = comment.thread?.items ?? [];
+    for (const reply of threadItems) {
+      const nested = vkVideoCommentMessage(reply, ownerId, videoId);
+      if (nested) {
+        messages.push(nested);
       }
-      messages.push({
-        externalId: `video:${ownerId}:${video.id}:${comment.id}`,
-        externalProfileId: String(comment.from_id),
-        username: null,
-        body: text,
-        url: `https://vk.com/video${ownerId}_${video.id}?reply=${comment.id}`,
-        receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
-        replyKind: "comment",
-      });
+    }
+    if ((comment.thread?.count ?? 0) > threadItems.length) {
+      nestedAfters[`${ownerId}_${videoId}_${comment.id}`] = "1";
     }
   }
-  return { messages, reachedEnd: videos.length === 0 ? true : reachedEnd };
+  return { messages, nestedAfters };
+}
+
+function vkVideoCommentMessage(
+  comment: { id: number; from_id?: number; text?: string; date?: number },
+  ownerId: number,
+  videoId: number,
+): InboxMessage | null {
+  const text = comment.text?.trim();
+  if (!text || comment.from_id === undefined || comment.from_id === ownerId) {
+    return null;
+  }
+  return {
+    externalId: `video:${ownerId}:${videoId}:${comment.id}`,
+    externalProfileId: String(comment.from_id),
+    username: null,
+    body: text,
+    url: `https://vk.com/video${ownerId}_${videoId}?reply=${comment.id}`,
+    receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
+    replyKind: "comment",
+  };
+}
+
+async function collectVkVideoThreads(
+  accessToken: string,
+  stored: VkThreadMap,
+): Promise<{ messages: InboxMessage[]; nextAfters: VkThreadMap; fetchedIds: string[] }> {
+  const pageSize = Number(VK_VIDEO_THREAD_COUNT);
+  const messages: InboxMessage[] = [];
+  const nextAfters: VkThreadMap = {};
+  const fetchedIds: string[] = [];
+  for (const id of Object.keys(stored).slice(0, VK_THREAD_FETCH_LIMIT)) {
+    const ref = parseVkThreadId(id);
+    const page = Number(stored[id]);
+    if (!ref || !Number.isInteger(page) || page < 1) {
+      continue;
+    }
+    fetchedIds.push(id);
+    const params: Record<string, string> = {
+      access_token: accessToken,
+      owner_id: ref.ownerId,
+      video_id: ref.postId,
+      comment_id: ref.commentId,
+      count: VK_VIDEO_THREAD_COUNT,
+      sort: "desc",
+      offset: String(page * pageSize),
+    };
+    const commentsPayload = await vkCall("video.getComments", params);
+    const comments = wallCommentsSchema.safeParse(commentsPayload);
+    if (!comments.success) {
+      throw new SocialError("VK video.getComments returned an unexpected payload");
+    }
+    const rawItems = comments.data.items ?? [];
+    if (rawItems.length >= pageSize) {
+      nextAfters[id] = String(page + 1);
+    }
+    for (const comment of rawItems) {
+      if (comment.id === Number(ref.commentId)) {
+        continue;
+      }
+      const message = vkVideoCommentMessage(comment, Number(ref.ownerId), Number(ref.postId));
+      if (message) {
+        messages.push(message);
+      }
+    }
+  }
+  return { messages, nextAfters, fetchedIds };
 }
 
 async function collectVkWallComments(

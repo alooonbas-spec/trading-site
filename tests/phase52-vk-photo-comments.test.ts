@@ -88,7 +88,7 @@ describe("PHASE 52 VK photos.getAllComments", () => {
         replyKind: "comment",
       },
     ]);
-    expect(first.cursor).toBe("mentionpages:1|photocomments:1|photos:1710000200|videocomments:1|videos:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(first.cursor).toBe("mentionpages:1|photocomments:1|photos:1710000200|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toHaveLength(1);
@@ -99,7 +99,7 @@ describe("PHASE 52 VK photos.getAllComments", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `photo:${item.pid}:${item.id}`));
-    expect(second.cursor).toBe("mentionpages:done|photocomments:2|photos:1710000200|videocomments:done|videos:done|wall:done|wallcomments:done|wallthreads:done");
+    expect(second.cursor).toBe("mentionpages:done|photocomments:2|photos:1710000200|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toHaveLength(3);
@@ -140,7 +140,7 @@ describe("PHASE 52 VK photos.getAllComments", () => {
       cursor: "photocomments:done|photos:1710000000",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["photo:9:81"]);
-    expect(result.cursor).toBe("mentionpages:1|photocomments:done|photos:1710000081|videocomments:1|videos:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("mentionpages:1|photocomments:done|photos:1710000081|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toHaveLength(1);

@@ -327,6 +327,10 @@ User OAuth inbox calls official `video.get` (count 10, Added album) then `video.
 
 `wall.getComments` requests official `thread_items_count=10` so each top-level comment includes its first nested replies. Nested replies use the same `{owner}:{post}:{comment}` ids and `wall.createComment` reply path as top-level comments. If `thread.count` is greater than the nested items returned, the next poll requests `wall.getComments` with `comment_id` of that parent (`count=10`, `sort=desc`, `offset = page * 10`). Opaque parent keys are stored base64url-encoded in `wallthreads` (at most 20). A short extra thread page drops that parent. An empty map stores `wallthreads:done` and later polls stay done. Extra thread pages are not dropped by the unix comments watermark. User OAuth and community wall collectors share this walker. Collectors still do not invent a separate thread API.
 
+## VK video comment threads (PHASE 55)
+
+`video.getComments` requests official `thread_items_count=10` so each top-level video comment includes its first nested replies. Nested replies use the same `video:{owner}:{videoId}:{comment}` ids and `video.createComment` reply path. If `thread.count` is greater than the nested items returned, the next poll requests `video.getComments` with `comment_id` of that parent (`count=10`, `sort=desc`, `offset = page * 10`). Parent keys are stored base64url-encoded in `videothreads` (at most 20). An empty map stores `videothreads:done` and later polls stay done. Extra video thread pages are not dropped by the unix `video` watermark. Community tokens skip these methods. No new VK OAuth scope.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
