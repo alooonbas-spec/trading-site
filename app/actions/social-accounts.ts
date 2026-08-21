@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { errorMessage } from "@/lib/errors";
-import { connectSocialAccount, disconnectSocialAccount, parsePlatform, refreshSocialAccountHealth } from "@/services/social-accounts/account-service";
+import { connectSocialAccount, disconnectSocialAccount, parsePlatform, refreshSocialAccountHealth, updateSocialAccountPublishDestination } from "@/services/social-accounts/account-service";
 import { startOAuthConnect } from "@/services/social-accounts/oauth-service";
 import { createAccountGroup, deleteAccountGroup } from "@/services/social-accounts/group-service";
 import { normalizeTelegramChatId } from "@/social/telegram/adapter";
@@ -34,6 +34,37 @@ export async function connectTelegramAction(
 
   revalidatePath(`/w/${workspaceId}/social-accounts`);
   return { error: null, success: "Telegram account connected" };
+}
+
+export async function updatePublishDestinationAction(
+  workspaceId: string,
+  accountId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const destination: Record<string, string> = {};
+    const pageId = formData.get("pageId");
+    const publishOwnerId = formData.get("publishOwnerId");
+    const publishChatId = formData.get("publishChatId");
+    if (typeof pageId === "string") {
+      destination.pageId = pageId;
+    }
+    if (typeof publishOwnerId === "string") {
+      destination.publishOwnerId = publishOwnerId;
+    }
+    if (typeof publishChatId === "string") {
+      destination.publishChatId = publishChatId.trim()
+        ? normalizeTelegramChatId(publishChatId)
+        : "";
+    }
+    await updateSocialAccountPublishDestination({ workspaceId, accountId, destination });
+  } catch (error) {
+    return { error: errorMessage(error, "Unable to update publish destination"), success: null };
+  }
+
+  revalidatePath(`/w/${workspaceId}/social-accounts`);
+  return { error: null, success: "Publish destination saved" };
 }
 
 export async function startOAuthAction(workspaceId: string, platform: string): Promise<ActionState> {

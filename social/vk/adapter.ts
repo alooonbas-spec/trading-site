@@ -6,8 +6,19 @@ import {
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot, TokenRefreshResult } from "@/social/core/adapter";
+import type {
+  ConnectResult,
+  PublishInput,
+  PublishResult,
+  SocialAccountSnapshot,
+  SocialCapabilities,
+  TokenRefreshResult,
+} from "@/social/core/adapter";
+import { VK_SCOPES } from "@/social/vk/api";
+import { executeVkPublish, planVkPublish } from "@/social/vk/publish";
 import { resolveVkPublicProfile } from "@/social/vk/public-profile";
+
+export { VK_SCOPES } from "@/social/vk/api";
 
 const VK_AUTHORIZE_URL = "https://id.vk.ru/authorize";
 const VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth";
@@ -51,7 +62,7 @@ export function buildVkAuthorizationUrl(input: OAuthBeginInput): string {
     state: input.state,
     code_challenge: input.codeChallenge,
     code_challenge_method: "S256",
-    scope: "vkid.personal_info",
+    scope: VK_SCOPES,
   });
 
   return `${VK_AUTHORIZE_URL}?${params.toString()}`;
@@ -111,7 +122,7 @@ export class VkAdapter extends BaseSocialAdapter {
       username: profile.username,
       displayName: profile.displayName,
       avatarUrl: profile.avatarUrl,
-      scopes: token.scope ? token.scope.split(/\s+/) : ["vkid.personal_info"],
+      scopes: token.scope ? token.scope.split(/\s+/) : VK_SCOPES.split(/\s+/),
       accessToken: token.access_token,
       refreshToken: token.refresh_token ?? null,
       tokenExpiresAt: expiresAt,
@@ -193,6 +204,20 @@ export class VkAdapter extends BaseSocialAdapter {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
     });
+  }
+
+  protected extraCapabilities(): Partial<SocialCapabilities> {
+    return { publishing: true };
+  }
+
+  async publish(input: PublishInput): Promise<PublishResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("VK account has no access token");
+    }
+
+    const plan = planVkPublish(input);
+    return executeVkPublish(token, plan, this.context.metadata);
   }
 
   protected resolvePublicProfile(source: string) {

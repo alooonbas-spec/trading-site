@@ -6,7 +6,15 @@ import {
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot, TokenRefreshResult } from "@/social/core/adapter";
+import type {
+  ConnectResult,
+  PublishInput,
+  PublishResult,
+  SocialAccountSnapshot,
+  SocialCapabilities,
+  TokenRefreshResult,
+} from "@/social/core/adapter";
+import { INSTAGRAM_SCOPES, executeInstagramPublish, planInstagramPublish, resolveInstagramUserId } from "@/social/instagram/publish";
 import { resolveInstagramPublicProfile } from "@/social/instagram/public-profile";
 
 const INSTAGRAM_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize";
@@ -14,7 +22,8 @@ const INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const INSTAGRAM_LONG_LIVED_URL = "https://graph.instagram.com/access_token";
 const INSTAGRAM_REFRESH_URL = "https://graph.instagram.com/refresh_access_token";
 const INSTAGRAM_ME_URL = "https://graph.instagram.com/me";
-const INSTAGRAM_SCOPES = "instagram_business_basic";
+
+export { INSTAGRAM_SCOPES } from "@/social/instagram/publish";
 
 type InstagramShortLivedResponse = {
   access_token?: string;
@@ -114,10 +123,11 @@ export class InstagramAdapter extends BaseSocialAdapter {
 
     return {
       ...profile,
-      scopes: shortLived.permissions ?? [INSTAGRAM_SCOPES],
+      scopes: shortLived.permissions ?? INSTAGRAM_SCOPES.split(","),
       accessToken,
       refreshToken: null,
       tokenExpiresAt: expiresAt,
+      metadata: { instagramUserId: profile.externalAccountId },
     };
   }
 
@@ -158,6 +168,21 @@ export class InstagramAdapter extends BaseSocialAdapter {
           ? new Date(Date.now() + refreshed.expires_in * 1000).toISOString()
           : null,
     };
+  }
+
+  protected extraCapabilities(): Partial<SocialCapabilities> {
+    return { publishing: true };
+  }
+
+  async publish(input: PublishInput): Promise<PublishResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Instagram account has no access token");
+    }
+
+    const plan = planInstagramPublish(input);
+    const userId = await resolveInstagramUserId(token, this.context.metadata);
+    return executeInstagramPublish(token, userId, plan);
   }
 
   protected resolvePublicProfile(source: string) {

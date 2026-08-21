@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UnsupportedActionError } from "@/lib/errors";
 import { canCancelPost, canDeletePost, canPublishPost, rollupPostStatus } from "@/lib/posts/status";
 import { createPostSchema, parseMediaList } from "@/lib/validation/post";
 import { getSocialAdapter } from "@/social/core/registry";
@@ -58,15 +57,16 @@ describe("publishing adapters", () => {
     vi.unstubAllGlobals();
   });
 
-  it("enables X and Telegram text publishing and keeps VK disabled", async () => {
+  it("enables official publishing on every platform and keeps VK contact disabled", async () => {
     expect((await getSocialAdapter("x").getCapabilities()).publishing).toBe(true);
     expect((await getSocialAdapter("telegram").getCapabilities()).publishing).toBe(true);
     expect((await getSocialAdapter("telegram").getCapabilities()).contactActions).toBe(true);
-    expect((await getSocialAdapter("vk").getCapabilities()).publishing).toBe(false);
+    expect((await getSocialAdapter("vk").getCapabilities()).publishing).toBe(true);
+    expect((await getSocialAdapter("facebook").getCapabilities()).publishing).toBe(true);
+    expect((await getSocialAdapter("instagram").getCapabilities()).publishing).toBe(true);
     expect((await getSocialAdapter("vk").getCapabilities()).contactActions).toBe(false);
-    await expect(
-      getSocialAdapter("vk").publish({ workspaceId: "w", socialAccountId: "a", body: "hi", media: [] }),
-    ).rejects.toBeInstanceOf(UnsupportedActionError);
+    expect((await getSocialAdapter("facebook").getCapabilities()).contactActions).toBe(false);
+    expect((await getSocialAdapter("instagram").getCapabilities()).contactActions).toBe(false);
   });
 
   it("posts X text through the official tweets endpoint", async () => {
@@ -93,7 +93,7 @@ describe("publishing adapters", () => {
     process.env.TINYFISH_API_KEY = "test-key";
     const capabilities = await getSocialAdapter("vk").getCapabilities();
     expect(capabilities.publicCollection).toBe(true);
-    expect(capabilities.publishing).toBe(false);
+    expect(capabilities.publishing).toBe(true);
     expect(capabilities.monitoring).toBe(true);
     expect(capabilities.contactActions).toBe(false);
   });

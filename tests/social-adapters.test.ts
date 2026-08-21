@@ -29,16 +29,13 @@ describe("PHASE 2 adapter capabilities", () => {
     delete process.env.TINYFISH_API_KEY;
   });
 
-  it("keeps VK publish and contact actions disabled", async () => {
+  it("keeps VK contact actions disabled while official publishing is enabled", async () => {
     const adapter = getSocialAdapter("vk");
     const capabilities = await adapter.getCapabilities();
-    expect(capabilities.publishing).toBe(false);
+    expect(capabilities.publishing).toBe(true);
     expect(capabilities.contactActions).toBe(false);
     expect(capabilities.publicCollection).toBe(false);
     expect(capabilities.monitoring).toBe(false);
-    await expect(
-      adapter.publish({ workspaceId: "w", socialAccountId: "a", body: "hi", media: [] }),
-    ).rejects.toBeInstanceOf(UnsupportedActionError);
     await expect(
       adapter.monitor({ workspaceId: "w", socialAccountId: null, keywords: ["hello"], sources: [] }),
     ).rejects.toBeInstanceOf(UnsupportedActionError);
@@ -67,7 +64,7 @@ describe("PHASE 2 adapter capabilities", () => {
     const capabilities = await adapter.getCapabilities();
     expect(capabilities.publicCollection).toBe(true);
     expect(capabilities.contactActions).toBe(false);
-    expect(capabilities.publishing).toBe(false);
+    expect(capabilities.publishing).toBe(true);
     expect(capabilities.monitoring).toBe(true);
   });
 });
@@ -100,6 +97,8 @@ describe("OAuth URL builders", () => {
     expect(
       buildXAuthorizationUrl({ ...input, redirectUri: "http://localhost:3000/api/social/x/callback" }),
     ).toContain("media.write");
+    expect(buildVkAuthorizationUrl(input)).toContain("wall");
+    expect(buildVkAuthorizationUrl(input)).toContain("photos");
     expect(
       buildFacebookAuthorizationUrl({
         ...input,
@@ -107,11 +106,23 @@ describe("OAuth URL builders", () => {
       }),
     ).toContain("https://www.facebook.com/v25.0/dialog/oauth?");
     expect(
+      buildFacebookAuthorizationUrl({
+        ...input,
+        redirectUri: "http://localhost:3000/api/social/facebook/callback",
+      }),
+    ).toContain("pages_manage_posts");
+    expect(
       buildInstagramAuthorizationUrl({
         ...input,
         redirectUri: "http://localhost:3000/api/social/instagram/callback",
       }),
     ).toContain("https://www.instagram.com/oauth/authorize?");
+    expect(
+      buildInstagramAuthorizationUrl({
+        ...input,
+        redirectUri: "http://localhost:3000/api/social/instagram/callback",
+      }),
+    ).toContain("instagram_business_content_publish");
   });
 
   it("refuses OAuth when platform credentials are missing", () => {

@@ -78,8 +78,7 @@ Safety policy:
 - A post has many `post_targets` (one per social account). Never assume 1 platform = 1 account.
 - Publish enqueues `PUBLISH` jobs onto the shared queue. Scheduling uses `jobs.run_after`, not adapter-native scheduling.
 - Workers skip cancelled posts, inoperable accounts, and already-published targets. They honor `AccountRateLimiter`.
-- `adapter.getCapabilities().publishing` decides whether `adapter.publish` runs. X text posts use official `POST https://api.x.com/2/tweets` with `tweet.write`. Other platforms throw `UnsupportedActionError` instead of fake success.
-- Post status (`DRAFT` / `SCHEDULED` / `PUBLISHING` / `PUBLISHED` / `PARTIAL` / `FAILED` / `CANCELLED`) is independent of JobStatus and CampaignStatus. `do_not_contact` is not on posts.
+- `adapter.getCapabilities().publishing` decides whether `adapter.publish` runs. Post status (`DRAFT` / `SCHEDULED` / `PUBLISHING` / `PUBLISHED` / `PARTIAL` / `FAILED` / `CANCELLED`) is independent of JobStatus and CampaignStatus. `do_not_contact` is not on posts.
 
 ## Monitoring (PHASE 7)
 
@@ -101,7 +100,7 @@ Safety policy:
 - `adapter.refreshTokens()` is the only place that talks to a platform token endpoint. Workers call `prepareAccountAdapter`, which refreshes expired tokens before CONTACT, PUBLISH, or MONITOR jobs.
 - X uses official `POST https://api.x.com/2/oauth2/token` with `grant_type=refresh_token`. Instagram uses `GET https://graph.instagram.com/refresh_access_token`. Facebook uses `fb_exchange_token`. VK uses `https://id.vk.ru/oauth2/auth`. Telegram bot tokens are not refreshable; missing refresh fails honestly.
 - Successful refreshes persist encrypted tokens and log `SOCIAL_ACCOUNT_TOKEN_REFRESHED`. If a provider omits a new refresh token, the previous encrypted refresh token is kept.
-- Telegram text publish and MESSAGE use official `sendMessage`. Publishing needs `metadata.publishChatId`. INVITE still throws `UnsupportedActionError`. VK, Facebook, and Instagram contact/publish stay disabled.
+- Telegram text publish and MESSAGE use official `sendMessage`. Publishing needs `metadata.publishChatId`. INVITE still throws `UnsupportedActionError`. Facebook, Instagram, and VK contact actions stay disabled.
 
 ## Background worker (PHASE 10)
 
@@ -115,7 +114,14 @@ Safety policy:
 
 - Telegram publishes image, GIF, video, PDF, and ZIP URLs through official `sendPhoto` / `sendAnimation` / `sendVideo` / `sendDocument` / `sendMediaGroup`. Telegram fetches the public URL. Local and private hosts are rejected.
 - X downloads public media, then uses official `POST https://api.x.com/2/media/upload/initialize`, `/append`, and `/finalize` with `media.write`, and attaches `media.media_ids` on `POST https://api.x.com/2/tweets`. Existing X accounts must reconnect to grant `media.write`.
-- Mixed types, private IPs, and VK/Facebook/Instagram media fail honestly. The worker still does not branch on `platform ===`.
+- Mixed types, private IPs, and unsupported document URLs fail honestly. The worker still does not branch on `platform ===`.
+
+## Facebook, Instagram, and VK publishing (PHASE 12)
+
+- Facebook publishes through a Page access token from official `GET /me/accounts`, then `POST /{page-id}/feed`, `/{page-id}/photos`, or `/{page-id}/videos`. OAuth now requests `pages_manage_posts`. Multiple Pages require `metadata.pageId`.
+- Instagram uses Instagram API with Instagram Login: `POST /{ig-user-id}/media` and `/{ig-user-id}/media_publish` with `instagram_business_content_publish`. Text-only posts are rejected. Images must be jpeg/png; Reels must be mp4.
+- VK uses official `wall.post`. Photos go through `photos.getWallUploadServer` → upload → `photos.saveWallPhoto`. OAuth now requests `wall photos offline`. Optional `metadata.publishOwnerId` targets a community wall.
+- Existing Facebook, Instagram, and VK accounts must reconnect to grant the new scopes. Contact actions on these platforms stay `UnsupportedActionError`. App Review still applies; tester/admin tokens work before review.
 
 ## Social adapters (PHASE 2)
 

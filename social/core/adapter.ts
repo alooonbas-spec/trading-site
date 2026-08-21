@@ -34,6 +34,7 @@ export type ConnectResult = {
   accessToken: string;
   refreshToken: string | null;
   tokenExpiresAt: string | null;
+  metadata?: Record<string, unknown>;
 };
 
 export type SocialAccountSnapshot = {

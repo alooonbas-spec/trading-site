@@ -18,6 +18,7 @@ import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import type { SocialAccountHealth, SocialAccountPublic } from "@/types/social-account";
 import type { SocialPlatform } from "@/types/social";
 import { SOCIAL_PLATFORMS } from "@/types/social";
+import { isPublishDestinationKey } from "@/lib/social/publish-destination";
 import { countJobsByAccount } from "@/services/jobs/worker-service";
 
 function isSocialPlatform(value: string): value is SocialPlatform {
@@ -56,6 +57,18 @@ export async function connectSocialAccount(input: {
   const now = new Date().toISOString();
 
   const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("social_accounts")
+    .select("metadata")
+    .eq("workspace_id", input.workspaceId)
+    .eq("platform", input.platform)
+    .eq("external_account_id", connected.externalAccountId)
+    .maybeSingle();
+  const existingMetadata =
+    existing?.metadata && typeof existing.metadata === "object" && !Array.isArray(existing.metadata)
+      ? existing.metadata
+      : {};
+
   const { data, error } = await supabase
     .from("social_accounts")
     .upsert(
@@ -71,7 +84,11 @@ export async function connectSocialAccount(input: {
         refresh_token_encrypted: encrypted.refresh_token_encrypted,
         token_expires_at: encrypted.token_expires_at,
         scopes: connected.scopes,
-        metadata: input.metadata ?? {},
+        metadata: {
+          ...existingMetadata,
+          ...(connected.metadata ?? {}),
+          ...(input.metadata ?? {}),
+        },
         last_sync_at: now,
         last_error: null,
         last_error_at: null,
@@ -95,6 +112,62 @@ export async function connectSocialAccount(input: {
     entityType: "social_account",
     entityId: data.id,
   });
+
+  return toPublicSocialAccount(data);
+}
+
+export async function updateSocialAccountPublishDestination(input: {
+  workspaceId: string;
+  accountId: string;
+  destination: Record<string, string>;
+}): Promise<SocialAccountPublic> {
+  const context = await requireWorkspaceContext(input.workspaceId);
+  if (!canManageAccounts(context.role)) {
+    throw new PermissionError("Only owners and admins can update social accounts");
+  }
+
+  for (const key of Object.keys(input.destination)) {
+    if (!isPublishDestinationKey(key)) {
+      throw new ValidationError("Unsupported publish destination field");
+    }
+  }
+
+  const supabase = await createClient();
+  const { data: current, error: currentError } = await supabase
+    .from("social_accounts")
+    .select("id, metadata")
+    .eq("id", input.accountId)
+    .eq("workspace_id", input.workspaceId)
+    .maybeSingle();
+
+  if (currentError || !current) {
+    throw new ValidationError(currentError?.message ?? "Social account not found");
+  }
+
+  const metadata: Record<string, unknown> =
+    current.metadata && typeof current.metadata === "object" && !Array.isArray(current.metadata)
+      ? { ...current.metadata }
+      : {};
+
+  for (const [key, value] of Object.entries(input.destination)) {
+    const trimmed = value.trim();
+    if (trimmed) {
+      metadata[key] = trimmed;
+    } else {
+      delete metadata[key];
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("social_accounts")
+    .update({ metadata })
+    .eq("id", input.accountId)
+    .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
+    .single();
+
+  if (error || !data) {
+    throw new ValidationError(error?.message ?? "Unable to update publish destination");
+  }
 
   return toPublicSocialAccount(data);
 }

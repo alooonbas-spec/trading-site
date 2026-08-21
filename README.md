@@ -55,4 +55,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 11: official Telegram media send and X v2 chunked media upload.
+PHASE 12: official Facebook Page, Instagram, and VK publishing. Reconnect those accounts to grant publish scopes.

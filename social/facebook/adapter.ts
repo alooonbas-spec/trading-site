@@ -6,14 +6,26 @@ import {
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot, TokenRefreshResult } from "@/social/core/adapter";
+import type {
+  ConnectResult,
+  PublishInput,
+  PublishResult,
+  SocialAccountSnapshot,
+  SocialCapabilities,
+  TokenRefreshResult,
+} from "@/social/core/adapter";
+import {
+  FACEBOOK_AUTHORIZE_URL,
+  FACEBOOK_GRAPH_ORIGIN,
+  FACEBOOK_ME_URL,
+  FACEBOOK_SCOPES,
+  FACEBOOK_TOKEN_URL,
+} from "@/social/facebook/graph";
+import { facebookConnectMetadata, listFacebookPages, resolveFacebookPage } from "@/social/facebook/pages";
+import { executeFacebookPublish, planFacebookPublish } from "@/social/facebook/publish";
 import { resolveFacebookPublicProfile } from "@/social/facebook/public-profile";
 
-const FACEBOOK_GRAPH_VERSION = "v25.0";
-const FACEBOOK_AUTHORIZE_URL = `https://www.facebook.com/${FACEBOOK_GRAPH_VERSION}/dialog/oauth`;
-const FACEBOOK_TOKEN_URL = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/oauth/access_token`;
-const FACEBOOK_ME_URL = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/me`;
-const FACEBOOK_SCOPES = "pages_show_list,pages_read_engagement";
+export { FACEBOOK_SCOPES, FACEBOOK_GRAPH_ORIGIN, FACEBOOK_GRAPH_VERSION } from "@/social/facebook/graph";
 
 type FacebookTokenResponse = {
   access_token?: string;
@@ -86,6 +98,7 @@ export class FacebookAdapter extends BaseSocialAdapter {
     }
 
     const profile = await this.fetchMe(token.access_token);
+    const pages = await listFacebookPages(token.access_token);
     const expiresAt =
       typeof token.expires_in === "number"
         ? new Date(Date.now() + token.expires_in * 1000).toISOString()
@@ -97,6 +110,7 @@ export class FacebookAdapter extends BaseSocialAdapter {
       accessToken: token.access_token,
       refreshToken: null,
       tokenExpiresAt: expiresAt,
+      metadata: facebookConnectMetadata(pages),
     };
   }
 
@@ -147,9 +161,24 @@ export class FacebookAdapter extends BaseSocialAdapter {
       return;
     }
 
-    const url = new URL(`https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/me/permissions`);
+    const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/me/permissions`);
     url.searchParams.set("access_token", token);
     await socialFetch(url.toString(), { method: "DELETE" });
+  }
+
+  protected extraCapabilities(): Partial<SocialCapabilities> {
+    return { publishing: true };
+  }
+
+  async publish(input: PublishInput): Promise<PublishResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Facebook account has no access token");
+    }
+
+    const plan = planFacebookPublish(input);
+    const page = await resolveFacebookPage(token, this.context.metadata);
+    return executeFacebookPublish(page, plan);
   }
 
   protected resolvePublicProfile(source: string) {
