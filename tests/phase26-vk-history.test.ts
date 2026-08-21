@@ -93,7 +93,7 @@ describe("PHASE 26 VK community history collection", () => {
   it("skips already-seen history ids after the history marker is stored", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) => {
+      vi.fn(async (url: string, init?: RequestInit) => {
         const target = String(url);
         if (target === vkMethodUrl("wall.get")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
@@ -114,6 +114,11 @@ describe("PHASE 26 VK community history collection", () => {
           );
         }
         expect(target).toBe(vkMethodUrl("messages.getHistory"));
+        const body = String(init?.body ?? "");
+        if (body.includes("offset=50")) {
+          return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+        }
+        expect(body).not.toContain("offset=");
         return new Response(
           JSON.stringify({
             response: {
@@ -138,7 +143,7 @@ describe("PHASE 26 VK community history collection", () => {
       cursor: "comments:1710000000|history:1|messages:11",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["12"]);
-    expect(result.cursor).toBe("comments:1710000000|history:1|messages:12");
+    expect(result.cursor).toBe("comments:1710000000|history:done|messages:12");
   });
 
   it("does not call messages.getHistory for user OAuth wall-comment inbox", async () => {

@@ -65,16 +65,23 @@ describe("PHASE 23 VK community conversations", () => {
         replyKind: "direct_message",
       },
     ]);
-    expect(parseVkInboxCursor("1710000000")).toEqual({ comments: "1710000000", messages: null, history: false });
+    expect(parseVkInboxCursor("1710000000")).toEqual({
+      comments: "1710000000",
+      messages: null,
+      history: false,
+      historyPage: 0,
+    });
     expect(parseVkInboxCursor("comments:1710000000|messages:8")).toEqual({
       comments: "1710000000",
       messages: "8",
       history: false,
+      historyPage: 0,
     });
     expect(parseVkInboxCursor("comments:1710000000|history:1|messages:8")).toEqual({
       comments: "1710000000",
       messages: "8",
       history: true,
+      historyPage: 1,
     });
     expect(vkCommunityPeerId({ externalProfileId: "42", username: "@lead" })).toBe("42");
     expect(vkCommunityPeerId({ externalProfileId: "lead", username: "@lead" })).toBeNull();

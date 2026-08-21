@@ -251,6 +251,10 @@ Campaign, post, and monitoring rule pages filter their paginated job lists by `J
 
 Campaign, post, group, monitoring, inbox, jobs, activity, and lead-relationship account pickers search the newest 200 matching accounts (`searchPickerAccounts` / `listSocialAccountsPage`). Selected compose accounts stay checked across searches. Jobs/activity/inbox `accountQ` is a GET search; a selected account id still loads by id if it is outside the current page. Unbounded `listSocialAccounts` remains for workspace-wide inbox poll and account health. The picker never sends tokens to the client and does not rewrite `LeadStatus` or `do_not_contact`.
 
+## VK community history offset (PHASE 36)
+
+After the first 50-message window (`history:1`), each later inbox poll calls official `messages.getHistory` with `offset = page * 50` for the same 1:1 user peers. A full 50-item page advances `history:2`, `history:3`, and so on. A short page stores `history:done` and later polls only keep Direct Message ids after the messages watermark. This is still not a full archive: chat peers stay skipped, conversations are the latest 20 from `getConversations`, and user OAuth inbox is still wall comments only. Unique `(workspace, account, external_id)` still dedups.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

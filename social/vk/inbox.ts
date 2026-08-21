@@ -90,23 +90,37 @@ export function parseVkInboxCursor(cursor?: string | null): {
   comments: string | null;
   messages: string | null;
   history: boolean;
+  historyPage: number | "done";
 } {
   const value = cursor?.trim();
   if (!value) {
-    return { comments: null, messages: null, history: false };
+    return { comments: null, messages: null, history: false, historyPage: 0 };
   }
   if (isNamedInboxCursor(value)) {
     const named = parseNamedInboxCursor(value);
     return {
       comments: named.comments ?? null,
       messages: named.messages ?? null,
-      history: named.history === "1",
+      ...vkHistoryCursor(named.history),
     };
   }
   if (/^\d{10}$/.test(value)) {
-    return { comments: value, messages: null, history: false };
+    return { comments: value, messages: null, history: false, historyPage: 0 };
   }
-  return { comments: null, messages: null, history: false };
+  return { comments: null, messages: null, history: false, historyPage: 0 };
+}
+
+function vkHistoryCursor(value: string | undefined): {
+  history: boolean;
+  historyPage: number | "done";
+} {
+  if (value === "done") {
+    return { history: true, historyPage: "done" };
+  }
+  if (value && /^\d+$/.test(value) && value !== "0") {
+    return { history: true, historyPage: Number(value) };
+  }
+  return { history: false, historyPage: 0 };
 }
 
 export function parseVkCommunityConversations(
@@ -176,22 +190,38 @@ async function collectVkCommunityInbox(
 ): Promise<InboxResult> {
   const groupId = vkCommunityGroupId(metadata);
   const cursor = parseVkInboxCursor(input.cursor);
-  const [comments, directMessages] = await Promise.all([
+  const [comments, peers] = await Promise.all([
     collectVkWallComments(accessToken, metadata),
-    collectVkCommunityMessages(accessToken, groupId),
+    listVkCommunityUserPeers(accessToken, groupId),
   ]);
-  const newestMessageId = directMessages.reduce<string | null>(
+  const latestPage = await collectVkCommunityHistoryForPeers(accessToken, groupId, peers, 0);
+  const newestMessageId = latestPage.messages.reduce<string | null>(
     (newest, message) => laterDigitId(newest, message.externalId),
     null,
   );
-  const inboundMessages = cursor.history
-    ? directMessages.filter((message) => isDigitIdAfter(message.externalId, cursor.messages))
-    : directMessages;
+  const inboundLatest = cursor.history
+    ? latestPage.messages.filter((message) => isDigitIdAfter(message.externalId, cursor.messages))
+    : latestPage.messages;
+  let olderMessages: InboxMessage[] = [];
+  let reachedEnd = true;
+  if (cursor.historyPage !== 0 && cursor.historyPage !== "done") {
+    const olderPage = await collectVkCommunityHistoryForPeers(
+      accessToken,
+      groupId,
+      peers,
+      cursor.historyPage * Number(VK_COMMUNITY_HISTORY_COUNT),
+    );
+    olderMessages = olderPage.messages;
+    reachedEnd = olderPage.reachedEnd;
+  }
   return {
-    messages: [...filterMessagesAfterCursor(comments, cursor.comments), ...inboundMessages],
+    messages: [
+      ...filterMessagesAfterCursor(comments, cursor.comments),
+      ...uniqueInboxMessages([...inboundLatest, ...olderMessages]),
+    ],
     cursor: serializeNamedInboxCursor({
       comments: laterDigitId(cursor.comments, newestVkCommentUnix(comments)) ?? "",
-      history: "1",
+      history: nextVkHistoryCursor(cursor.historyPage, reachedEnd),
       messages: laterDigitId(cursor.messages, newestMessageId) ?? "",
     }),
   };
@@ -259,7 +289,10 @@ async function collectVkWallComments(
   return messages;
 }
 
-async function collectVkCommunityMessages(accessToken: string, groupId: string): Promise<InboxMessage[]> {
+async function listVkCommunityUserPeers(
+  accessToken: string,
+  groupId: string,
+): Promise<{ peerIds: number[]; seedProfiles: Map<number, { screen_name?: string }> }> {
   const payload = await vkCall("messages.getConversations", {
     access_token: accessToken,
     count: "20",
@@ -283,18 +316,39 @@ async function collectVkCommunityMessages(accessToken: string, groupId: string):
     seenPeers.add(peer.id);
     peerIds.push(peer.id);
   }
+  return { peerIds, seedProfiles };
+}
 
+async function collectVkCommunityHistoryForPeers(
+  accessToken: string,
+  groupId: string,
+  peers: { peerIds: number[]; seedProfiles: Map<number, { screen_name?: string }> },
+  offset: number,
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+  const pageSize = Number(VK_COMMUNITY_HISTORY_COUNT);
   const messages: InboxMessage[] = [];
   const seenIds = new Set<string>();
-  for (const peerId of peerIds) {
-    const historyPayload = await vkCall("messages.getHistory", {
+  let reachedEnd = true;
+  for (const peerId of peers.peerIds) {
+    const params: Record<string, string> = {
       access_token: accessToken,
       peer_id: String(peerId),
       count: VK_COMMUNITY_HISTORY_COUNT,
       extended: "1",
       group_id: groupId,
-    });
-    for (const message of parseVkCommunityHistory(historyPayload, groupId, seedProfiles)) {
+    };
+    if (offset > 0) {
+      params.offset = String(offset);
+    }
+    const historyPayload = await vkCall("messages.getHistory", params);
+    const parsedHistory = historySchema.safeParse(historyPayload);
+    if (!parsedHistory.success) {
+      throw new SocialError("VK messages.getHistory returned an unexpected payload");
+    }
+    if ((parsedHistory.data.items ?? []).length >= pageSize) {
+      reachedEnd = false;
+    }
+    for (const message of parseVkCommunityHistory(historyPayload, groupId, peers.seedProfiles)) {
       if (seenIds.has(message.externalId)) {
         continue;
       }
@@ -302,7 +356,33 @@ async function collectVkCommunityMessages(accessToken: string, groupId: string):
       messages.push(message);
     }
   }
-  return messages;
+  return { messages, reachedEnd: peers.peerIds.length === 0 ? true : reachedEnd };
+}
+
+function nextVkHistoryCursor(current: number | "done", reachedEnd: boolean): string {
+  if (current === "done") {
+    return "done";
+  }
+  if (current === 0) {
+    return "1";
+  }
+  if (reachedEnd) {
+    return "done";
+  }
+  return String(current + 1);
+}
+
+function uniqueInboxMessages(messages: InboxMessage[]): InboxMessage[] {
+  const seen = new Set<string>();
+  const unique: InboxMessage[] = [];
+  for (const message of messages) {
+    if (seen.has(message.externalId)) {
+      continue;
+    }
+    seen.add(message.externalId);
+    unique.push(message);
+  }
+  return unique;
 }
 
 function isVkUserPeer(peer: { id: number; type?: string }): boolean {
