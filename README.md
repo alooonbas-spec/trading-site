@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 34: Campaign, post, and monitoring rule detail job lists filter by JobStatus. Filter forms omit the jobs cursor so a new filter starts from the newest created_at keyset page. Retry still does not rewrite LeadStatus or do_not_contact. No new SQL.
+PHASE 35: Compose and filter account pickers search the newest 200 matching accounts instead of unbounded `listSocialAccounts`. Selected compose accounts stay checked across searches. Worker inbox poll and account health still use the unbounded list. No new SQL.

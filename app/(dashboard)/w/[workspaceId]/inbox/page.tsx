@@ -9,7 +9,7 @@ import {
 } from "@/lib/inbox/filters";
 import { INBOX_REPLY_KIND_LABELS } from "@/lib/inbox/reply-kind";
 import { searchPickerLeads } from "@/services/leads/lead-service";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { listSocialAccountsByIds, searchPickerAccounts } from "@/services/social-accounts/account-service";
 import { AttachInboxForm } from "@/components/inbox/attach-inbox-form";
 import { InboxControls } from "@/components/inbox/inbox-controls";
 import { InboxEventMeta } from "@/components/inbox/inbox-event-meta";
@@ -18,6 +18,11 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
 import { LEAD_PICKER_LIMIT_HINT, toPickerLead } from "@/lib/leads/picker";
+import {
+  ACCOUNT_PICKER_LIMIT_HINT,
+  toPickerAccount,
+  withSelectedPickerAccount,
+} from "@/lib/social-accounts/picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +51,7 @@ export default async function InboxPage({
     kind?: string;
     after?: string;
     leadQ?: string;
+    accountQ?: string;
   }>;
 }) {
   const { workspaceId } = await params;
@@ -57,7 +63,7 @@ export default async function InboxPage({
   const socialAccountId = parseInboxAccountIdFilter(query.account);
   const platform = parseInboxPlatformFilter(query.platform);
   const replyKind = parseInboxReplyKindFilter(query.kind);
-  const [inboxPage, picker, accounts] = await Promise.all([
+  const [inboxPage, picker, accountPicker, selectedAccounts] = await Promise.all([
     listInboxEvents({
       workspaceId,
       match,
@@ -68,10 +74,15 @@ export default async function InboxPage({
       after: query.after,
     }),
     canMutate ? searchPickerLeads(workspaceId, query.leadQ) : Promise.resolve({ items: [], hasMore: false }),
-    listSocialAccounts(workspaceId),
+    searchPickerAccounts(workspaceId, query.accountQ),
+    socialAccountId ? listSocialAccountsByIds(workspaceId, [socialAccountId]) : Promise.resolve([]),
   ]);
   const events = inboxPage.items;
   const leads = picker.items.map(toPickerLead);
+  const accounts = withSelectedPickerAccount(
+    accountPicker.items.map(toPickerAccount),
+    selectedAccounts[0] ? toPickerAccount(selectedAccounts[0]) : undefined,
+  );
   const filterQuery = {
     q: query.q,
     match: match === "all" ? undefined : match,
@@ -79,6 +90,7 @@ export default async function InboxPage({
     platform,
     kind: replyKind,
     leadQ: query.leadQ,
+    accountQ: query.accountQ,
   };
   const inboxPath = `/w/${workspaceId}/inbox`;
 
@@ -98,7 +110,7 @@ export default async function InboxPage({
         canManage={canManage}
         canMutate={canMutate}
       />
-      <form className="grid gap-2 md:grid-cols-2 xl:grid-cols-6" method="get">
+      <form className="grid gap-2 md:grid-cols-2 xl:grid-cols-7" method="get">
         {query.leadQ ? <input type="hidden" name="leadQ" value={query.leadQ} /> : null}
         <Input name="q" placeholder="Search sender or message" defaultValue={query.q ?? ""} />
         <select
@@ -124,6 +136,7 @@ export default async function InboxPage({
             </option>
           ))}
         </select>
+        <Input name="accountQ" placeholder="Find an account" defaultValue={query.accountQ ?? ""} />
         <select
           name="account"
           defaultValue={socialAccountId ?? ""}
@@ -153,11 +166,16 @@ export default async function InboxPage({
           Filter
         </Button>
       </form>
+      <p className="text-xs text-muted-foreground">
+        {ACCOUNT_PICKER_LIMIT_HINT}
+        {accountPicker.hasMore ? " More than 200 accounts match. Refine the search." : ""}
+      </p>
       {canMutate ? (
         <form className="grid gap-2 md:grid-cols-[1fr_auto]" method="get">
           {query.q ? <input type="hidden" name="q" value={query.q} /> : null}
           {match !== "all" ? <input type="hidden" name="match" value={match} /> : null}
           {socialAccountId ? <input type="hidden" name="account" value={socialAccountId} /> : null}
+          {query.accountQ ? <input type="hidden" name="accountQ" value={query.accountQ} /> : null}
           {platform ? <input type="hidden" name="platform" value={platform} /> : null}
           {replyKind ? <input type="hidden" name="kind" value={replyKind} /> : null}
           {query.after ? <input type="hidden" name="after" value={query.after} /> : null}

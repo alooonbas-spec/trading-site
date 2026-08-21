@@ -1,24 +1,25 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createPostAction, idleActionState } from "@/app/actions/posts";
 import { SocialAccountSelector } from "@/components/social-accounts/social-account-selector";
-import type { SocialAccountPublic } from "@/types/social-account";
+import type { PickerAccount } from "@/lib/social-accounts/picker";
 
 export function CreatePostForm({
   workspaceId,
-  accounts,
+  initialAccounts,
+  initialHasMore,
 }: {
   workspaceId: string;
-  accounts: SocialAccountPublic[];
+  initialAccounts: PickerAccount[];
+  initialHasMore: boolean;
 }) {
   const action = createPostAction.bind(null, workspaceId);
   const [state, formAction, pending] = useActionState(action, idleActionState);
-  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -42,9 +43,9 @@ export function CreatePostForm({
       <div className="space-y-2">
         <Label>Target accounts</Label>
         <SocialAccountSelector
-          accounts={accounts}
-          value={selectedAccounts}
-          onChange={setSelectedAccounts}
+          workspaceId={workspaceId}
+          initialAccounts={initialAccounts}
+          initialHasMore={initialHasMore}
           name="accountIds"
         />
       </div>

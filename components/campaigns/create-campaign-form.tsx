@@ -9,23 +9,24 @@ import { createCampaignAction, idleActionState } from "@/app/actions/campaigns";
 import { searchPickerLeadsAction, type PickerLeadState } from "@/app/actions/leads";
 import { CAMPAIGN_ACTIONS } from "@/types/campaign";
 import { LEAD_PICKER_LIMIT_HINT, type PickerLead } from "@/lib/leads/picker";
-import type { SocialAccountPublic } from "@/types/social-account";
+import type { PickerAccount } from "@/lib/social-accounts/picker";
 import { SocialAccountSelector } from "@/components/social-accounts/social-account-selector";
 
 export function CreateCampaignForm({
   workspaceId,
   initialLeads,
   initialHasMore,
-  accounts,
+  initialAccounts,
+  initialAccountsHasMore,
 }: {
   workspaceId: string;
   initialLeads: PickerLead[];
   initialHasMore: boolean;
-  accounts: SocialAccountPublic[];
+  initialAccounts: PickerAccount[];
+  initialAccountsHasMore: boolean;
 }) {
   const action = createCampaignAction.bind(null, workspaceId);
   const [state, formAction, pending] = useActionState(action, idleActionState);
-  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<PickerLead[]>([]);
   const [search, setSearch] = useState("");
   const initialPicker: PickerLeadState = {
@@ -160,9 +161,9 @@ export function CreateCampaignForm({
       <div className="space-y-2">
         <Label>Social accounts</Label>
         <SocialAccountSelector
-          accounts={accounts}
-          value={selectedAccounts}
-          onChange={setSelectedAccounts}
+          workspaceId={workspaceId}
+          initialAccounts={initialAccounts}
+          initialHasMore={initialAccountsHasMore}
           name="accountIds"
         />
       </div>

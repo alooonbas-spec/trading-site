@@ -3,11 +3,12 @@ import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
 import { listMonitoringRulesPage } from "@/services/monitoring/rule-service";
 import { parseMonitoringPlatformFilter, parseMonitoringStatusFilter } from "@/lib/monitoring/filters";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { searchPickerAccounts } from "@/services/social-accounts/account-service";
 import { CreateMonitoringRuleForm } from "@/components/monitoring/create-monitoring-rule-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
+import { toPickerAccount } from "@/lib/social-accounts/picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +38,7 @@ export default async function MonitoringPage({
   const platform = parseMonitoringPlatformFilter(query.platform);
   const [rulesPage, accounts] = await Promise.all([
     listMonitoringRulesPage(workspaceId, { after: query.after, status, platform }),
-    listSocialAccounts(workspaceId),
+    searchPickerAccounts(workspaceId, undefined, { platform: "x" }),
   ]);
   const rules = rulesPage.items;
   const monitoringPath = `/w/${workspaceId}/monitoring`;
@@ -91,7 +92,11 @@ export default async function MonitoringPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <CreateMonitoringRuleForm workspaceId={workspaceId} accounts={accounts} />
+            <CreateMonitoringRuleForm
+              workspaceId={workspaceId}
+              initialAccounts={accounts.items.map(toPickerAccount)}
+              initialHasMore={accounts.hasMore}
+            />
           </CardContent>
         </Card>
       ) : null}

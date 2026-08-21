@@ -1,7 +1,7 @@
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
 import { listWorkspaceJobs } from "@/services/jobs/query-service";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { listSocialAccountsByIds, searchPickerAccounts } from "@/services/social-accounts/account-service";
 import {
   parseJobAccountIdFilter,
   parseJobStatusFilter,
@@ -12,6 +12,7 @@ import { JobRowControls } from "@/components/jobs/job-row-controls";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
+import { ACCOUNT_PICKER_LIMIT_HINT, toPickerAccount, withSelectedPickerAccount } from "@/lib/social-accounts/picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 import { JOB_TYPES } from "@/types/campaign";
 import { JOB_STATUSES } from "@/types/status";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
@@ -32,7 +34,7 @@ export default async function JobsPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ type?: string; status?: string; account?: string; after?: string }>;
+  searchParams: Promise<{ type?: string; status?: string; account?: string; accountQ?: string; after?: string }>;
 }) {
   const { workspaceId } = await params;
   const query = await searchParams;
@@ -41,7 +43,7 @@ export default async function JobsPage({
   const type = parseJobTypeFilter(query.type);
   const status = parseJobStatusFilter(query.status);
   const socialAccountId = parseJobAccountIdFilter(query.account);
-  const [jobsPage, accounts] = await Promise.all([
+  const [jobsPage, picker, selectedAccounts] = await Promise.all([
     listWorkspaceJobs({
       workspaceId,
       type,
@@ -49,14 +51,20 @@ export default async function JobsPage({
       socialAccountId,
       after: query.after,
     }),
-    listSocialAccounts(workspaceId),
+    searchPickerAccounts(workspaceId, query.accountQ),
+    socialAccountId ? listSocialAccountsByIds(workspaceId, [socialAccountId]) : Promise.resolve([]),
   ]);
   const jobs = jobsPage.items;
+  const accounts = withSelectedPickerAccount(
+    picker.items.map(toPickerAccount),
+    selectedAccounts[0] ? toPickerAccount(selectedAccounts[0]) : undefined,
+  );
   const jobsPath = `/w/${workspaceId}/jobs`;
   const filterQuery = {
     type,
     status,
     account: socialAccountId,
+    accountQ: query.accountQ,
   };
 
   return (
@@ -69,7 +77,7 @@ export default async function JobsPage({
         </p>
       </div>
       <JobsQueueControls workspaceId={workspaceId} canMutate={canMutate} />
-      <form className="grid gap-2 md:grid-cols-2 xl:grid-cols-4" method="get">
+      <form className="grid gap-2 md:grid-cols-2 xl:grid-cols-5" method="get">
         <select
           name="type"
           defaultValue={type ?? ""}
@@ -94,6 +102,7 @@ export default async function JobsPage({
             </option>
           ))}
         </select>
+        <Input name="accountQ" placeholder="Find an account" defaultValue={query.accountQ ?? ""} />
         <select
           name="account"
           defaultValue={socialAccountId ?? ""}
@@ -111,6 +120,10 @@ export default async function JobsPage({
           Filter
         </Button>
       </form>
+      <p className="text-xs text-muted-foreground">
+        {ACCOUNT_PICKER_LIMIT_HINT}
+        {picker.hasMore ? " More than 200 accounts match. Refine the search." : ""}
+      </p>
       {jobs.length === 0 ? (
         <EmptyState
           title="No jobs match"

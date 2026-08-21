@@ -23,7 +23,7 @@ describe("social account index filters", () => {
 });
 
 describe("PHASE 33 social account pagination", () => {
-  it("pages account health with created_at keysets and keeps picker listSocialAccounts unbounded", () => {
+  it("pages account health with created_at keysets and keeps unbounded listSocialAccounts for workers", () => {
     const service = readFileSync("services/social-accounts/account-service.ts", "utf8");
     expect(unboundedListBody(service, "listSocialAccounts", "listSocialAccountsPage")).not.toContain(
       ".limit(",
@@ -40,7 +40,7 @@ describe("PHASE 33 social account pagination", () => {
   it("filters the Social Accounts page without loading picker accounts through the keyset", () => {
     const page = readFileSync("app/(dashboard)/w/[workspaceId]/social-accounts/page.tsx", "utf8");
     expect(page).toContain("listSocialAccountHealthPage");
-    expect(page).toContain("listSocialAccounts(workspaceId)");
+    expect(page).toContain("searchPickerAccounts");
     expect(page).toContain("ListPagination");
     expect(page).toContain("created_at keyset");
     expect(page).toContain('name="platform"');

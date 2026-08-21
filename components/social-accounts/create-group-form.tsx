@@ -1,26 +1,28 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SocialAccountSelector } from "@/components/social-accounts/social-account-selector";
 import { createGroupAction, idleActionState } from "@/app/actions/social-accounts";
-import type { AccountGroup, SocialAccountPublic } from "@/types/social-account";
+import type { AccountGroup } from "@/types/social-account";
+import type { PickerAccount } from "@/lib/social-accounts/picker";
 
 export function CreateGroupForm({
   workspaceId,
-  accounts,
+  initialAccounts,
+  initialHasMore,
   groups,
 }: {
   workspaceId: string;
-  accounts: SocialAccountPublic[];
+  initialAccounts: PickerAccount[];
+  initialHasMore: boolean;
   groups: AccountGroup[];
 }) {
   const action = createGroupAction.bind(null, workspaceId);
   const [state, formAction, pending] = useActionState(action, idleActionState);
-  const [selected, setSelected] = useState<string[]>([]);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -35,10 +37,10 @@ export function CreateGroupForm({
       <div className="space-y-2">
         <Label>Accounts</Label>
         <SocialAccountSelector
-          accounts={accounts}
+          workspaceId={workspaceId}
+          initialAccounts={initialAccounts}
+          initialHasMore={initialHasMore}
           groups={groups}
-          value={selected}
-          onChange={setSelected}
           name="accountIds"
         />
       </div>

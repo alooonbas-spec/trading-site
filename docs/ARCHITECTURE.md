@@ -247,6 +247,10 @@ The Social Accounts page paginates connected-account cards with the same `create
 
 Campaign, post, and monitoring rule pages filter their paginated job lists by `JobStatus`. Filter GET forms omit the jobs cursor (`after` on campaign/post, `jobs` on monitoring) so a new filter starts from the newest keyset page. Independent cursors (campaign leads, monitoring events) stay in hidden fields. Filtering does not rewrite `LeadStatus` or `do_not_contact`. Retry still lives on the Jobs queue.
 
+## Social account pickers (PHASE 35)
+
+Campaign, post, group, monitoring, inbox, jobs, activity, and lead-relationship account pickers search the newest 200 matching accounts (`searchPickerAccounts` / `listSocialAccountsPage`). Selected compose accounts stay checked across searches. Jobs/activity/inbox `accountQ` is a GET search; a selected account id still loads by id if it is outside the current page. Unbounded `listSocialAccounts` remains for workspace-wide inbox poll and account health. The picker never sends tokens to the client and does not rewrite `LeadStatus` or `do_not_contact`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

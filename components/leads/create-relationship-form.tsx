@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { createRelationshipAction, idleActionState } from "@/app/actions/leads";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
 import type { SocialProfile } from "@/types/crm";
-import type { SocialAccountPublic } from "@/types/social-account";
+import type { PickerAccount } from "@/lib/social-accounts/picker";
 
 export function CreateRelationshipForm({
   workspaceId,
@@ -17,15 +17,15 @@ export function CreateRelationshipForm({
   workspaceId: string;
   leadId: string;
   profiles: SocialProfile[];
-  accounts: SocialAccountPublic[];
+  accounts: PickerAccount[];
 }) {
   const action = createRelationshipAction.bind(null, workspaceId, leadId);
   const [state, formAction, pending] = useActionState(action, idleActionState);
 
-  if (profiles.length === 0 || accounts.length === 0) {
+  if (profiles.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Link a social profile and connect a workspace account before creating a contact relationship.
+        Link a social profile before creating a contact relationship.
       </p>
     );
   }
@@ -53,11 +53,15 @@ export function CreateRelationshipForm({
           name="socialAccountId"
           className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
         >
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {SOCIAL_PLATFORM_LABELS[account.platform]} {account.username ?? account.externalAccountId}
-            </option>
-          ))}
+          {accounts.length === 0 ? (
+            <option value="">No matching accounts</option>
+          ) : (
+            accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {SOCIAL_PLATFORM_LABELS[account.platform]} {account.username ?? account.externalAccountId}
+              </option>
+            ))
+          )}
         </select>
       </div>
       <Button type="submit" disabled={pending}>

@@ -22,6 +22,7 @@ import {
   encryptConnectResult,
   toPublicSocialAccount,
 } from "@/services/social-accounts/mapper";
+import { sanitizeAccountPickerQuery } from "@/lib/social-accounts/picker";
 import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import type { SocialAccountHealth, SocialAccountPublic } from "@/types/social-account";
 import type { SocialPlatform } from "@/types/social";
@@ -55,6 +56,7 @@ const SOCIAL_ACCOUNT_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 export async function listSocialAccountsPage(input: {
   workspaceId: string;
   after?: string;
+  query?: string;
   platform?: SocialPlatform;
   status?: SocialAccountStatus;
 }): Promise<KeysetPage<SocialAccountPublic>> {
@@ -74,6 +76,12 @@ export async function listSocialAccountsPage(input: {
   if (input.status) {
     request = request.eq("status", input.status);
   }
+  const query = sanitizeIlike(sanitizeAccountPickerQuery(input.query));
+  if (query) {
+    request = request.or(
+      `username.ilike.%${query}%,display_name.ilike.%${query}%,external_account_id.ilike.%${query}%`,
+    );
+  }
   if (cursor) {
     request = request.or(keysetOrFilter(cursor));
   }
@@ -87,6 +95,23 @@ export async function listSocialAccountsPage(input: {
   return {
     items: page.map(toPublicSocialAccount),
     nextCursor: nextKeysetCursor(page, hasMore),
+  };
+}
+
+export async function searchPickerAccounts(
+  workspaceId: string,
+  query?: string,
+  options?: { platform?: SocialPlatform; status?: SocialAccountStatus },
+): Promise<{ items: SocialAccountPublic[]; hasMore: boolean }> {
+  const page = await listSocialAccountsPage({
+    workspaceId,
+    query: sanitizeAccountPickerQuery(query),
+    platform: options?.platform,
+    status: options?.status,
+  });
+  return {
+    items: page.items,
+    hasMore: page.nextCursor !== null,
   };
 }
 
@@ -557,4 +582,8 @@ export function parsePlatform(value: string): SocialPlatform {
     throw new ValidationError("Unsupported social platform");
   }
   return value;
+}
+
+function sanitizeIlike(value: string | undefined): string {
+  return (value ?? "").replace(/[%_,()\\]/g, " ").trim();
 }

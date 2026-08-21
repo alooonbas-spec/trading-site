@@ -3,11 +3,12 @@ import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canMutateWorkspaceData } from "@/lib/auth/permissions";
 import { listPostsPage } from "@/services/posts/post-service";
 import { parsePostStatusFilter } from "@/lib/posts/filters";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { searchPickerAccounts } from "@/services/social-accounts/account-service";
 import { CreatePostForm } from "@/components/posts/create-post-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
+import { toPickerAccount } from "@/lib/social-accounts/picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,7 +36,7 @@ export default async function PostsPage({
   const status = parsePostStatusFilter(query.status);
   const [postsPage, accounts] = await Promise.all([
     listPostsPage(workspaceId, { after: query.after, status }),
-    listSocialAccounts(workspaceId),
+    searchPickerAccounts(workspaceId),
   ]);
   const posts = postsPage.items;
   const postsPath = `/w/${workspaceId}/posts`;
@@ -74,7 +75,11 @@ export default async function PostsPage({
             <CardDescription>Save a draft, then publish or schedule from the post page.</CardDescription>
           </CardHeader>
           <CardContent>
-            <CreatePostForm workspaceId={workspaceId} accounts={accounts} />
+            <CreatePostForm
+              workspaceId={workspaceId}
+              initialAccounts={accounts.items.map(toPickerAccount)}
+              initialHasMore={accounts.hasMore}
+            />
           </CardContent>
         </Card>
       ) : null}

@@ -1,6 +1,6 @@
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canManageAccounts } from "@/lib/auth/permissions";
-import { listSocialAccountHealthPage, listSocialAccounts } from "@/services/social-accounts/account-service";
+import { listSocialAccountHealthPage, searchPickerAccounts } from "@/services/social-accounts/account-service";
 import {
   parseSocialAccountPlatformFilter,
   parseSocialAccountStatusFilter,
@@ -17,6 +17,7 @@ import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { toPickerAccount } from "@/lib/social-accounts/picker";
 import { SOCIAL_PLATFORM_LABELS, SOCIAL_PLATFORMS } from "@/types/social";
 import { SOCIAL_ACCOUNT_STATUSES } from "@/types/status";
 
@@ -41,7 +42,7 @@ export default async function SocialAccountsPage({
       status,
     }),
     listAccountGroups(workspaceId),
-    canManage ? listSocialAccounts(workspaceId) : Promise.resolve([]),
+    canManage ? searchPickerAccounts(workspaceId) : Promise.resolve({ items: [], hasMore: false }),
   ]);
   const health = healthPage.items;
   const accountsPath = `/w/${workspaceId}/social-accounts`;
@@ -145,12 +146,18 @@ export default async function SocialAccountsPage({
           <CardTitle>Account groups</CardTitle>
           <CardDescription>
             Groups are a convenience for selecting many accounts. They do not change permissions.
+            The group picker shows the newest 200 matching accounts.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <AccountGroupList workspaceId={workspaceId} groups={groups} canManage={canManage} />
           {canManage ? (
-            <CreateGroupForm workspaceId={workspaceId} accounts={pickerAccounts} groups={groups} />
+            <CreateGroupForm
+              workspaceId={workspaceId}
+              initialAccounts={pickerAccounts.items.map(toPickerAccount)}
+              initialHasMore={pickerAccounts.hasMore}
+              groups={groups}
+            />
           ) : null}
         </CardContent>
       </Card>

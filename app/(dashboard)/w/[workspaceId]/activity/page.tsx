@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { listWorkspaceActivity } from "@/services/activity/query-service";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { listSocialAccountsByIds, searchPickerAccounts } from "@/services/social-accounts/account-service";
 import {
   parseActivityAccountIdFilter,
   parseActivityActionFilter,
@@ -12,6 +12,7 @@ import { activityEntityHref } from "@/lib/activity/links";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
+import { ACCOUNT_PICKER_LIMIT_HINT, toPickerAccount, withSelectedPickerAccount } from "@/lib/social-accounts/picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,13 +26,21 @@ import {
 } from "@/components/ui/table";
 import { ACTIVITY_ACTIONS, ACTIVITY_ENTITY_TYPES } from "@/types/activity";
 import { SOCIAL_PLATFORM_LABELS, SOCIAL_PLATFORMS } from "@/types/social";
+import { Input } from "@/components/ui/input";
 
 export default async function ActivityPage({
   params,
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ action?: string; entity?: string; account?: string; platform?: string; after?: string }>;
+  searchParams: Promise<{
+    action?: string;
+    entity?: string;
+    account?: string;
+    accountQ?: string;
+    platform?: string;
+    after?: string;
+  }>;
 }) {
   const { workspaceId } = await params;
   const query = await searchParams;
@@ -40,7 +49,7 @@ export default async function ActivityPage({
   const entityType = parseActivityEntityTypeFilter(query.entity);
   const socialAccountId = parseActivityAccountIdFilter(query.account);
   const platform = parseActivityPlatformFilter(query.platform);
-  const [activityPage, accounts] = await Promise.all([
+  const [activityPage, picker, selectedAccounts] = await Promise.all([
     listWorkspaceActivity({
       workspaceId,
       action,
@@ -49,14 +58,20 @@ export default async function ActivityPage({
       platform,
       after: query.after,
     }),
-    listSocialAccounts(workspaceId),
+    searchPickerAccounts(workspaceId, query.accountQ),
+    socialAccountId ? listSocialAccountsByIds(workspaceId, [socialAccountId]) : Promise.resolve([]),
   ]);
   const events = activityPage.items;
+  const accounts = withSelectedPickerAccount(
+    picker.items.map(toPickerAccount),
+    selectedAccounts[0] ? toPickerAccount(selectedAccounts[0]) : undefined,
+  );
   const activityPath = `/w/${workspaceId}/activity`;
   const filterQuery = {
     action,
     entity: entityType,
     account: socialAccountId,
+    accountQ: query.accountQ,
     platform,
   };
 
@@ -69,7 +84,7 @@ export default async function ActivityPage({
           appear here. Activity does not rewrite LeadStatus or do_not_contact.
         </p>
       </div>
-      <form className="grid gap-2 md:grid-cols-2 xl:grid-cols-5" method="get">
+      <form className="grid gap-2 md:grid-cols-2 xl:grid-cols-6" method="get">
         <select
           name="action"
           defaultValue={action ?? ""}
@@ -94,6 +109,7 @@ export default async function ActivityPage({
             </option>
           ))}
         </select>
+        <Input name="accountQ" placeholder="Find an account" defaultValue={query.accountQ ?? ""} />
         <select
           name="account"
           defaultValue={socialAccountId ?? ""}
@@ -123,6 +139,10 @@ export default async function ActivityPage({
           Filter
         </Button>
       </form>
+      <p className="text-xs text-muted-foreground">
+        {ACCOUNT_PICKER_LIMIT_HINT}
+        {picker.hasMore ? " More than 200 accounts match. Refine the search." : ""}
+      </p>
       {events.length === 0 ? (
         <EmptyState
           title="No activity matches"

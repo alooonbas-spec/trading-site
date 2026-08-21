@@ -4,12 +4,13 @@ import { canMutateWorkspaceData } from "@/lib/auth/permissions";
 import { listCampaignsPage } from "@/services/campaigns/campaign-service";
 import { parseCampaignStatusFilter } from "@/lib/campaigns/filters";
 import { searchPickerLeads } from "@/services/leads/lead-service";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { searchPickerAccounts } from "@/services/social-accounts/account-service";
 import { CreateCampaignForm } from "@/components/campaigns/create-campaign-form";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
 import { toPickerLead } from "@/lib/leads/picker";
+import { toPickerAccount } from "@/lib/social-accounts/picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +39,7 @@ export default async function CampaignsPage({
   const [campaignsPage, picker, accounts] = await Promise.all([
     listCampaignsPage(workspaceId, { after: query.after, status }),
     searchPickerLeads(workspaceId),
-    listSocialAccounts(workspaceId),
+    searchPickerAccounts(workspaceId),
   ]);
   const campaigns = campaignsPage.items;
   const campaignsPath = `/w/${workspaceId}/campaigns`;
@@ -77,7 +78,7 @@ export default async function CampaignsPage({
             <CardDescription>
               Jobs are created when the campaign starts. MESSAGE enqueues only for accounts whose
               adapter reports messaging, including VK community tokens. INVITE currently enqueues for
-              nobody. Lead picker shows the newest 200 matching leads.
+              nobody. Lead and account pickers show the newest 200 matches.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -85,7 +86,8 @@ export default async function CampaignsPage({
               workspaceId={workspaceId}
               initialLeads={picker.items.map(toPickerLead)}
               initialHasMore={picker.hasMore}
-              accounts={accounts}
+              initialAccounts={accounts.items.map(toPickerAccount)}
+              initialAccountsHasMore={accounts.hasMore}
             />
           </CardContent>
         </Card>

@@ -3,9 +3,14 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { errorMessage } from "@/lib/errors";
-import { connectSocialAccount, disconnectSocialAccount, parsePlatform, refreshSocialAccountHealth, startInboxPolling, startWorkspaceInboxPolling, updateSocialAccountPublishDestination } from "@/services/social-accounts/account-service";
+import { connectSocialAccount, disconnectSocialAccount, parsePlatform, refreshSocialAccountHealth, searchPickerAccounts, startInboxPolling, startWorkspaceInboxPolling, updateSocialAccountPublishDestination } from "@/services/social-accounts/account-service";
 import { startOAuthConnect } from "@/services/social-accounts/oauth-service";
 import { createAccountGroup, deleteAccountGroup } from "@/services/social-accounts/group-service";
+import {
+  parseSocialAccountPlatformFilter,
+  parseSocialAccountStatusFilter,
+} from "@/lib/social-accounts/filters";
+import { toPickerAccount, type PickerAccount } from "@/lib/social-accounts/picker";
 import { normalizeTelegramChatId } from "@/social/telegram/adapter";
 
 export type ActionState = {
@@ -14,6 +19,34 @@ export type ActionState = {
 };
 
 export const idleActionState: ActionState = { error: null, success: null };
+
+export type PickerAccountState = {
+  error: string | null;
+  query: string;
+  accounts: PickerAccount[];
+  hasMore: boolean;
+};
+
+export async function searchPickerAccountsAction(
+  workspaceId: string,
+  _prev: PickerAccountState,
+  formData: FormData,
+): Promise<PickerAccountState> {
+  const query = String(formData.get("q") ?? "");
+  const platform = parseSocialAccountPlatformFilter(String(formData.get("platform") ?? ""));
+  const status = parseSocialAccountStatusFilter(String(formData.get("status") ?? ""));
+  try {
+    const result = await searchPickerAccounts(workspaceId, query, { platform, status });
+    return {
+      error: null,
+      query: query.trim(),
+      accounts: result.items.map(toPickerAccount),
+      hasMore: result.hasMore,
+    };
+  } catch (error) {
+    return { error: errorMessage(error), query: query.trim(), accounts: [], hasMore: false };
+  }
+}
 
 export async function connectTelegramAction(
   workspaceId: string,

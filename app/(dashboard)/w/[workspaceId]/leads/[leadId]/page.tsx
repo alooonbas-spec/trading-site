@@ -6,11 +6,12 @@ import { findLead, searchPickerLeads } from "@/services/leads/lead-service";
 import { listSocialProfiles } from "@/services/leads/profile-service";
 import { listContactRelationships } from "@/services/leads/relationship-service";
 import { listLeadInteractions } from "@/services/leads/interaction-service";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { listSocialAccountsByIds, searchPickerAccounts } from "@/services/social-accounts/account-service";
 import { listInboxEventsForLead } from "@/services/inbox/query-service";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
 import { LEAD_PICKER_LIMIT_HINT, toPickerLead } from "@/lib/leads/picker";
+import { ACCOUNT_PICKER_LIMIT_HINT, toPickerAccount } from "@/lib/social-accounts/picker";
 import { EditLeadForm } from "@/components/leads/edit-lead-form";
 import { CreateProfileForm } from "@/components/leads/create-profile-form";
 import { CreateRelationshipForm } from "@/components/leads/create-relationship-form";
@@ -32,7 +33,7 @@ export default async function LeadDetailPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string; leadId: string }>;
-  searchParams: Promise<{ inbox?: string; timeline?: string; mergeQ?: string }>;
+  searchParams: Promise<{ inbox?: string; timeline?: string; mergeQ?: string; accountQ?: string }>;
 }) {
   const { workspaceId, leadId } = await params;
   const query = await searchParams;
@@ -44,14 +45,18 @@ export default async function LeadDetailPage({
 
   const canMutate = canMutateWorkspaceData(context.role) && !lead.mergedIntoId;
   const collectionEnabled = isTinyFishConfigured();
-  const [profiles, relationships, interactionPage, accounts, others, inboxPage] = await Promise.all([
+  const [profiles, relationships, interactionPage, pickerAccounts, others, inboxPage] = await Promise.all([
     listSocialProfiles(workspaceId, leadId),
     listContactRelationships(workspaceId, leadId),
     listLeadInteractions(workspaceId, leadId, query.timeline),
-    listSocialAccounts(workspaceId),
+    canMutate ? searchPickerAccounts(workspaceId, query.accountQ) : Promise.resolve({ items: [], hasMore: false }),
     canMutate ? searchPickerLeads(workspaceId, query.mergeQ) : Promise.resolve({ items: [], hasMore: false }),
     listInboxEventsForLead(workspaceId, leadId, query.inbox),
   ]);
+  const relationshipAccounts = await listSocialAccountsByIds(
+    workspaceId,
+    relationships.map((item) => item.socialAccountId),
+  );
   const mergeCandidates = others.items
     .filter((item) => item.id !== lead.id)
     .map(toPickerLead);
@@ -165,16 +170,35 @@ export default async function LeadDetailPage({
             leadId={lead.id}
             relationships={relationships}
             profiles={profiles}
-            accounts={accounts}
+            accounts={relationshipAccounts}
             canMutate={canMutate}
           />
           {canMutate ? (
-            <CreateRelationshipForm
-              workspaceId={workspaceId}
-              leadId={lead.id}
-              profiles={profiles}
-              accounts={accounts}
-            />
+            <div className="space-y-3">
+              <form className="grid gap-2 md:grid-cols-[1fr_auto]" method="get">
+                {query.inbox ? <input type="hidden" name="inbox" value={query.inbox} /> : null}
+                {query.timeline ? <input type="hidden" name="timeline" value={query.timeline} /> : null}
+                {query.mergeQ ? <input type="hidden" name="mergeQ" value={query.mergeQ} /> : null}
+                <Input
+                  name="accountQ"
+                  placeholder="Find an account for a relationship"
+                  defaultValue={query.accountQ ?? ""}
+                />
+                <Button type="submit" variant="outline">
+                  Find account
+                </Button>
+              </form>
+              <p className="text-xs text-muted-foreground">
+                {ACCOUNT_PICKER_LIMIT_HINT}
+                {pickerAccounts.hasMore ? " More than 200 accounts match. Refine the search." : ""}
+              </p>
+              <CreateRelationshipForm
+                workspaceId={workspaceId}
+                leadId={lead.id}
+                profiles={profiles}
+                accounts={pickerAccounts.items.map(toPickerAccount)}
+              />
+            </div>
           ) : null}
         </CardContent>
       </Card>
@@ -191,7 +215,13 @@ export default async function LeadDetailPage({
           <LeadInboxEvents events={inboxEvents} canMutate={canMutate} />
           <ListPagination
             newestHref={
-              query.inbox ? searchHref(leadPath, { timeline: query.timeline, mergeQ: query.mergeQ }) : null
+              query.inbox
+                ? searchHref(leadPath, {
+                    timeline: query.timeline,
+                    mergeQ: query.mergeQ,
+                    accountQ: query.accountQ,
+                  })
+                : null
             }
             olderHref={
               inboxPage.nextCursor
@@ -199,6 +229,7 @@ export default async function LeadDetailPage({
                     inbox: inboxPage.nextCursor,
                     timeline: query.timeline,
                     mergeQ: query.mergeQ,
+                    accountQ: query.accountQ,
                   })
                 : null
             }
@@ -221,7 +252,13 @@ export default async function LeadDetailPage({
           />
           <ListPagination
             newestHref={
-              query.timeline ? searchHref(leadPath, { inbox: query.inbox, mergeQ: query.mergeQ }) : null
+              query.timeline
+                ? searchHref(leadPath, {
+                    inbox: query.inbox,
+                    mergeQ: query.mergeQ,
+                    accountQ: query.accountQ,
+                  })
+                : null
             }
             olderHref={
               interactionPage.nextCursor
@@ -229,6 +266,7 @@ export default async function LeadDetailPage({
                     inbox: query.inbox,
                     timeline: interactionPage.nextCursor,
                     mergeQ: query.mergeQ,
+                    accountQ: query.accountQ,
                   })
                 : null
             }
@@ -247,6 +285,7 @@ export default async function LeadDetailPage({
             <form className="grid gap-2 md:grid-cols-[1fr_auto]" method="get">
               {query.inbox ? <input type="hidden" name="inbox" value={query.inbox} /> : null}
               {query.timeline ? <input type="hidden" name="timeline" value={query.timeline} /> : null}
+              {query.accountQ ? <input type="hidden" name="accountQ" value={query.accountQ} /> : null}
               <Input name="mergeQ" placeholder="Search a lead to merge from" defaultValue={query.mergeQ ?? ""} />
               <Button type="submit" variant="outline">
                 Find lead
