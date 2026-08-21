@@ -69,7 +69,7 @@ describe("publishing adapters", () => {
     ).rejects.toBeInstanceOf(UnsupportedActionError);
   });
 
-  it("posts X text through the official tweets endpoint and refuses media", async () => {
+  it("posts X text through the official tweets endpoint", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(url).toBe("https://api.x.com/2/tweets");
       expect(init?.method).toBe("POST");
@@ -87,15 +87,6 @@ describe("publishing adapters", () => {
     });
     expect(published.externalPostId).toBe("123");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    await expect(
-      new XAdapter({ accessToken: "x-token" }).publish({
-        workspaceId: "w",
-        socialAccountId: "a",
-        body: "Hello",
-        media: ["https://example.com/image.jpg"],
-      }),
-    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("does not treat TinyFish collection as a publish capability", async () => {

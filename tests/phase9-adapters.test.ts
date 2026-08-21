@@ -33,7 +33,7 @@ describe("PHASE 9 token refresh", () => {
           access_token: "new-access",
           refresh_token: "new-refresh",
           expires_in: 7200,
-          scope: "tweet.read tweet.write users.read offline.access",
+          scope: "tweet.read tweet.write users.read media.write offline.access",
         }),
         { status: 200 },
       );
@@ -105,7 +105,7 @@ describe("PHASE 9 Telegram sendMessage", () => {
     expect(capabilities.messaging).toBe(true);
   });
 
-  it("publishes text through official sendMessage and refuses media", async () => {
+  it("publishes text through official sendMessage", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(url).toBe(telegramMethodUrl("123456:ABC-token_value", "sendMessage"));
       expect(init?.method).toBe("POST");
@@ -131,18 +131,6 @@ describe("PHASE 9 Telegram sendMessage", () => {
     });
     expect(published.externalPostId).toBe("-100:9");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    await expect(
-      new TelegramAdapter({
-        accessToken: "123456:ABC-token_value",
-        metadata: { publishChatId: "@hub_channel" },
-      }).publish({
-        workspaceId: "w",
-        socialAccountId: "a",
-        body: "Hello",
-        media: ["https://example.com/image.jpg"],
-      }),
-    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("sends MESSAGE to the profile chat and refuses INVITE", async () => {

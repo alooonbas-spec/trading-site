@@ -30,8 +30,8 @@ export function CreatePostForm({
         <Label htmlFor="post-media">Media URLs (optional)</Label>
         <Textarea id="post-media" name="media" placeholder="One URL per line" />
         <p className="text-xs text-muted-foreground">
-          X text publishing is enabled. Media and other platforms fail honestly until those adapters
-          support publishing.
+          X and Telegram can publish public image, GIF, and video URLs. VK, Facebook, and Instagram
+          publishing is not enabled yet.
         </p>
       </div>
       <div className="space-y-2">

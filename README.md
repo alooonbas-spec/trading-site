@@ -55,4 +55,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 10: background worker claims due jobs across workspaces through `GET|POST /api/jobs/process`.
+PHASE 11: official Telegram media send and X v2 chunked media upload.

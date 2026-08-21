@@ -79,7 +79,6 @@ Safety policy:
 - Publish enqueues `PUBLISH` jobs onto the shared queue. Scheduling uses `jobs.run_after`, not adapter-native scheduling.
 - Workers skip cancelled posts, inoperable accounts, and already-published targets. They honor `AccountRateLimiter`.
 - `adapter.getCapabilities().publishing` decides whether `adapter.publish` runs. X text posts use official `POST https://api.x.com/2/tweets` with `tweet.write`. Other platforms throw `UnsupportedActionError` instead of fake success.
-- Media URLs on X fail honestly until media upload is implemented.
 - Post status (`DRAFT` / `SCHEDULED` / `PUBLISHING` / `PUBLISHED` / `PARTIAL` / `FAILED` / `CANCELLED`) is independent of JobStatus and CampaignStatus. `do_not_contact` is not on posts.
 
 ## Monitoring (PHASE 7)
@@ -102,7 +101,7 @@ Safety policy:
 - `adapter.refreshTokens()` is the only place that talks to a platform token endpoint. Workers call `prepareAccountAdapter`, which refreshes expired tokens before CONTACT, PUBLISH, or MONITOR jobs.
 - X uses official `POST https://api.x.com/2/oauth2/token` with `grant_type=refresh_token`. Instagram uses `GET https://graph.instagram.com/refresh_access_token`. Facebook uses `fb_exchange_token`. VK uses `https://id.vk.ru/oauth2/auth`. Telegram bot tokens are not refreshable; missing refresh fails honestly.
 - Successful refreshes persist encrypted tokens and log `SOCIAL_ACCOUNT_TOKEN_REFRESHED`. If a provider omits a new refresh token, the previous encrypted refresh token is kept.
-- Telegram text publish and MESSAGE use official `sendMessage`. Publishing needs `metadata.publishChatId`. INVITE and Telegram media still throw `UnsupportedActionError` / validation errors. VK, Facebook, and Instagram contact/publish stay disabled.
+- Telegram text publish and MESSAGE use official `sendMessage`. Publishing needs `metadata.publishChatId`. INVITE still throws `UnsupportedActionError`. VK, Facebook, and Instagram contact/publish stay disabled.
 
 ## Background worker (PHASE 10)
 
@@ -111,6 +110,12 @@ Safety policy:
 - `claim_due_jobs` is granted only to `service_role`. It claims due `PENDING`/`RETRY` jobs across workspaces with `FOR UPDATE SKIP LOCKED`, still skipping paused campaigns and non-ACTIVE monitoring rules.
 - UI "Process queue" still uses workspace-scoped `claim_jobs`. The worker does not introduce `if (platform === …)`.
 - Vercel Cron is configured daily (`0 0 * * *`) so Hobby deploys stay valid. More frequent processing uses the same endpoint from an external scheduler.
+
+## Media publishing (PHASE 11)
+
+- Telegram publishes image, GIF, video, PDF, and ZIP URLs through official `sendPhoto` / `sendAnimation` / `sendVideo` / `sendDocument` / `sendMediaGroup`. Telegram fetches the public URL. Local and private hosts are rejected.
+- X downloads public media, then uses official `POST https://api.x.com/2/media/upload/initialize`, `/append`, and `/finalize` with `media.write`, and attaches `media.media_ids` on `POST https://api.x.com/2/tweets`. Existing X accounts must reconnect to grant `media.write`.
+- Mixed types, private IPs, and VK/Facebook/Instagram media fail honestly. The worker still does not branch on `platform ===`.
 
 ## Social adapters (PHASE 2)
 

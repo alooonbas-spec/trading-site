@@ -98,6 +98,9 @@ describe("OAuth URL builders", () => {
       "https://twitter.com/i/oauth2/authorize?",
     );
     expect(
+      buildXAuthorizationUrl({ ...input, redirectUri: "http://localhost:3000/api/social/x/callback" }),
+    ).toContain("media.write");
+    expect(
       buildFacebookAuthorizationUrl({
         ...input,
         redirectUri: "http://localhost:3000/api/social/facebook/callback",

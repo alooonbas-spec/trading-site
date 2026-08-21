@@ -20,6 +20,7 @@ import type {
 } from "@/social/core/adapter";
 import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 import { resolveXPublicProfile } from "@/social/x/public-profile";
+import { uploadXMediaFromUrls } from "@/social/x/media-upload";
 
 const X_AUTHORIZE_URL = "https://twitter.com/i/oauth2/authorize";
 const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
@@ -27,7 +28,7 @@ const X_REVOKE_URL = "https://api.x.com/2/oauth2/revoke";
 const X_ME_URL = "https://api.x.com/2/users/me";
 const X_TWEETS_URL = "https://api.x.com/2/tweets";
 const X_RECENT_SEARCH_URL = "https://api.x.com/2/tweets/search/recent";
-const X_SCOPES = "tweet.read tweet.write users.read offline.access";
+const X_SCOPES = "tweet.read tweet.write users.read media.write offline.access";
 
 type XTokenResponse = {
   access_token?: string;
@@ -257,8 +258,11 @@ export class XAdapter extends BaseSocialAdapter {
     if (!text) {
       throw new ValidationError("X posts require text");
     }
-    if (input.media.length > 0) {
-      throw new ValidationError("X media upload is not enabled. Remove media URLs or wait for media.write publishing.");
+
+    const mediaIds = await uploadXMediaFromUrls(token, input.media);
+    const payload: { text: string; media?: { media_ids: string[] } } = { text };
+    if (mediaIds.length > 0) {
+      payload.media = { media_ids: mediaIds };
     }
 
     const response = await socialFetch(X_TWEETS_URL, {
@@ -267,7 +271,7 @@ export class XAdapter extends BaseSocialAdapter {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(payload),
     });
     const parsed = xCreateTweetResponseSchema.safeParse(await readJson<unknown>(response));
     if (!parsed.success) {

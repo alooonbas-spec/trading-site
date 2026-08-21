@@ -16,6 +16,7 @@ import type {
 } from "@/social/core/adapter";
 import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 import { resolveTelegramPublicProfile } from "@/social/telegram/public-profile";
+import { buildTelegramMediaPayload } from "@/social/telegram/media";
 
 const TELEGRAM_API_ORIGIN = "https://api.telegram.org";
 
@@ -80,20 +81,26 @@ const telegramGetUpdatesResponseSchema = z.object({
     .optional(),
 });
 
+const telegramMessageSchema = z.object({
+  message_id: z.number(),
+  chat: z
+    .object({
+      id: z.number(),
+      username: z.string().optional(),
+    })
+    .optional(),
+});
+
 const telegramSendMessageResponseSchema = z.object({
   ok: z.boolean(),
   description: z.string().optional(),
-  result: z
-    .object({
-      message_id: z.number(),
-      chat: z
-        .object({
-          id: z.number(),
-          username: z.string().optional(),
-        })
-        .optional(),
-    })
-    .optional(),
+  result: telegramMessageSchema.optional(),
+});
+
+const telegramSendMediaGroupResponseSchema = z.object({
+  ok: z.boolean(),
+  description: z.string().optional(),
+  result: z.array(telegramMessageSchema).optional(),
 });
 
 export function telegramPublishChatId(metadata?: Record<string, unknown>): string {
@@ -256,11 +263,11 @@ export class TelegramAdapter extends BaseSocialAdapter {
     if (!token) {
       throw new AuthenticationError("Telegram account has no access token");
     }
-    if (input.media.length > 0) {
-      throw new ValidationError("Telegram media publishing is not enabled. Remove media URLs and send text.");
-    }
-
-    const sent = await this.sendMessage(token, telegramPublishChatId(this.context.metadata), input.body);
+    const chatId = telegramPublishChatId(this.context.metadata);
+    const sent =
+      input.media.length === 0
+        ? await this.sendMessage(token, chatId, input.body)
+        : await this.sendMedia(token, chatId, input.body, input.media);
     return {
       externalPostId: sent.externalId,
       publishedAt: new Date().toISOString(),
@@ -309,6 +316,41 @@ export class TelegramAdapter extends BaseSocialAdapter {
     }
 
     const message = parsed.data.result;
+    return this.toSentMessage(chatId, message);
+  }
+
+  private async sendMedia(token: string, chatId: string, text: string, media: string[]) {
+    const payload = buildTelegramMediaPayload({ chatId, body: text, media });
+    const response = await socialFetch(telegramMethodUrl(token, payload.method), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload.body),
+    });
+    const json = await readJson<unknown>(response);
+    if (payload.method === "sendMediaGroup") {
+      const parsed = telegramSendMediaGroupResponseSchema.safeParse(json);
+      const first = parsed.success ? parsed.data.result?.[0] : undefined;
+      if (!parsed.success || !parsed.data.ok || !first) {
+        throw new SocialError(
+          (parsed.success ? parsed.data.description : undefined) ?? "Telegram sendMediaGroup returned an unexpected payload",
+        );
+      }
+      return this.toSentMessage(chatId, first);
+    }
+
+    const parsed = telegramSendMessageResponseSchema.safeParse(json);
+    if (!parsed.success || !parsed.data.ok || !parsed.data.result) {
+      throw new SocialError(
+        (parsed.success ? parsed.data.description : undefined) ?? `Telegram ${payload.method} returned an unexpected payload`,
+      );
+    }
+    return this.toSentMessage(chatId, parsed.data.result);
+  }
+
+  private toSentMessage(
+    chatId: string,
+    message: { message_id: number; chat?: { id: number; username?: string } },
+  ) {
     const username = message.chat?.username;
     return {
       externalId: `${message.chat?.id ?? chatId}:${message.message_id}`,
