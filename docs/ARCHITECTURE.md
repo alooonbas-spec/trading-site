@@ -311,6 +311,10 @@ Facebook `/{comment-id}/comments` and Instagram `/{comment-id}/replies` follow o
 
 Facebook `GET /{page-id}/tagged` and Instagram `GET /{ig-user-id}/tags` collect posts/media where the connected Page or professional account was tagged. Each poll still reads the latest 10 tagged items. If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `tagged`. A short page stores `tagged:done`. Extra tagged pages are not dropped by the independent `mentions` timestamp watermark. Photo-only tagged posts without text are skipped. This is photo/Page tagging, not Instagram @mention webhooks. Outbound mention replies use official `POST /{post-id}/comments` (Facebook) and `POST /{ig-media-id}/comments` (Instagram). Existing Facebook accounts must reconnect to grant `pages_read_user_content`. Collectors still do not fetch `paging.next` URLs.
 
+## VK wall mentions (PHASE 51)
+
+User OAuth inbox calls official `newsfeed.getMentions` (count 20). `start_time` and `end_time` are omitted so VK returns the mention archive rather than the 24-hour default window. After `mentionpages:1`, each later poll requests `offset = page * 20`. A full 20-item page advances `mentionpages:2`. A short page stores `mentionpages:done`. Extra mention pages are not dropped by the independent unix `mentions` watermark. Mention events store `owner:post` ids and `replyKind=mention`. Replies use `wall.createComment` on that post without `reply_to_comment`. Community tokens skip this method (user newsfeed). No new VK OAuth scope.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

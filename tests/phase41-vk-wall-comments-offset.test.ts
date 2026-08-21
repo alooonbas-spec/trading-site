@@ -65,6 +65,9 @@ describe("PHASE 41 VK wall.getComments offset", () => {
           { status: 200 },
         );
       }
+      if (target === vkMethodUrl("newsfeed.getMentions")) {
+        return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+      }
       expect(target).toBe(vkMethodUrl("wall.getComments"));
       expect(body).toContain("count=50");
       expect(body).toContain("sort=desc");
@@ -92,7 +95,7 @@ describe("PHASE 41 VK wall.getComments offset", () => {
       "10:20:80",
       ...older.map((item) => `10:20:${item.id}`),
     ]);
-    expect(result.cursor).toBe("comments:1710000200|wall:done|wallcomments:2");
+    expect(result.cursor).toBe("comments:1710000200|mentionpages:1|wall:done|wallcomments:2");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("wall.getComments")),
     ).toHaveLength(2);
@@ -107,6 +110,9 @@ describe("PHASE 41 VK wall.getComments offset", () => {
           JSON.stringify({ response: { items: [{ id: 20, owner_id: 10 }] } }),
           { status: 200 },
         );
+      }
+      if (target === vkMethodUrl("newsfeed.getMentions")) {
+        return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       expect(target).toBe(vkMethodUrl("wall.getComments"));
       if (body.includes("offset=50")) {
@@ -137,7 +143,7 @@ describe("PHASE 41 VK wall.getComments offset", () => {
       cursor: "comments:1710000000|wall:done|wallcomments:1",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["10:20:1", "10:20:80"]);
-    expect(result.cursor).toBe("comments:1710000200|wall:done|wallcomments:done");
+    expect(result.cursor).toBe("comments:1710000200|mentionpages:1|wall:done|wallcomments:done");
   });
 
   it("skips getComments offset after wallcomments:done", async () => {
@@ -149,6 +155,9 @@ describe("PHASE 41 VK wall.getComments offset", () => {
           JSON.stringify({ response: { items: [{ id: 20, owner_id: 10 }] } }),
           { status: 200 },
         );
+      }
+      if (target === vkMethodUrl("newsfeed.getMentions")) {
+        return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       expect(target).toBe(vkMethodUrl("wall.getComments"));
       if (body.includes("offset=")) {
@@ -172,7 +181,7 @@ describe("PHASE 41 VK wall.getComments offset", () => {
       cursor: "comments:1710000000|wall:done|wallcomments:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["10:20:81"]);
-    expect(result.cursor).toBe("comments:1710000081|wall:done|wallcomments:done");
+    expect(result.cursor).toBe("comments:1710000081|mentionpages:1|wall:done|wallcomments:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("wall.getComments")),
     ).toHaveLength(1);

@@ -154,6 +154,9 @@ describe("PHASE 26 VK community history collection", () => {
           status: 200,
         });
       }
+      if (target === vkMethodUrl("newsfeed.getMentions")) {
+        return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+      }
       expect(target).toBe(vkMethodUrl("wall.getComments"));
       return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
     });

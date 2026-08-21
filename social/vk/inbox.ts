@@ -37,6 +37,20 @@ const wallCommentsSchema = z.object({
     .optional(),
 });
 
+const mentionsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.number(),
+        owner_id: z.number().optional(),
+        from_id: z.number().optional(),
+        date: z.number().optional(),
+        text: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
 const vkMessageItemSchema = z.object({
   id: z.number(),
   date: z.number().optional(),
@@ -87,6 +101,7 @@ const VK_COMMUNITY_HISTORY_COUNT = "50";
 const VK_COMMUNITY_CONVERSATION_COUNT = "20";
 const VK_WALL_COUNT = "10";
 const VK_WALL_COMMENT_COUNT = "50";
+const VK_MENTIONS_COUNT = "20";
 const VK_CHAT_PEER_FLOOR = 2_000_000_000;
 
 type VkOffsetPage = number | "done";
@@ -302,18 +317,83 @@ async function collectVkWallCommentInbox(
   cursor?: string | null,
 ): Promise<InboxResult> {
   const parsed = parseVkInboxCursor(cursor);
-  const wallComments = await collectVkWallComments(accessToken, metadata, parsed.wallPage, parsed.wallcommentsPage);
+  const named = parseNamedInboxCursor(cursor);
+  const mentionPage = vkOffsetCursor(named.mentionpages);
+  const mentionOffset =
+    mentionPage.page !== 0 && mentionPage.page !== "done"
+      ? mentionPage.page * Number(VK_MENTIONS_COUNT)
+      : null;
+  const [wallComments, latestMentions, olderMentions] = await Promise.all([
+    collectVkWallComments(accessToken, metadata, parsed.wallPage, parsed.wallcommentsPage),
+    collectVkMentions(accessToken, 0),
+    mentionOffset === null
+      ? Promise.resolve(emptyVkMentionPage(true))
+      : collectVkMentions(accessToken, mentionOffset),
+  ]);
   return {
     messages: [
       ...filterMessagesAfterCursor(wallComments.latest, parsed.comments),
       ...wallComments.older,
+      ...filterMessagesAfterCursor(latestMentions.messages, named.mentions ?? null),
+      ...olderMentions.messages,
     ],
     cursor: serializeNamedInboxCursor({
       comments: laterDigitId(parsed.comments, newestVkCommentUnix([...wallComments.latest, ...wallComments.older])) ?? "",
+      mentionpages: nextVkOffsetCursor(mentionPage.page, olderMentions.reachedEnd),
+      mentions:
+        laterDigitId(
+          named.mentions,
+          newestVkCommentUnix([...latestMentions.messages, ...olderMentions.messages]),
+        ) ?? "",
       wall: nextVkOffsetCursor(parsed.wallPage, wallComments.reachedEnd),
       wallcomments: nextVkOffsetCursor(parsed.wallcommentsPage, wallComments.commentsReachedEnd),
     }),
   };
+}
+
+async function collectVkMentions(
+  accessToken: string,
+  offset: number,
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+  const pageSize = Number(VK_MENTIONS_COUNT);
+  const params: Record<string, string> = {
+    access_token: accessToken,
+    count: VK_MENTIONS_COUNT,
+  };
+  if (offset > 0) {
+    params.offset = String(offset);
+  }
+  const payload = await vkCall("newsfeed.getMentions", params);
+  const parsed = mentionsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK newsfeed.getMentions returned an unexpected payload");
+  }
+  const messages: InboxMessage[] = [];
+  for (const post of parsed.data.items ?? []) {
+    const text = post.text?.trim();
+    const ownerId = post.owner_id;
+    const fromId = post.from_id;
+    if (!text || ownerId === undefined || fromId === undefined) {
+      continue;
+    }
+    messages.push({
+      externalId: `${ownerId}:${post.id}`,
+      externalProfileId: String(fromId),
+      username: null,
+      body: text,
+      url: `https://vk.com/wall${ownerId}_${post.id}`,
+      receivedAt: post.date ? new Date(post.date * 1000).toISOString() : null,
+      replyKind: "mention",
+    });
+  }
+  return {
+    messages,
+    reachedEnd: (parsed.data.items ?? []).length < pageSize,
+  };
+}
+
+function emptyVkMentionPage(reachedEnd: boolean): { messages: InboxMessage[]; reachedEnd: boolean } {
+  return { messages: [], reachedEnd };
 }
 
 async function collectVkWallComments(
@@ -648,6 +728,19 @@ export function parseVkInboxCommentRef(externalId: string): {
   return { ownerId, postId, commentId };
 }
 
+export function parseVkInboxMentionRef(externalId: string): {
+  ownerId: string;
+  postId: string;
+} {
+  const parts = externalId.split(":");
+  const ownerId = parts[0];
+  const postId = parts[1];
+  if (parts.length !== 2 || !ownerId || !postId || !/^-?\d+$/.test(ownerId) || !/^\d+$/.test(postId)) {
+    throw new ValidationError("VK mention replies require owner and post ids from newsfeed.getMentions");
+  }
+  return { ownerId, postId };
+}
+
 export async function replyToVkWallComment(
   accessToken: string,
   input: { externalId: string; text: string },
@@ -658,12 +751,38 @@ export async function replyToVkWallComment(
   }
 
   const ref = parseVkInboxCommentRef(input.externalId);
-  const payload = await vkCall("wall.createComment", {
-    access_token: accessToken,
+  return postVkWallComment(accessToken, {
     owner_id: ref.ownerId,
     post_id: ref.postId,
     reply_to_comment: ref.commentId,
     message: text,
+  });
+}
+
+export async function replyToVkWallMention(
+  accessToken: string,
+  input: { externalId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("VK mention replies require a body");
+  }
+
+  const ref = parseVkInboxMentionRef(input.externalId);
+  return postVkWallComment(accessToken, {
+    owner_id: ref.ownerId,
+    post_id: ref.postId,
+    message: text,
+  });
+}
+
+async function postVkWallComment(
+  accessToken: string,
+  params: Record<string, string>,
+): Promise<{ externalMessageId: string }> {
+  const payload = await vkCall("wall.createComment", {
+    access_token: accessToken,
+    ...params,
   });
   const parsed = createCommentSchema.safeParse(payload);
   if (!parsed.success) {

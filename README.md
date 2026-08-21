@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 50: Official Graph tagged-post / tagged-media `after` paging and mention replies. No new SQL.
+PHASE 51: Official VK `newsfeed.getMentions` offset paging for user OAuth inbox. No new SQL.
