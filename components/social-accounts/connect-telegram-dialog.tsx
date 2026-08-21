@@ -34,6 +34,19 @@ export function ConnectTelegramDialog({ workspaceId }: { workspaceId: string }) 
             <Label htmlFor="token">Bot token</Label>
             <Input id="token" name="token" type="password" autoComplete="off" required />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="publishChatId">Publish channel (optional)</Label>
+            <Input
+              id="publishChatId"
+              name="publishChatId"
+              placeholder="@channel or numeric chat id"
+              autoComplete="off"
+            />
+            <p className="text-muted-foreground text-sm">
+              Needed to publish bot posts. Direct messages still use the lead profile username or chat
+              id.
+            </p>
+          </div>
           {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
           {state.success ? <p className="text-sm">{state.success}</p> : null}
           <Button type="submit" disabled={pending}>

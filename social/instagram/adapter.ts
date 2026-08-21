@@ -6,13 +6,13 @@ import {
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot } from "@/social/core/adapter";
+import type { ConnectResult, SocialAccountSnapshot, TokenRefreshResult } from "@/social/core/adapter";
 import { resolveInstagramPublicProfile } from "@/social/instagram/public-profile";
 
 const INSTAGRAM_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize";
 const INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
 const INSTAGRAM_LONG_LIVED_URL = "https://graph.instagram.com/access_token";
-const INSTAGRAM_ME_URL = "https://graph.instagram.com/me";
+const INSTAGRAM_REFRESH_URL = "https://graph.instagram.com/refresh_access_token";
 const INSTAGRAM_SCOPES = "instagram_business_basic";
 
 type InstagramShortLivedResponse = {
@@ -131,6 +131,31 @@ export class InstagramAdapter extends BaseSocialAdapter {
       platform: "instagram",
       ...profile,
       status: "CONNECTED",
+    };
+  }
+
+  async refreshTokens(): Promise<TokenRefreshResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Instagram account has no access token");
+    }
+
+    const url = new URL(INSTAGRAM_REFRESH_URL);
+    url.searchParams.set("grant_type", "ig_refresh_token");
+    url.searchParams.set("access_token", token);
+    const response = await socialFetch(url.toString());
+    const refreshed = await readJson<InstagramLongLivedResponse>(response);
+    if (!refreshed.access_token) {
+      throw new AuthenticationError("Instagram token refresh failed");
+    }
+
+    return {
+      accessToken: refreshed.access_token,
+      refreshToken: null,
+      tokenExpiresAt:
+        typeof refreshed.expires_in === "number"
+          ? new Date(Date.now() + refreshed.expires_in * 1000).toISOString()
+          : null,
     };
   }
 

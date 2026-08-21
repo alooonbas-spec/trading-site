@@ -100,11 +100,22 @@ export type ContactActionInput = {
   leadId: string;
   action: "INVITE" | "MESSAGE" | "OPEN_PROFILE" | "MANUAL_ACTION_REQUIRED";
   body?: string;
+  target?: {
+    externalProfileId: string;
+    username: string | null;
+  };
 };
 
 export type ContactActionResult = {
   status: "SUCCESS" | "MANUAL_ACTION_REQUIRED" | "OPEN_PROFILE";
   externalMessageId: string | null;
+};
+
+export type TokenRefreshResult = {
+  accessToken: string;
+  refreshToken: string | null;
+  tokenExpiresAt: string | null;
+  scopes?: string[];
 };
 
 export type AccountRateLimit = {
@@ -125,4 +136,5 @@ export interface SocialAdapter {
   publish(input: PublishInput): Promise<PublishResult>;
   monitor(input: MonitorInput): Promise<MonitorResult>;
   executeContactAction(input: ContactActionInput): Promise<ContactActionResult>;
+  refreshTokens(): Promise<TokenRefreshResult>;
 }

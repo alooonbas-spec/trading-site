@@ -1,12 +1,16 @@
 import { z } from "zod";
-import { AuthenticationError, SocialError, ValidationError } from "@/lib/errors";
+import { AuthenticationError, SocialError, UnsupportedActionError, ValidationError } from "@/lib/errors";
 import { matchKeywords, normalizeKeywords } from "@/lib/monitoring/keywords";
 import { readJson, socialFetch } from "@/social/core/http";
 import { BaseSocialAdapter, type AdapterContext, type ConnectInput } from "@/social/core/base-adapter";
 import type {
   ConnectResult,
+  ContactActionInput,
+  ContactActionResult,
   MonitorInput,
   MonitorResult,
+  PublishInput,
+  PublishResult,
   SocialAccountSnapshot,
   SocialCapabilities,
 } from "@/social/core/adapter";
@@ -76,6 +80,56 @@ const telegramGetUpdatesResponseSchema = z.object({
     .optional(),
 });
 
+const telegramSendMessageResponseSchema = z.object({
+  ok: z.boolean(),
+  description: z.string().optional(),
+  result: z
+    .object({
+      message_id: z.number(),
+      chat: z
+        .object({
+          id: z.number(),
+          username: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
+export function telegramPublishChatId(metadata?: Record<string, unknown>): string {
+  const value = metadata?.publishChatId;
+  if (typeof value !== "string" || !value.trim()) {
+    throw new ValidationError(
+      "Telegram publishing requires a destination chat. Add a channel username when connecting the bot.",
+    );
+  }
+  return normalizeTelegramChatId(value);
+}
+
+export function telegramChatIdFromTarget(target: ContactActionInput["target"]): string {
+  if (!target) {
+    throw new ValidationError("Telegram contact requires a social profile target");
+  }
+  if (target.username) {
+    return normalizeTelegramChatId(target.username);
+  }
+  if (/^-?\d+$/.test(target.externalProfileId)) {
+    return target.externalProfileId;
+  }
+  return normalizeTelegramChatId(target.externalProfileId);
+}
+
+export function normalizeTelegramChatId(source: string): string {
+  const trimmed = source.trim();
+  if (!trimmed) {
+    throw new ValidationError("Telegram chat id is required");
+  }
+  if (/^-?\d+$/.test(trimmed)) {
+    return trimmed;
+  }
+  return `@${trimmed.replace(/^@/, "")}`;
+}
+
 export class TelegramAdapter extends BaseSocialAdapter {
   readonly platform = "telegram" as const;
   readonly connectMode = "credential" as const;
@@ -122,7 +176,7 @@ export class TelegramAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { monitoring: true };
+    return { monitoring: true, publishing: true, contactActions: true, messaging: true };
   }
 
   protected resolvePublicProfile(source: string) {
@@ -194,6 +248,71 @@ export class TelegramAdapter extends BaseSocialAdapter {
     return {
       events,
       cursor: updates.length > 0 ? String(maxUpdateId + 1) : (input.cursor ?? null),
+    };
+  }
+
+  async publish(input: PublishInput): Promise<PublishResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Telegram account has no access token");
+    }
+    if (input.media.length > 0) {
+      throw new ValidationError("Telegram media publishing is not enabled. Remove media URLs and send text.");
+    }
+
+    const sent = await this.sendMessage(token, telegramPublishChatId(this.context.metadata), input.body);
+    return {
+      externalPostId: sent.externalId,
+      publishedAt: new Date().toISOString(),
+    };
+  }
+
+  async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {
+    if (input.action !== "MESSAGE") {
+      throw new UnsupportedActionError("Telegram bots can send messages but cannot invite contacts");
+    }
+
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Telegram account has no access token");
+    }
+
+    const text = input.body?.trim();
+    if (!text) {
+      throw new ValidationError("Telegram messages require a body");
+    }
+
+    const chatId = telegramChatIdFromTarget(input.target);
+    const sent = await this.sendMessage(token, chatId, text);
+    return {
+      status: "SUCCESS",
+      externalMessageId: sent.externalId,
+    };
+  }
+
+  private async sendMessage(token: string, chatId: string, text: string) {
+    const body = text.trim();
+    if (!body) {
+      throw new ValidationError("Telegram messages require text");
+    }
+
+    const response = await socialFetch(telegramMethodUrl(token, "sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: body }),
+    });
+    const parsed = telegramSendMessageResponseSchema.safeParse(await readJson<unknown>(response));
+    if (!parsed.success || !parsed.data.ok || !parsed.data.result) {
+      throw new SocialError(
+        (parsed.success ? parsed.data.description : undefined) ?? "Telegram sendMessage returned an unexpected payload",
+      );
+    }
+
+    const message = parsed.data.result;
+    const username = message.chat?.username;
+    return {
+      externalId: `${message.chat?.id ?? chatId}:${message.message_id}`,
+      url: username ? `https://t.me/${username}/${message.message_id}` : null,
     };
   }
 

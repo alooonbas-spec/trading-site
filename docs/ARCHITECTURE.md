@@ -97,6 +97,13 @@ Safety policy:
 - Analytics reads live workspace tables. It does not invent a universal success total or copy `do_not_contact` onto other entities.
 - CONTACT, PUBLISH, and MONITOR job counts are tallied separately.
 
+## Token refresh and Telegram send (PHASE 9)
+
+- `adapter.refreshTokens()` is the only place that talks to a platform token endpoint. Workers call `prepareAccountAdapter`, which refreshes expired tokens before CONTACT, PUBLISH, or MONITOR jobs.
+- X uses official `POST https://api.x.com/2/oauth2/token` with `grant_type=refresh_token`. Instagram uses `GET https://graph.instagram.com/refresh_access_token`. Facebook uses `fb_exchange_token`. VK uses `https://id.vk.ru/oauth2/auth`. Telegram bot tokens are not refreshable; missing refresh fails honestly.
+- Successful refreshes persist encrypted tokens and log `SOCIAL_ACCOUNT_TOKEN_REFRESHED`. If a provider omits a new refresh token, the previous encrypted refresh token is kept.
+- Telegram text publish and MESSAGE use official `sendMessage`. Publishing needs `metadata.publishChatId`. INVITE and Telegram media still throw `UnsupportedActionError` / validation errors. VK, Facebook, and Instagram contact/publish stay disabled.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

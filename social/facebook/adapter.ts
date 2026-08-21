@@ -6,7 +6,7 @@ import {
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot } from "@/social/core/adapter";
+import type { ConnectResult, SocialAccountSnapshot, TokenRefreshResult } from "@/social/core/adapter";
 import { resolveFacebookPublicProfile } from "@/social/facebook/public-profile";
 
 const FACEBOOK_GRAPH_VERSION = "v25.0";
@@ -111,6 +111,33 @@ export class FacebookAdapter extends BaseSocialAdapter {
       platform: "facebook",
       ...profile,
       status: "CONNECTED",
+    };
+  }
+
+  async refreshTokens(): Promise<TokenRefreshResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("Facebook account has no access token");
+    }
+
+    const url = new URL(FACEBOOK_TOKEN_URL);
+    url.searchParams.set("grant_type", "fb_exchange_token");
+    url.searchParams.set("client_id", facebookAppId());
+    url.searchParams.set("client_secret", facebookAppSecret());
+    url.searchParams.set("fb_exchange_token", token);
+    const response = await socialFetch(url.toString());
+    const exchanged = await readJson<FacebookTokenResponse>(response);
+    if (!exchanged.access_token) {
+      throw new AuthenticationError(exchanged.error?.message ?? "Facebook token refresh failed");
+    }
+
+    return {
+      accessToken: exchanged.access_token,
+      refreshToken: null,
+      tokenExpiresAt:
+        typeof exchanged.expires_in === "number"
+          ? new Date(Date.now() + exchanged.expires_in * 1000).toISOString()
+          : null,
     };
   }
 

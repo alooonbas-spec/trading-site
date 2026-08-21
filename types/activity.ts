@@ -23,6 +23,7 @@ export const ACTIVITY_ACTIONS = [
   "MONITORING_FAILED",
   "SOCIAL_ACCOUNT_CONNECTED",
   "SOCIAL_ACCOUNT_DISCONNECTED",
+  "SOCIAL_ACCOUNT_TOKEN_REFRESHED",
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

@@ -6,6 +6,7 @@ import { errorMessage } from "@/lib/errors";
 import { connectSocialAccount, disconnectSocialAccount, parsePlatform, refreshSocialAccountHealth } from "@/services/social-accounts/account-service";
 import { startOAuthConnect } from "@/services/social-accounts/oauth-service";
 import { createAccountGroup, deleteAccountGroup } from "@/services/social-accounts/group-service";
+import { normalizeTelegramChatId } from "@/social/telegram/adapter";
 
 export type ActionState = {
   error: string | null;
@@ -20,10 +21,12 @@ export async function connectTelegramAction(
   formData: FormData,
 ): Promise<ActionState> {
   try {
+    const publishChatId = String(formData.get("publishChatId") ?? "").trim();
     await connectSocialAccount({
       workspaceId,
       platform: "telegram",
       connectInput: { credential: String(formData.get("token") ?? "") },
+      metadata: publishChatId ? { publishChatId: normalizeTelegramChatId(publishChatId) } : undefined,
     });
   } catch (error) {
     return { error: errorMessage(error, "Unable to connect Telegram"), success: null };

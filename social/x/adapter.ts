@@ -16,6 +16,7 @@ import type {
   PublishResult,
   SocialAccountSnapshot,
   SocialCapabilities,
+  TokenRefreshResult,
 } from "@/social/core/adapter";
 import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 import { resolveXPublicProfile } from "@/social/x/public-profile";
@@ -211,6 +212,39 @@ export class XAdapter extends BaseSocialAdapter {
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
     return { publishing: true, monitoring: true };
+  }
+
+  async refreshTokens(): Promise<TokenRefreshResult> {
+    const refreshToken = this.context.refreshToken;
+    if (!refreshToken) {
+      throw new AuthenticationError("X account has no refresh token");
+    }
+
+    const response = await socialFetch(X_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: xBasicAuthHeader(),
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+      }),
+    });
+    const token = await readJson<XTokenResponse>(response);
+    if (!token.access_token) {
+      throw new AuthenticationError(token.error_description ?? "X token refresh failed");
+    }
+
+    return {
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token ?? refreshToken,
+      tokenExpiresAt:
+        typeof token.expires_in === "number"
+          ? new Date(Date.now() + token.expires_in * 1000).toISOString()
+          : null,
+      scopes: token.scope ? token.scope.split(/\s+/) : undefined,
+    };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {

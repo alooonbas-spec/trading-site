@@ -29,13 +29,13 @@ describe("PHASE 2 adapter capabilities", () => {
     delete process.env.TINYFISH_API_KEY;
   });
 
-  it("keeps publish and contact actions disabled", async () => {
-    const adapter = getSocialAdapter("telegram");
+  it("keeps VK publish and contact actions disabled", async () => {
+    const adapter = getSocialAdapter("vk");
     const capabilities = await adapter.getCapabilities();
     expect(capabilities.publishing).toBe(false);
     expect(capabilities.contactActions).toBe(false);
     expect(capabilities.publicCollection).toBe(false);
-    expect(capabilities.monitoring).toBe(true);
+    expect(capabilities.monitoring).toBe(false);
     await expect(
       adapter.publish({ workspaceId: "w", socialAccountId: "a", body: "hi", media: [] }),
     ).rejects.toBeInstanceOf(UnsupportedActionError);

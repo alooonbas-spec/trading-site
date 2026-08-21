@@ -2,11 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth/session";
 import { assertCanManageWorkspace, canManageAccounts } from "@/lib/auth/permissions";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
-import { AuthenticationError, PermissionError, ValidationError, errorMessage } from "@/lib/errors";
+import { AuthenticationError, PermissionError, SocialAccountUnavailableError, UnsupportedActionError, ValidationError, errorMessage } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { decryptSecret, getTokenEncryptionKey } from "@/lib/crypto/token-encryption";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { getSocialAdapter } from "@/social/core/registry";
+import { refreshAccountTokens } from "@/services/social-accounts/token-refresh-service";
 import type { ConnectInput } from "@/social/core/adapter";
 import { logActivity } from "@/services/activity/activity-service";
 import {
@@ -121,7 +122,31 @@ export async function refreshSocialAccountHealth(input: {
 
   try {
     const accessToken = decryptSecret(row.access_token_encrypted, getTokenEncryptionKey());
-    const adapter = getSocialAdapter(row.platform, { accessToken, metadata: row.metadata });
+    const refreshToken = row.refresh_token_encrypted
+      ? decryptSecret(row.refresh_token_encrypted, getTokenEncryptionKey())
+      : undefined;
+    try {
+      await refreshAccountTokens(input.accountId, { userId: context.user.id });
+    } catch (caught) {
+      if (!(caught instanceof UnsupportedActionError) && !(caught instanceof SocialAccountUnavailableError)) {
+        throw caught;
+      }
+    }
+    const { data: latestSecrets } = await supabase.rpc("read_social_account_secrets", {
+      p_account_id: input.accountId,
+    });
+    const latest = latestSecrets?.[0] ?? row;
+    const latestAccess = latest.access_token_encrypted
+      ? decryptSecret(latest.access_token_encrypted, getTokenEncryptionKey())
+      : accessToken;
+    const latestRefresh = latest.refresh_token_encrypted
+      ? decryptSecret(latest.refresh_token_encrypted, getTokenEncryptionKey())
+      : refreshToken;
+    const adapter = getSocialAdapter(row.platform, {
+      accessToken: latestAccess,
+      refreshToken: latestRefresh,
+      metadata: latest.metadata ?? row.metadata,
+    });
     const snapshot = await adapter.getAccount();
     const now = new Date().toISOString();
     const { data: updated, error: updateError } = await supabase

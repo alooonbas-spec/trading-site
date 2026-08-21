@@ -15,14 +15,16 @@ import {
 import { AccountRateLimiter } from "@/lib/jobs/account-rate-limiter";
 import { isAdapterContactAction, jobStatusAfterError, MONITOR_POLL_INTERVAL_MS } from "@/lib/jobs/queue-rules";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
-import { decryptSecret, getTokenEncryptionKey } from "@/lib/crypto/token-encryption";
+import { prepareAccountAdapter } from "@/services/social-accounts/token-refresh-service";
 import { assertCanContactLead } from "@/services/leads/do-not-contact";
 import { recordLeadInteraction } from "@/services/leads/interaction-service";
 import { logActivity } from "@/services/activity/activity-service";
+import type { SocialAdapter } from "@/social/core/adapter";
 import { getSocialAdapter } from "@/social/core/registry";
 import { CAMPAIGN_PUBLIC_COLUMNS, JOB_PUBLIC_COLUMNS, type Job } from "@/types/campaign";
 import { LEAD_PUBLIC_COLUMNS } from "@/types/crm";
 import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
+import { SOCIAL_PROFILE_PUBLIC_COLUMNS } from "@/types/crm";
 import { toJob } from "@/services/campaigns/mapper";
 import { enqueueMonitorJob } from "@/services/jobs/enqueue-service";
 import { toMonitoringRule } from "@/services/monitoring/mapper";
@@ -217,6 +219,52 @@ async function processContactJob(job: Job, userId: string): Promise<void> {
     }
     assertCanContactLead({ do_not_contact: lead.do_not_contact });
 
+    if (!job.socialProfileId) {
+      throw new ValidationError("Job is missing a social profile");
+    }
+
+    if (isAdapterContactAction(action)) {
+      await markRelationship(job, action === "INVITE" ? "INVITE_PENDING" : "MESSAGE_PENDING");
+      const { data: profile, error: profileError } = await supabase
+        .from("social_profiles")
+        .select(SOCIAL_PROFILE_PUBLIC_COLUMNS)
+        .eq("id", job.socialProfileId)
+        .maybeSingle();
+      if (profileError) {
+        throw new ValidationError(profileError.message);
+      }
+      if (!profile) {
+        throw new ValidationError("Social profile not found");
+      }
+
+      const prepared = await prepareAccountAdapter(socialAccountId, { userId });
+      if (profile.platform !== prepared.platform) {
+        throw new ValidationError("Contact job platform does not match the social account");
+      }
+      await takeAdapterRate(socialAccountId, prepared.adapter);
+
+      const result = await prepared.adapter.executeContactAction({
+        workspaceId: job.workspaceId,
+        socialAccountId,
+        socialProfileId: job.socialProfileId,
+        leadId,
+        action,
+        body: job.body ?? undefined,
+        target: {
+          externalProfileId: profile.external_profile_id,
+          username: profile.username,
+        },
+      });
+
+      await finishJob(job, userId, {
+        status: "SUCCESS",
+        relationshipStatus: action === "INVITE" ? "INVITE_SENT" : "MESSAGE_SENT",
+        result: { status: result.status, externalMessageId: result.externalMessageId },
+        activity: "CONTACT_ACTION_SUCCESS",
+      });
+      return;
+    }
+
     const { data: account } = await supabase
       .from("social_accounts")
       .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
@@ -228,55 +276,6 @@ async function processContactJob(job: Job, userId: string): Promise<void> {
       deriveTokenStatus({ status: account.status, tokenExpiresAt: account.token_expires_at }) !== "CONNECTED"
     ) {
       throw new SocialAccountUnavailableError();
-    }
-
-    if (!job.socialProfileId) {
-      throw new ValidationError("Job is missing a social profile");
-    }
-
-    if (isAdapterContactAction(action)) {
-      await markRelationship(job, action === "INVITE" ? "INVITE_PENDING" : "MESSAGE_PENDING");
-      const { data: secrets, error: secretError } = await supabase.rpc("read_social_account_secrets", {
-        p_account_id: socialAccountId,
-      });
-      const secret = secrets?.[0];
-      if (secretError || !secret?.access_token_encrypted) {
-        throw new SocialAccountUnavailableError("Social account has no access token");
-      }
-
-      const adapter = getSocialAdapter(account.platform, {
-        accessToken: decryptSecret(secret.access_token_encrypted, getTokenEncryptionKey()),
-        metadata: secret.metadata,
-      });
-      const limiter = new AccountRateLimiter(async ({ accountId, windowStart, maxActions }) => {
-        const { data, error: rateError } = await supabase.rpc("increment_account_rate_bucket", {
-          p_account_id: accountId,
-          p_window_start: windowStart,
-          p_max: maxActions,
-        });
-        if (rateError) {
-          throw new ValidationError(rateError.message);
-        }
-        return data ?? 0;
-      });
-      await limiter.take(socialAccountId, adapter.getRateLimit());
-
-      const result = await adapter.executeContactAction({
-        workspaceId: job.workspaceId,
-        socialAccountId,
-        socialProfileId: job.socialProfileId,
-        leadId,
-        action,
-        body: job.body ?? undefined,
-      });
-
-      await finishJob(job, userId, {
-        status: "SUCCESS",
-        relationshipStatus: action === "INVITE" ? "INVITE_SENT" : "MESSAGE_SENT",
-        result: { status: result.status, externalMessageId: result.externalMessageId },
-        activity: "CONTACT_ACTION_SUCCESS",
-      });
-      return;
     }
 
     await recordLeadInteraction({
@@ -359,17 +358,10 @@ async function processPublishJob(job: Job, userId: string): Promise<void> {
       return;
     }
 
-    const { data: account } = await supabase
-      .from("social_accounts")
-      .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
-      .eq("id", socialAccountId)
-      .maybeSingle();
-    if (
-      !account ||
-      !isAccountOperable(account.status) ||
-      deriveTokenStatus({ status: account.status, tokenExpiresAt: account.token_expires_at }) !== "CONNECTED"
-    ) {
-      throw new SocialAccountUnavailableError();
+    const prepared = await prepareAccountAdapter(socialAccountId, { userId });
+    const capabilities = await prepared.adapter.getCapabilities();
+    if (!capabilities.publishing) {
+      throw new UnsupportedActionError(`${prepared.platform} publishing is not enabled yet`);
     }
 
     await supabase
@@ -377,35 +369,8 @@ async function processPublishJob(job: Job, userId: string): Promise<void> {
       .update({ status: "PUBLISHING", last_error: null })
       .eq("id", target.id);
 
-    const { data: secrets, error: secretError } = await supabase.rpc("read_social_account_secrets", {
-      p_account_id: socialAccountId,
-    });
-    const secret = secrets?.[0];
-    if (secretError || !secret?.access_token_encrypted) {
-      throw new SocialAccountUnavailableError("Social account has no access token");
-    }
-
-    const adapter = getSocialAdapter(account.platform, {
-      accessToken: decryptSecret(secret.access_token_encrypted, getTokenEncryptionKey()),
-      metadata: secret.metadata,
-    });
-    const capabilities = await adapter.getCapabilities();
-    if (!capabilities.publishing) {
-      throw new UnsupportedActionError(`${account.platform} publishing is not enabled yet`);
-    }
-
-    const limiter = new AccountRateLimiter(async ({ accountId, windowStart, maxActions }) => {
-      const { data, error: rateError } = await supabase.rpc("increment_account_rate_bucket", {
-        p_account_id: accountId,
-        p_window_start: windowStart,
-        p_max: maxActions,
-      });
-      if (rateError) {
-        throw new ValidationError(rateError.message);
-      }
-      return data ?? 0;
-    });
-    await limiter.take(socialAccountId, adapter.getRateLimit());
+    await takeAdapterRate(socialAccountId, prepared.adapter);
+    const adapter = prepared.adapter;
 
     const media = Array.isArray(post.media)
       ? post.media.filter((item): item is string => typeof item === "string")
@@ -467,47 +432,12 @@ async function processMonitorJob(job: Job, userId: string): Promise<void> {
     let adapter = getSocialAdapter(rule.platform);
 
     if (accountId) {
-      const { data: account } = await supabase
-        .from("social_accounts")
-        .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
-        .eq("id", accountId)
-        .maybeSingle();
-      if (
-        !account ||
-        !isAccountOperable(account.status) ||
-        deriveTokenStatus({ status: account.status, tokenExpiresAt: account.token_expires_at }) !== "CONNECTED"
-      ) {
-        throw new SocialAccountUnavailableError();
-      }
-      if (account.platform !== rule.platform) {
+      const prepared = await prepareAccountAdapter(accountId, { userId });
+      if (prepared.platform !== rule.platform) {
         throw new ValidationError("Monitoring account platform does not match the rule");
       }
-
-      const { data: secrets, error: secretError } = await supabase.rpc("read_social_account_secrets", {
-        p_account_id: accountId,
-      });
-      const secret = secrets?.[0];
-      if (secretError || !secret?.access_token_encrypted) {
-        throw new SocialAccountUnavailableError("Social account has no access token");
-      }
-
-      adapter = getSocialAdapter(account.platform, {
-        accessToken: decryptSecret(secret.access_token_encrypted, getTokenEncryptionKey()),
-        metadata: secret.metadata,
-      });
-
-      const limiter = new AccountRateLimiter(async ({ accountId: rateAccountId, windowStart, maxActions }) => {
-        const { data, error: rateError } = await supabase.rpc("increment_account_rate_bucket", {
-          p_account_id: rateAccountId,
-          p_window_start: windowStart,
-          p_max: maxActions,
-        });
-        if (rateError) {
-          throw new ValidationError(rateError.message);
-        }
-        return data ?? 0;
-      });
-      await limiter.take(accountId, adapter.getRateLimit());
+      adapter = prepared.adapter;
+      await takeAdapterRate(accountId, adapter);
     }
 
     const capabilities = await adapter.getCapabilities();
@@ -570,6 +500,22 @@ async function processMonitorJob(job: Job, userId: string): Promise<void> {
   } catch (caught) {
     await failOrRetry(job, userId, caught);
   }
+}
+
+async function takeAdapterRate(accountId: string, adapter: SocialAdapter): Promise<void> {
+  const supabase = await createClient();
+  const limiter = new AccountRateLimiter(async ({ accountId: rateAccountId, windowStart, maxActions }) => {
+    const { data, error: rateError } = await supabase.rpc("increment_account_rate_bucket", {
+      p_account_id: rateAccountId,
+      p_window_start: windowStart,
+      p_max: maxActions,
+    });
+    if (rateError) {
+      throw new ValidationError(rateError.message);
+    }
+    return data ?? 0;
+  });
+  await limiter.take(accountId, adapter.getRateLimit());
 }
 
 async function markRelationship(job: Job, status: ContactStatus): Promise<void> {

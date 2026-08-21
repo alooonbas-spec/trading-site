@@ -6,7 +6,7 @@ import {
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot } from "@/social/core/adapter";
+import type { ConnectResult, SocialAccountSnapshot, TokenRefreshResult } from "@/social/core/adapter";
 import { resolveVkPublicProfile } from "@/social/vk/public-profile";
 
 const VK_AUTHORIZE_URL = "https://id.vk.ru/authorize";
@@ -132,6 +132,48 @@ export class VkAdapter extends BaseSocialAdapter {
       displayName: profile.displayName,
       avatarUrl: profile.avatarUrl,
       status: "CONNECTED",
+    };
+  }
+
+  async refreshTokens(): Promise<TokenRefreshResult> {
+    const refreshToken = this.context.refreshToken;
+    const deviceId = this.context.metadata?.deviceId;
+    if (!refreshToken) {
+      throw new AuthenticationError("VK account has no refresh token");
+    }
+    if (typeof deviceId !== "string" || !deviceId) {
+      throw new AuthenticationError("VK token refresh requires the original device_id");
+    }
+
+    const body = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: vkClientId(),
+      device_id: deviceId,
+    });
+    const serviceToken = process.env.VK_SERVICE_TOKEN;
+    if (serviceToken) {
+      body.set("service_token", serviceToken);
+    }
+
+    const response = await socialFetch(VK_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    const token = await readJson<VkTokenResponse>(response);
+    if (!token.access_token) {
+      throw new AuthenticationError(token.error_description ?? "VK token refresh failed");
+    }
+
+    return {
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token ?? refreshToken,
+      tokenExpiresAt:
+        typeof token.expires_in === "number"
+          ? new Date(Date.now() + token.expires_in * 1000).toISOString()
+          : null,
+      scopes: token.scope ? token.scope.split(/\s+/) : undefined,
     };
   }
 

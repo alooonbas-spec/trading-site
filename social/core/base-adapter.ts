@@ -12,6 +12,7 @@ import type {
   OAuthBeginInput,
   PublishInput,
   PublishResult,
+  TokenRefreshResult,
   SocialAdapter,
   SocialCapabilities,
   SocialAccountSnapshot,
@@ -106,5 +107,9 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
 
   async executeContactAction(_input: ContactActionInput): Promise<ContactActionResult> {
     throw new UnsupportedActionError(`${this.platform} contact actions are not enabled yet`);
+  }
+
+  async refreshTokens(): Promise<TokenRefreshResult> {
+    throw new UnsupportedActionError(`${this.platform} token refresh is not enabled`);
   }
 }

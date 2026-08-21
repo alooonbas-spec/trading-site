@@ -58,12 +58,14 @@ describe("publishing adapters", () => {
     vi.unstubAllGlobals();
   });
 
-  it("enables X text publishing and keeps other platforms disabled", async () => {
+  it("enables X and Telegram text publishing and keeps VK disabled", async () => {
     expect((await getSocialAdapter("x").getCapabilities()).publishing).toBe(true);
-    expect((await getSocialAdapter("telegram").getCapabilities()).publishing).toBe(false);
-    expect((await getSocialAdapter("telegram").getCapabilities()).contactActions).toBe(false);
+    expect((await getSocialAdapter("telegram").getCapabilities()).publishing).toBe(true);
+    expect((await getSocialAdapter("telegram").getCapabilities()).contactActions).toBe(true);
+    expect((await getSocialAdapter("vk").getCapabilities()).publishing).toBe(false);
+    expect((await getSocialAdapter("vk").getCapabilities()).contactActions).toBe(false);
     await expect(
-      getSocialAdapter("telegram").publish({ workspaceId: "w", socialAccountId: "a", body: "hi", media: [] }),
+      getSocialAdapter("vk").publish({ workspaceId: "w", socialAccountId: "a", body: "hi", media: [] }),
     ).rejects.toBeInstanceOf(UnsupportedActionError);
   });
 
@@ -98,7 +100,7 @@ describe("publishing adapters", () => {
 
   it("does not treat TinyFish collection as a publish capability", async () => {
     process.env.TINYFISH_API_KEY = "test-key";
-    const capabilities = await getSocialAdapter("telegram").getCapabilities();
+    const capabilities = await getSocialAdapter("vk").getCapabilities();
     expect(capabilities.publicCollection).toBe(true);
     expect(capabilities.publishing).toBe(false);
     expect(capabilities.monitoring).toBe(true);
@@ -126,5 +128,6 @@ describe("PHASE 6 source boundaries", () => {
     expect(worker).toContain('job.type === "PUBLISH"');
     expect(worker).toContain("adapter.publish");
     expect(worker).toContain("capabilities.publishing");
+    expect(worker).toContain("prepareAccountAdapter");
   });
 });

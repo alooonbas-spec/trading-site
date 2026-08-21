@@ -53,4 +53,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 8: workspace analytics with separate lead, contact, campaign, account, post, monitoring, and job-family metrics.
+PHASE 9: official token refresh and Telegram Bot API `sendMessage` for text publish and MESSAGE.
