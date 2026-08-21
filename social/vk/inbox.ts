@@ -1,8 +1,16 @@
 import { z } from "zod";
 import { SocialError, ValidationError } from "@/lib/errors";
-import { filterMessagesAfterCursor, laterDigitId } from "@/lib/inbox/cursor";
+import {
+  filterMessagesAfterCursor,
+  isDigitIdAfter,
+  isNamedInboxCursor,
+  laterDigitId,
+  parseNamedInboxCursor,
+  serializeNamedInboxCursor,
+} from "@/lib/inbox/cursor";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
 import { vkCall } from "@/social/vk/api";
+import { isVkCommunityAccount, vkCommunityGroupId } from "@/social/vk/community";
 import { vkWallTarget } from "@/social/vk/publish";
 
 const wallGetSchema = z.object({
@@ -29,11 +37,157 @@ const wallCommentsSchema = z.object({
     .optional(),
 });
 
+const conversationsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        conversation: z
+          .object({
+            peer: z
+              .object({
+                id: z.number(),
+                type: z.string().optional(),
+              })
+              .optional(),
+          })
+          .optional(),
+        last_message: z
+          .object({
+            id: z.number(),
+            date: z.number().optional(),
+            from_id: z.number().optional(),
+            text: z.string().optional(),
+            out: z.number().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+  profiles: z
+    .array(
+      z.object({
+        id: z.number(),
+        screen_name: z.string().optional(),
+        first_name: z.string().optional(),
+        last_name: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+export function parseVkInboxCursor(cursor?: string | null): {
+  comments: string | null;
+  messages: string | null;
+} {
+  const value = cursor?.trim();
+  if (!value) {
+    return { comments: null, messages: null };
+  }
+  if (isNamedInboxCursor(value)) {
+    const named = parseNamedInboxCursor(value);
+    return {
+      comments: named.comments ?? null,
+      messages: named.messages ?? null,
+    };
+  }
+  if (/^\d{10}$/.test(value)) {
+    return { comments: value, messages: null };
+  }
+  return { comments: null, messages: null };
+}
+
+export function parseVkCommunityConversations(
+  payload: unknown,
+  groupId: string,
+): InboxMessage[] {
+  const parsed = conversationsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK messages.getConversations returned an unexpected payload");
+  }
+
+  const communityFromId = -Number(groupId);
+  const profiles = new Map((parsed.data.profiles ?? []).map((profile) => [profile.id, profile]));
+  const messages: InboxMessage[] = [];
+  for (const item of parsed.data.items ?? []) {
+    const peer = item.conversation?.peer;
+    const last = item.last_message;
+    if (!peer || peer.type === "chat" || !last) {
+      continue;
+    }
+    const text = last.text?.trim();
+    if (!text || last.out === 1 || last.from_id === undefined || last.from_id === communityFromId || last.from_id < 0) {
+      continue;
+    }
+    const profile = profiles.get(last.from_id);
+    const username = profile?.screen_name ? `@${profile.screen_name}` : null;
+    messages.push({
+      externalId: String(last.id),
+      externalProfileId: String(last.from_id),
+      username,
+      body: text,
+      url: null,
+      receivedAt: last.date ? new Date(last.date * 1000).toISOString() : null,
+      replyKind: "direct_message",
+    });
+  }
+  return messages;
+}
+
 export async function collectVkInbox(
   accessToken: string,
   metadata: Record<string, unknown> | undefined,
   input: InboxInput,
 ): Promise<InboxResult> {
+  if (isVkCommunityAccount(metadata)) {
+    return collectVkCommunityInbox(accessToken, metadata ?? {}, input);
+  }
+  return collectVkWallCommentInbox(accessToken, metadata, input.cursor);
+}
+
+async function collectVkCommunityInbox(
+  accessToken: string,
+  metadata: Record<string, unknown>,
+  input: InboxInput,
+): Promise<InboxResult> {
+  const groupId = vkCommunityGroupId(metadata);
+  const cursor = parseVkInboxCursor(input.cursor);
+  const [comments, directMessages] = await Promise.all([
+    collectVkWallComments(accessToken, metadata),
+    collectVkCommunityMessages(accessToken, groupId),
+  ]);
+  const newestMessageId = directMessages.reduce<string | null>(
+    (newest, message) => laterDigitId(newest, message.externalId),
+    null,
+  );
+  return {
+    messages: [
+      ...filterMessagesAfterCursor(comments, cursor.comments),
+      ...directMessages.filter((message) => isDigitIdAfter(message.externalId, cursor.messages)),
+    ],
+    cursor: serializeNamedInboxCursor({
+      comments: laterDigitId(cursor.comments, newestVkCommentUnix(comments)) ?? "",
+      messages: laterDigitId(cursor.messages, newestMessageId) ?? "",
+    }),
+  };
+}
+
+async function collectVkWallCommentInbox(
+  accessToken: string,
+  metadata: Record<string, unknown> | undefined,
+  cursor?: string | null,
+): Promise<InboxResult> {
+  const comments = await collectVkWallComments(accessToken, metadata);
+  const watermark = parseVkInboxCursor(cursor).comments;
+  return {
+    messages: filterMessagesAfterCursor(comments, watermark),
+    cursor: laterDigitId(watermark, newestVkCommentUnix(comments)),
+  };
+}
+
+async function collectVkWallComments(
+  accessToken: string,
+  metadata: Record<string, unknown> | undefined,
+): Promise<InboxMessage[]> {
   const target = vkWallTarget(metadata);
   const wallPayload = await vkCall("wall.get", {
     access_token: accessToken,
@@ -76,12 +230,18 @@ export async function collectVkInbox(
       });
     }
   }
+  return messages;
+}
 
-  const cursor = input.cursor && /^\d{10}$/.test(input.cursor) ? input.cursor : null;
-  return {
-    messages: filterMessagesAfterCursor(messages, cursor),
-    cursor: laterDigitId(cursor, newestVkCommentUnix(messages)),
-  };
+async function collectVkCommunityMessages(accessToken: string, groupId: string): Promise<InboxMessage[]> {
+  const payload = await vkCall("messages.getConversations", {
+    access_token: accessToken,
+    count: "20",
+    filter: "all",
+    extended: "1",
+    group_id: groupId,
+  });
+  return parseVkCommunityConversations(payload, groupId);
 }
 
 function newestVkCommentUnix(messages: InboxMessage[]): string | null {
@@ -141,4 +301,3 @@ export async function replyToVkWallComment(
   }
   return { externalMessageId: String(parsed.data.comment_id) };
 }
-

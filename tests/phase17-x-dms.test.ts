@@ -290,7 +290,7 @@ describe("PHASE 17 campaign contact gating", () => {
   it("gates enqueue through capabilities instead of platform switches", () => {
     const enqueue = readFileSync("services/jobs/enqueue-service.ts", "utf8");
     const worker = readFileSync("services/jobs/worker-service.ts", "utf8");
-    expect(enqueue).toContain("platformsSupportingCampaignAction");
+    expect(enqueue).toContain("accountSupportsCampaignAction");
     expect(enqueue).not.toMatch(/if\s*\(\s*platform\s*===/);
     expect(worker).not.toMatch(/if\s*\(\s*platform\s*===/);
     expect(worker).toContain("executeContactAction");

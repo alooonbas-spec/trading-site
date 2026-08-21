@@ -36,6 +36,29 @@ export async function connectTelegramAction(
   return { error: null, success: "Telegram account connected" };
 }
 
+export async function connectVkCommunityAction(
+  workspaceId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await connectSocialAccount({
+      workspaceId,
+      platform: "vk",
+      connectInput: {
+        credential: String(formData.get("token") ?? ""),
+        accountHint: String(formData.get("groupId") ?? ""),
+      },
+    });
+  } catch (error) {
+    return { error: errorMessage(error, "Unable to connect VK community"), success: null };
+  }
+
+  revalidatePath(`/w/${workspaceId}/social-accounts`);
+  revalidatePath(`/w/${workspaceId}/inbox`);
+  return { error: null, success: "VK community connected" };
+}
+
 export async function updatePublishDestinationAction(
   workspaceId: string,
   accountId: string,

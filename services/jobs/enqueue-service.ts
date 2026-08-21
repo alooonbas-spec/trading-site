@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { ValidationError } from "@/lib/errors";
 import {
-  platformsSupportingCampaignAction,
+  accountSupportsCampaignAction,
   unsupportedCampaignActionMessage,
 } from "@/lib/campaigns/contact-capabilities";
+import { asAccountMetadata } from "@/lib/social/account-metadata";
 import { buildEnqueuePairs } from "@/lib/jobs/queue-rules";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { logActivity } from "@/services/activity/activity-service";
@@ -54,7 +55,7 @@ export async function enqueueCampaignJobs(input: {
       supabase.from("leads").select(LEAD_PUBLIC_COLUMNS).eq("workspace_id", input.workspaceId).in("id", leadIds),
       supabase
         .from("social_accounts")
-        .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
+        .select(`${SOCIAL_ACCOUNT_PUBLIC_COLUMNS}, metadata`)
         .eq("workspace_id", input.workspaceId)
         .in("id", accountIds),
       supabase
@@ -100,15 +101,19 @@ export async function enqueueCampaignJobs(input: {
     );
   }
 
-  const supportedPlatforms = await platformsSupportingCampaignAction(
-    operableAccounts.map((account) => account.platform),
-    campaign.action,
-  );
-  const accountPlatform = new Map(operableAccounts.map((account) => [account.id, account.platform]));
-  const pairs = matchingPairs.filter((pair) => {
-    const platform = accountPlatform.get(pair.socialAccountId);
-    return platform !== undefined && supportedPlatforms.has(platform);
-  });
+  const supportedAccountIds = new Set<string>();
+  for (const account of operableAccounts) {
+    if (
+      await accountSupportsCampaignAction({
+        platform: account.platform,
+        metadata: asAccountMetadata(account.metadata),
+        action: campaign.action,
+      })
+    ) {
+      supportedAccountIds.add(account.id);
+    }
+  }
+  const pairs = matchingPairs.filter((pair) => supportedAccountIds.has(pair.socialAccountId));
 
   if (pairs.length === 0) {
     throw new ValidationError(unsupportedCampaignActionMessage(campaign.action));

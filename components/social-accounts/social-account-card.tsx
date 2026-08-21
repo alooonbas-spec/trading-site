@@ -72,8 +72,15 @@ export function SocialAccountCard({
             field="publishOwnerId"
             label="VK wall owner (optional)"
             placeholder="-communityId or user id"
-            hint="Leave empty to post on the user wall. Negative ids post to a community. Reconnect to grant wall, photos, and video."
+            hint="Leave empty to post on the user wall. Negative ids post to a community. Community tokens set this automatically. Reconnect to grant wall, photos, and video."
           />
+        ) : null}
+        {account.platform === "vk" ? (
+          <p className="text-xs text-muted-foreground">
+            User OAuth cannot send Direct Messages. A community token with the messages right can
+            collect and reply to community DMs. Recipients must allow community messages. INVITE
+            stays unavailable.
+          </p>
         ) : null}
         {account.platform === "x" ? (
           <p className="text-xs text-muted-foreground">

@@ -45,8 +45,9 @@ export default async function CampaignsPage({
           <CardHeader>
             <CardTitle>New campaign</CardTitle>
             <CardDescription>
-              Jobs are created when the campaign starts. INVITE/MESSAGE call adapters; they currently
-              fail honestly until contact actions are enabled.
+              Jobs are created when the campaign starts. MESSAGE enqueues only for accounts whose
+              adapter reports messaging, including VK community tokens. INVITE currently enqueues for
+              nobody.
             </CardDescription>
           </CardHeader>
           <CardContent>

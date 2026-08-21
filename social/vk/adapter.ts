@@ -8,6 +8,8 @@ import {
 } from "@/social/core/base-adapter";
 import type {
   ConnectResult,
+  ContactActionInput,
+  ContactActionResult,
   InboxInput,
   InboxReplyInput,
   InboxReplyResult,
@@ -24,6 +26,8 @@ import { VK_SCOPES } from "@/social/vk/api";
 import { executeVkPublish, planVkPublish } from "@/social/vk/publish";
 import { collectVkInbox, replyToVkWallComment } from "@/social/vk/inbox";
 import { collectVkNewsfeedSearch, vkMonitorAccessToken } from "@/social/vk/monitor";
+import { connectVkCommunity, fetchVkCommunity, isVkCommunityAccount, vkCommunityGroupId } from "@/social/vk/community";
+import { resolveVkCommunityPeerId, sendVkCommunityMessage } from "@/social/vk/contact";
 import { resolveVkPublicProfile } from "@/social/vk/public-profile";
 import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 
@@ -90,6 +94,13 @@ export class VkAdapter extends BaseSocialAdapter {
   }
 
   async connect(input?: ConnectInput): Promise<ConnectResult> {
+    if (input?.credential) {
+      return connectVkCommunity({
+        token: input.credential,
+        groupRef: input.accountHint ?? "",
+      });
+    }
+
     if (!input?.authorizationCode || !input.redirectUri || !input.codeVerifier || !input.deviceId || !input.oauthState) {
       throw new ValidationError("VK OAuth callback is missing code, device_id, or PKCE verifier");
     }
@@ -144,6 +155,18 @@ export class VkAdapter extends BaseSocialAdapter {
       throw new AuthenticationError("VK account has no access token");
     }
 
+    if (isVkCommunityAccount(this.context.metadata)) {
+      const group = await fetchVkCommunity(token, vkCommunityGroupId(this.context.metadata));
+      return {
+        platform: "vk",
+        externalAccountId: String(group.id),
+        username: group.screen_name ?? null,
+        displayName: group.name ?? group.screen_name ?? String(group.id),
+        avatarUrl: group.photo_200 ?? null,
+        status: "CONNECTED",
+      };
+    }
+
     const profile = await this.fetchUser(token);
     return {
       platform: "vk",
@@ -156,6 +179,9 @@ export class VkAdapter extends BaseSocialAdapter {
   }
 
   async refreshTokens(): Promise<TokenRefreshResult> {
+    if (isVkCommunityAccount(this.context.metadata)) {
+      throw new UnsupportedActionError("VK community tokens are not refreshable");
+    }
     const refreshToken = this.context.refreshToken;
     const deviceId = this.context.metadata?.deviceId;
     if (!refreshToken) {
@@ -198,6 +224,9 @@ export class VkAdapter extends BaseSocialAdapter {
   }
 
   async disconnect(): Promise<void> {
+    if (isVkCommunityAccount(this.context.metadata)) {
+      return;
+    }
     const token = this.context.accessToken;
     if (!token) {
       return;
@@ -216,6 +245,16 @@ export class VkAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
+    if (isVkCommunityAccount(this.context.metadata)) {
+      return {
+        publishing: true,
+        inbox: true,
+        inboxReply: true,
+        monitoring: true,
+        contactActions: true,
+        messaging: true,
+      };
+    }
     return { publishing: true, inbox: true, inboxReply: true, monitoring: true };
   }
 
@@ -238,15 +277,32 @@ export class VkAdapter extends BaseSocialAdapter {
   }
 
   async replyToInbox(input: InboxReplyInput): Promise<InboxReplyResult> {
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("VK account has no access token");
+    }
+
+    if (input.kind === "direct_message") {
+      if (!isVkCommunityAccount(this.context.metadata)) {
+        throw new UnsupportedActionError(
+          "VK can reply to wall comments. User Direct Messages are not enabled for new apps. Connect a community token with messages.",
+        );
+      }
+      const text = input.body.trim();
+      if (!text) {
+        throw new ValidationError("VK community messages require a body");
+      }
+      const sent = await sendVkCommunityMessage(token, {
+        peerId: await resolveVkCommunityPeerId(token, input.target),
+        text,
+      });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
     if (input.kind !== "comment") {
       throw new UnsupportedActionError(
         "VK can reply to wall comments. User Direct Messages are not enabled for new apps.",
       );
-    }
-
-    const token = this.context.accessToken;
-    if (!token) {
-      throw new AuthenticationError("VK account has no access token");
     }
 
     const sent = await replyToVkWallComment(token, {
@@ -256,8 +312,43 @@ export class VkAdapter extends BaseSocialAdapter {
     return { externalMessageId: sent.externalMessageId };
   }
 
+  async executeContactAction(input: ContactActionInput): Promise<ContactActionResult> {
+    if (input.action !== "MESSAGE") {
+      throw new UnsupportedActionError("VK communities can send messages but cannot invite contacts");
+    }
+    if (!isVkCommunityAccount(this.context.metadata)) {
+      throw new UnsupportedActionError(
+        "VK user Direct Messages are not enabled for new apps. Connect a community token with messages.",
+      );
+    }
+
+    const token = this.context.accessToken;
+    if (!token) {
+      throw new AuthenticationError("VK account has no access token");
+    }
+    const text = input.body?.trim();
+    if (!text) {
+      throw new ValidationError("VK community messages require a body");
+    }
+    if (!input.target) {
+      throw new ValidationError("VK contact requires a social profile target");
+    }
+
+    const sent = await sendVkCommunityMessage(token, {
+      peerId: await resolveVkCommunityPeerId(token, input.target),
+      text,
+    });
+    return {
+      status: "SUCCESS",
+      externalMessageId: sent.externalMessageId,
+    };
+  }
+
   async monitor(input: MonitorInput): Promise<MonitorResult> {
     assertMonitorSourcesAllowed("vk", input.sources);
+    if (isVkCommunityAccount(this.context.metadata)) {
+      return super.monitor(input);
+    }
     const token = vkMonitorAccessToken(this.context.accessToken);
     if (!token) {
       return super.monitor(input);

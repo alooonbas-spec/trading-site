@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 22: Inbox operator filters (account, platform, stored reply kind), poll/process from the Inbox page, and separate unmatched/reply analytics.
+PHASE 23: VK community tokens for official community Direct Messages (`messages.getConversations` / `messages.send`). User OAuth still cannot DM.

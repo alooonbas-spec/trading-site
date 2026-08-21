@@ -3,6 +3,7 @@ import { canManageAccounts } from "@/lib/auth/permissions";
 import { listSocialAccountHealth } from "@/services/social-accounts/account-service";
 import { listAccountGroups } from "@/services/social-accounts/group-service";
 import { ConnectTelegramDialog } from "@/components/social-accounts/connect-telegram-dialog";
+import { ConnectVkCommunityDialog } from "@/components/social-accounts/connect-vk-community-dialog";
 import { ConnectOAuthButtons } from "@/components/social-accounts/connect-oauth-buttons";
 import { SocialAccountCard } from "@/components/social-accounts/social-account-card";
 import { CreateGroupForm } from "@/components/social-accounts/create-group-form";
@@ -45,12 +46,14 @@ export default async function SocialAccountsPage({
           <CardHeader>
             <CardTitle>Connect an account</CardTitle>
             <CardDescription>
-              Telegram uses a BotFather token. VK, X, Instagram, and Facebook use OAuth. Missing
+              Telegram uses a BotFather token. VK user accounts, X, Instagram, and Facebook use
+              OAuth. VK community messaging uses a community access key from Manage → API. Missing
               platform credentials return an error instead of a fake connection.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <ConnectTelegramDialog workspaceId={workspaceId} />
+            <ConnectVkCommunityDialog workspaceId={workspaceId} />
             <ConnectOAuthButtons workspaceId={workspaceId} />
           </CardContent>
         </Card>

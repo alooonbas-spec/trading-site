@@ -16,6 +16,7 @@ export type SocialCapabilities = {
 
 export type ConnectInput = {
   credential?: string;
+  accountHint?: string;
   authorizationCode?: string;
   redirectUri?: string;
   codeVerifier?: string;
