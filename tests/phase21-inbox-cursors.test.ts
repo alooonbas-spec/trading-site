@@ -274,6 +274,9 @@ describe("PHASE 21 collector watermarks", () => {
         if (target === vkMethodUrl("photos.getAllComments")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
         }
+        if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
+          return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+        }
         expect(target).toBe(vkMethodUrl("wall.getComments"));
         return new Response(
           JSON.stringify({
@@ -295,7 +298,7 @@ describe("PHASE 21 collector watermarks", () => {
       cursor: "1710000000",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["10:20:2"]);
-    expect(result.cursor).toBe("comments:1710000099|mentionpages:1|photocomments:1|wall:1|wallcomments:1");
+    expect(result.cursor).toBe("comments:1710000099|mentionpages:1|photocomments:1|videocomments:1|videos:1|wall:1|wallcomments:1");
   });
 });
 

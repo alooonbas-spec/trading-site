@@ -24,7 +24,7 @@ import type {
 } from "@/social/core/adapter";
 import { VK_SCOPES } from "@/social/vk/api";
 import { executeVkPublish, planVkPublish } from "@/social/vk/publish";
-import { collectVkInbox, replyToVkPhotoComment, replyToVkWallComment, replyToVkWallMention } from "@/social/vk/inbox";
+import { collectVkInbox, replyToVkPhotoComment, replyToVkVideoComment, replyToVkWallComment, replyToVkWallMention } from "@/social/vk/inbox";
 import { collectVkNewsfeedSearch, vkMonitorAccessToken } from "@/social/vk/monitor";
 import { connectVkCommunity, fetchVkCommunity, isVkCommunityAccount, vkCommunityGroupId } from "@/social/vk/community";
 import { resolveVkCommunityPeerId, sendVkCommunityMessage } from "@/social/vk/contact";
@@ -309,8 +309,16 @@ export class VkAdapter extends BaseSocialAdapter {
 
     if (input.kind !== "comment") {
       throw new UnsupportedActionError(
-        "VK can reply to wall comments, photo comments, and mentions. User Direct Messages are not enabled for new apps.",
+        "VK can reply to wall comments, photo comments, video comments, and mentions. User Direct Messages are not enabled for new apps.",
       );
+    }
+
+    if (input.externalEventId.startsWith("video:")) {
+      const sent = await replyToVkVideoComment(token, {
+        externalId: input.externalEventId,
+        text: input.body,
+      });
+      return { externalMessageId: sent.externalMessageId };
     }
 
     if (input.externalEventId.startsWith("photo:")) {

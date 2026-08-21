@@ -319,6 +319,10 @@ User OAuth inbox calls official `newsfeed.getMentions` (count 20). `start_time` 
 
 User OAuth inbox calls official `photos.getAllComments` (count 50) for comments across albums in one request. `album_id` and `owner_id` are omitted so VK uses all albums of the current user. Offset is omitted when `0`. After `photocomments:1`, each later poll requests `offset = page * 50`. A full 50-item page advances `photocomments:2`. A short page stores `photocomments:done`. Extra photo-comment pages are not dropped by the independent unix `photos` watermark. Events store `photo:{pid}:{commentId}` ids, `replyKind=comment`, and `url=null` (owner id is not in this payload). Replies use official `photos.createComment` with `photo_id` and `reply_to_comment`; `owner_id` is omitted so the comment lands on the current user's photo. Community tokens skip this method. No new VK OAuth scope.
 
+## VK video comments (PHASE 53)
+
+User OAuth inbox calls official `video.get` (count 10, Added album) then `video.getComments` (count 50, `sort=desc`) for those videos. `owner_id` and `album_id` are omitted on `video.get` so VK uses the current user. Offset is omitted when `0`. After `videos:1`, each later poll requests `video.get` `offset = page * 10`. After `videocomments:1`, each later poll requests `video.getComments` `offset = page * 50` for the current videos. A full page advances `videos:2` / `videocomments:2`. A short page stores `done`. Extra video and comment pages are not dropped by the independent unix `video` watermark. Events store `video:{ownerId}:{videoId}:{commentId}` and `replyKind=comment`. Replies use official `video.createComment` with `owner_id`, `video_id`, and `reply_to_comment`. Community tokens skip these methods. No new VK OAuth scope (`video` is already granted for publishing).
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

@@ -270,6 +270,9 @@ describe("PHASE 39 VK community conversation offset", () => {
         if (target === vkMethodUrl("photos.getAllComments")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
         }
+        if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
+          return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+        }
         expect(target).toBe(vkMethodUrl("wall.getComments"));
       return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
     });
