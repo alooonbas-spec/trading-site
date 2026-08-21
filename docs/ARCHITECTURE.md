@@ -201,7 +201,7 @@ Inbox filters by receiving account, account platform, match state, and stored `r
 
 ## VK community Direct Messages (PHASE 23)
 
-VK community tokens connect through the existing `VkAdapter`. Tokens stay encrypted at rest. Inbox uses `messages.getConversations` plus wall comments. Outbound MESSAGE uses `messages.send`. User OAuth still cannot DM.
+VK community tokens connect through the existing `VkAdapter`. Tokens stay encrypted at rest. Inbox uses `messages.getConversations` to discover 1:1 peers, then `messages.getHistory` for the latest 50 inbound Direct Messages per conversation, plus wall comments. Outbound MESSAGE uses `messages.send`. User OAuth still cannot DM.
 
 ## Jobs queue (PHASE 24)
 
@@ -210,6 +210,10 @@ The Jobs page lists CONTACT, PUBLISH, MONITOR, and INBOX jobs. Operators retry F
 ## Activity log (PHASE 25)
 
 The Activity page lists `activity_log` rows with action, entity, account, and platform filters. Platform is account identity. Metadata is passed through `logger.redact` before display so tokens and secrets never reach the client. The log is append-only; viewing it does not rewrite any status machine.
+
+## VK community DM history (PHASE 26)
+
+Community inbox no longer stops at `last_message`. After listing conversations, the adapter calls official `messages.getHistory` for each 1:1 user peer (count 50). A `history:1` cursor marker means later polls may skip Direct Message ids at or before the messages watermark. PHASE 23 cursors without that marker backfill the recent history window once. Unique `(workspace, account, external_id)` still dedups. Chat peers stay skipped. User OAuth inbox is still wall comments only.
 
 ## Social adapters (PHASE 2)
 

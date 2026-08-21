@@ -37,6 +37,26 @@ const wallCommentsSchema = z.object({
     .optional(),
 });
 
+const vkMessageItemSchema = z.object({
+  id: z.number(),
+  date: z.number().optional(),
+  from_id: z.number().optional(),
+  text: z.string().optional(),
+  out: z.number().optional(),
+  peer_id: z.number().optional(),
+});
+
+const vkProfilesSchema = z
+  .array(
+    z.object({
+      id: z.number(),
+      screen_name: z.string().optional(),
+      first_name: z.string().optional(),
+      last_name: z.string().optional(),
+    }),
+  )
+  .optional();
+
 const conversationsSchema = z.object({
   items: z
     .array(
@@ -51,49 +71,42 @@ const conversationsSchema = z.object({
               .optional(),
           })
           .optional(),
-        last_message: z
-          .object({
-            id: z.number(),
-            date: z.number().optional(),
-            from_id: z.number().optional(),
-            text: z.string().optional(),
-            out: z.number().optional(),
-          })
-          .optional(),
+        last_message: vkMessageItemSchema.optional(),
       }),
     )
     .optional(),
-  profiles: z
-    .array(
-      z.object({
-        id: z.number(),
-        screen_name: z.string().optional(),
-        first_name: z.string().optional(),
-        last_name: z.string().optional(),
-      }),
-    )
-    .optional(),
+  profiles: vkProfilesSchema,
 });
+
+const historySchema = z.object({
+  items: z.array(vkMessageItemSchema).optional(),
+  profiles: vkProfilesSchema,
+});
+
+const VK_COMMUNITY_HISTORY_COUNT = "50";
+const VK_CHAT_PEER_FLOOR = 2_000_000_000;
 
 export function parseVkInboxCursor(cursor?: string | null): {
   comments: string | null;
   messages: string | null;
+  history: boolean;
 } {
   const value = cursor?.trim();
   if (!value) {
-    return { comments: null, messages: null };
+    return { comments: null, messages: null, history: false };
   }
   if (isNamedInboxCursor(value)) {
     const named = parseNamedInboxCursor(value);
     return {
       comments: named.comments ?? null,
       messages: named.messages ?? null,
+      history: named.history === "1",
     };
   }
   if (/^\d{10}$/.test(value)) {
-    return { comments: value, messages: null };
+    return { comments: value, messages: null, history: false };
   }
-  return { comments: null, messages: null };
+  return { comments: null, messages: null, history: false };
 }
 
 export function parseVkCommunityConversations(
@@ -105,30 +118,42 @@ export function parseVkCommunityConversations(
     throw new SocialError("VK messages.getConversations returned an unexpected payload");
   }
 
-  const communityFromId = -Number(groupId);
-  const profiles = new Map((parsed.data.profiles ?? []).map((profile) => [profile.id, profile]));
+  const profiles = profilesFromVk(parsed.data.profiles);
   const messages: InboxMessage[] = [];
   for (const item of parsed.data.items ?? []) {
     const peer = item.conversation?.peer;
     const last = item.last_message;
-    if (!peer || peer.type === "chat" || !last) {
+    if (!peer || !isVkUserPeer(peer) || !last) {
       continue;
     }
-    const text = last.text?.trim();
-    if (!text || last.out === 1 || last.from_id === undefined || last.from_id === communityFromId || last.from_id < 0) {
+    const message = toVkCommunityInboxMessage(last, groupId, profiles);
+    if (message) {
+      messages.push(message);
+    }
+  }
+  return messages;
+}
+
+export function parseVkCommunityHistory(
+  payload: unknown,
+  groupId: string,
+  seedProfiles?: Map<number, { screen_name?: string }>,
+): InboxMessage[] {
+  const parsed = historySchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK messages.getHistory returned an unexpected payload");
+  }
+
+  const profiles = profilesFromVk(parsed.data.profiles, seedProfiles);
+  const messages: InboxMessage[] = [];
+  for (const item of parsed.data.items ?? []) {
+    if (item.peer_id !== undefined && !isVkUserPeer({ id: item.peer_id })) {
       continue;
     }
-    const profile = profiles.get(last.from_id);
-    const username = profile?.screen_name ? `@${profile.screen_name}` : null;
-    messages.push({
-      externalId: String(last.id),
-      externalProfileId: String(last.from_id),
-      username,
-      body: text,
-      url: null,
-      receivedAt: last.date ? new Date(last.date * 1000).toISOString() : null,
-      replyKind: "direct_message",
-    });
+    const message = toVkCommunityInboxMessage(item, groupId, profiles);
+    if (message) {
+      messages.push(message);
+    }
   }
   return messages;
 }
@@ -159,13 +184,14 @@ async function collectVkCommunityInbox(
     (newest, message) => laterDigitId(newest, message.externalId),
     null,
   );
+  const inboundMessages = cursor.history
+    ? directMessages.filter((message) => isDigitIdAfter(message.externalId, cursor.messages))
+    : directMessages;
   return {
-    messages: [
-      ...filterMessagesAfterCursor(comments, cursor.comments),
-      ...directMessages.filter((message) => isDigitIdAfter(message.externalId, cursor.messages)),
-    ],
+    messages: [...filterMessagesAfterCursor(comments, cursor.comments), ...inboundMessages],
     cursor: serializeNamedInboxCursor({
       comments: laterDigitId(cursor.comments, newestVkCommentUnix(comments)) ?? "",
+      history: "1",
       messages: laterDigitId(cursor.messages, newestMessageId) ?? "",
     }),
   };
@@ -241,7 +267,82 @@ async function collectVkCommunityMessages(accessToken: string, groupId: string):
     extended: "1",
     group_id: groupId,
   });
-  return parseVkCommunityConversations(payload, groupId);
+  const parsed = conversationsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK messages.getConversations returned an unexpected payload");
+  }
+
+  const seedProfiles = profilesFromVk(parsed.data.profiles);
+  const peerIds: number[] = [];
+  const seenPeers = new Set<number>();
+  for (const item of parsed.data.items ?? []) {
+    const peer = item.conversation?.peer;
+    if (!peer || !isVkUserPeer(peer) || seenPeers.has(peer.id)) {
+      continue;
+    }
+    seenPeers.add(peer.id);
+    peerIds.push(peer.id);
+  }
+
+  const messages: InboxMessage[] = [];
+  const seenIds = new Set<string>();
+  for (const peerId of peerIds) {
+    const historyPayload = await vkCall("messages.getHistory", {
+      access_token: accessToken,
+      peer_id: String(peerId),
+      count: VK_COMMUNITY_HISTORY_COUNT,
+      extended: "1",
+      group_id: groupId,
+    });
+    for (const message of parseVkCommunityHistory(historyPayload, groupId, seedProfiles)) {
+      if (seenIds.has(message.externalId)) {
+        continue;
+      }
+      seenIds.add(message.externalId);
+      messages.push(message);
+    }
+  }
+  return messages;
+}
+
+function isVkUserPeer(peer: { id: number; type?: string }): boolean {
+  if (peer.type === "chat" || peer.type === "group") {
+    return false;
+  }
+  return peer.id > 0 && peer.id < VK_CHAT_PEER_FLOOR;
+}
+
+function profilesFromVk(
+  rows?: Array<{ id: number; screen_name?: string }>,
+  seed?: Map<number, { screen_name?: string }>,
+): Map<number, { screen_name?: string }> {
+  const profiles = new Map(seed ?? []);
+  for (const profile of rows ?? []) {
+    profiles.set(profile.id, profile);
+  }
+  return profiles;
+}
+
+function toVkCommunityInboxMessage(
+  item: z.infer<typeof vkMessageItemSchema>,
+  groupId: string,
+  profiles: Map<number, { screen_name?: string }>,
+): InboxMessage | null {
+  const communityFromId = -Number(groupId);
+  const text = item.text?.trim();
+  if (!text || item.out === 1 || item.from_id === undefined || item.from_id === communityFromId || item.from_id < 0) {
+    return null;
+  }
+  const profile = profiles.get(item.from_id);
+  return {
+    externalId: String(item.id),
+    externalProfileId: String(item.from_id),
+    username: profile?.screen_name ? `@${profile.screen_name}` : null,
+    body: text,
+    url: null,
+    receivedAt: item.date ? new Date(item.date * 1000).toISOString() : null,
+    replyKind: "direct_message",
+  };
 }
 
 function newestVkCommentUnix(messages: InboxMessage[]): string | null {

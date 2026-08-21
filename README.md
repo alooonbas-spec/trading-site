@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 25: workspace Activity log page with action/entity/account/platform filters. Metadata is redacted before display. No new SQL.
+PHASE 26: VK community inbox reads official `messages.getHistory` (latest 50 inbound DMs per 1:1 conversation). First poll after upgrade backfills that window; later polls skip already-seen ids. No new SQL.

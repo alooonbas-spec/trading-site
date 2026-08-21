@@ -65,10 +65,16 @@ describe("PHASE 23 VK community conversations", () => {
         replyKind: "direct_message",
       },
     ]);
-    expect(parseVkInboxCursor("1710000000")).toEqual({ comments: "1710000000", messages: null });
+    expect(parseVkInboxCursor("1710000000")).toEqual({ comments: "1710000000", messages: null, history: false });
     expect(parseVkInboxCursor("comments:1710000000|messages:8")).toEqual({
       comments: "1710000000",
       messages: "8",
+      history: false,
+    });
+    expect(parseVkInboxCursor("comments:1710000000|history:1|messages:8")).toEqual({
+      comments: "1710000000",
+      messages: "8",
+      history: true,
     });
     expect(vkCommunityPeerId({ externalProfileId: "42", username: "@lead" })).toBe("42");
     expect(vkCommunityPeerId({ externalProfileId: "lead", username: "@lead" })).toBeNull();
@@ -133,19 +139,35 @@ describe("PHASE 23 VK community adapter", () => {
           { status: 200 },
         );
       }
-      expect(target).toBe(vkMethodUrl("messages.getConversations"));
+      if (target === vkMethodUrl("messages.getConversations")) {
+        return new Response(
+          JSON.stringify({
+            response: {
+              items: [
+                {
+                  conversation: { peer: { id: 42, type: "user" } },
+                  last_message: { id: 8, from_id: 42, text: "old dm", date: 1710000001, out: 0 },
+                },
+                {
+                  conversation: { peer: { id: 42, type: "user" } },
+                  last_message: { id: 11, from_id: 42, text: "new dm", date: 1710000098, out: 0 },
+                },
+              ],
+              profiles: [{ id: 42, screen_name: "lead" }],
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      expect(target).toBe(vkMethodUrl("messages.getHistory"));
       return new Response(
         JSON.stringify({
           response: {
             items: [
-              {
-                conversation: { peer: { id: 42, type: "user" } },
-                last_message: { id: 8, from_id: 42, text: "old dm", date: 1710000001, out: 0 },
-              },
-              {
-                conversation: { peer: { id: 42, type: "user" } },
-                last_message: { id: 11, from_id: 42, text: "new dm", date: 1710000098, out: 0 },
-              },
+              { id: 8, from_id: 42, text: "old dm", date: 1710000001, out: 0, peer_id: 42 },
+              { id: 9, from_id: 42, text: "missed dm", date: 1710000002, out: 0, peer_id: 42 },
+              { id: 10, from_id: -12345, text: "we replied", date: 1710000003, out: 1, peer_id: 42 },
+              { id: 11, from_id: 42, text: "new dm", date: 1710000098, out: 0, peer_id: 42 },
             ],
             profiles: [{ id: 42, screen_name: "lead" }],
           },
@@ -163,8 +185,9 @@ describe("PHASE 23 VK community adapter", () => {
       socialAccountId: "a",
       cursor: "comments:1710000000|messages:8",
     });
-    expect(result.messages.map((item) => item.externalId).sort()).toEqual(["-12345:20:2", "11"]);
-    expect(result.cursor).toBe("comments:1710000099|messages:11");
+    expect(result.messages.map((item) => item.externalId).sort()).toEqual(["-12345:20:2", "11", "8", "9"]);
+    expect(result.cursor).toBe("comments:1710000099|history:1|messages:11");
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getHistory"))).toHaveLength(1);
   });
 
   it("sends community DMs through messages.send and still refuses user OAuth DMs", async () => {
@@ -264,6 +287,7 @@ describe("PHASE 23 campaign gating", () => {
     expect(adapter).toContain("sendVkCommunityMessage");
     expect(readFileSync("social/vk/contact.ts", "utf8")).toContain("messages.send");
     expect(readFileSync("social/vk/inbox.ts", "utf8")).toContain("messages.getConversations");
+    expect(readFileSync("social/vk/inbox.ts", "utf8")).toContain("messages.getHistory");
     expect(adapter).not.toContain("VK_COMMUNITY_TOKEN");
     expect(mapper).toContain("assertNoTokenLeak");
     expect(page).toContain("ConnectVkCommunityDialog");

@@ -46,7 +46,8 @@ export function ConnectVkCommunityDialog({ workspaceId }: { workspaceId: string 
             />
             <p className="text-muted-foreground text-sm">
               Messages need the messages right on the token. Recipients must allow community
-              messages. INVITE stays unavailable.
+              messages. Inbox reads the latest 50 Direct Messages per 1:1 conversation. INVITE stays
+              unavailable.
             </p>
           </div>
           {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
