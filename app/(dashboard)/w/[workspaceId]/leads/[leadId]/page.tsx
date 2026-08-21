@@ -8,6 +8,8 @@ import { listContactRelationships } from "@/services/leads/relationship-service"
 import { listLeadInteractions } from "@/services/leads/interaction-service";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
 import { listInboxEventsForLead } from "@/services/inbox/query-service";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { EditLeadForm } from "@/components/leads/edit-lead-form";
 import { CreateProfileForm } from "@/components/leads/create-profile-form";
 import { CreateRelationshipForm } from "@/components/leads/create-relationship-form";
@@ -24,10 +26,13 @@ import { isTinyFishConfigured } from "@/lib/tinyfish/config";
 
 export default async function LeadDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceId: string; leadId: string }>;
+  searchParams: Promise<{ inbox?: string; timeline?: string }>;
 }) {
   const { workspaceId, leadId } = await params;
+  const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
   const lead = await findLead(workspaceId, leadId);
   if (!lead) {
@@ -36,15 +41,18 @@ export default async function LeadDetailPage({
 
   const canMutate = canMutateWorkspaceData(context.role) && !lead.mergedIntoId;
   const collectionEnabled = isTinyFishConfigured();
-  const [profiles, relationships, interactions, accounts, others, inboxEvents] = await Promise.all([
+  const [profiles, relationships, interactionPage, accounts, others, inboxPage] = await Promise.all([
     listSocialProfiles(workspaceId, leadId),
     listContactRelationships(workspaceId, leadId),
-    listLeadInteractions(workspaceId, leadId),
+    listLeadInteractions(workspaceId, leadId, query.timeline),
     listSocialAccounts(workspaceId),
     canMutate ? listLeads({ workspaceId }) : Promise.resolve([]),
-    listInboxEventsForLead(workspaceId, leadId),
+    listInboxEventsForLead(workspaceId, leadId, query.inbox),
   ]);
   const mergeCandidates = others.filter((item) => item.id !== lead.id);
+  const leadPath = `/w/${workspaceId}/leads/${leadId}`;
+  const inboxEvents = inboxPage.items;
+  const interactions = interactionPage.items;
 
   return (
     <div className="space-y-6">
@@ -171,23 +179,42 @@ export default async function LeadDetailPage({
           <CardDescription>
             Matched inbound events for this lead. Unmatched senders are attached from Inbox, never
             auto-created as new people. Official replies are blocked when the lead is do_not_contact.
+            Older pages use a created_at keyset, not OFFSET.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <LeadInboxEvents events={inboxEvents} canMutate={canMutate} />
+          <ListPagination
+            newestHref={query.inbox ? searchHref(leadPath, { timeline: query.timeline }) : null}
+            olderHref={
+              inboxPage.nextCursor
+                ? searchHref(leadPath, { inbox: inboxPage.nextCursor, timeline: query.timeline })
+                : null
+            }
+          />
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
           <CardTitle>Interactions</CardTitle>
-          <CardDescription>Notes, status changes, profile links, and merges.</CardDescription>
+          <CardDescription>
+            Notes, status changes, profile links, and merges. Older pages use a created_at keyset, not OFFSET.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <InteractionTimeline
             workspaceId={workspaceId}
             leadId={lead.id}
             interactions={interactions}
             canMutate={canMutate}
+          />
+          <ListPagination
+            newestHref={query.timeline ? searchHref(leadPath, { inbox: query.inbox }) : null}
+            olderHref={
+              interactionPage.nextCursor
+                ? searchHref(leadPath, { inbox: query.inbox, timeline: interactionPage.nextCursor })
+                : null
+            }
           />
         </CardContent>
       </Card>

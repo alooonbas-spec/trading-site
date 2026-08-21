@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 27: Inbox, Jobs, and Activity lists use created_at keyset pagination (200 rows per page, Older/Newest). No OFFSET and no new SQL.
+PHASE 28: lead inbox and interaction timeline use the same created_at keyset pagination. No new SQL.

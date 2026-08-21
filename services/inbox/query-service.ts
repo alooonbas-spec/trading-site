@@ -89,23 +89,35 @@ export async function listInboxEvents(input: {
 export async function listInboxEventsForLead(
   workspaceId: string,
   leadId: string,
-): Promise<InboxEventListItem[]> {
+  after?: string,
+): Promise<KeysetPage<InboxEventListItem>> {
   await requireWorkspaceContext(workspaceId);
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const cursor = parseKeysetCursor(after);
+  let request = supabase
     .from("inbox_events")
     .select(INBOX_EVENT_PUBLIC_COLUMNS)
     .eq("workspace_id", workspaceId)
     .eq("lead_id", leadId)
-    .order("received_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(INBOX_PAGE_SIZE);
+    .order("id", { ascending: false })
+    .limit(INBOX_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
 
+  const { data, error } = await request;
   if (error) {
     throw new ValidationError(error.message);
   }
 
-  return hydrateInboxEvents(workspaceId, (data ?? []) as InboxEventRow[]);
+  const rows = (data ?? []) as InboxEventRow[];
+  const { page, hasMore } = splitKeysetRows(rows, INBOX_PAGE_SIZE);
+  const items = await hydrateInboxEvents(workspaceId, page);
+  return {
+    items,
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
 }
 
 export async function getInboxEvent(workspaceId: string, inboxEventId: string): Promise<InboxEvent> {

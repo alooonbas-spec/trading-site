@@ -219,6 +219,10 @@ Community inbox no longer stops at `last_message`. After listing conversations, 
 
 Inbox, Jobs, and Activity pages fetch 201 rows and keep 200. If more exist, an opaque `after` keyset (`created_at`, `id`) loads older rows. Invalid cursors are ignored. There is no SQL `OFFSET`. Filter forms omit `after` so a new filter starts from the newest page.
 
+## Lead detail pagination (PHASE 28)
+
+The lead page paginates matched inbox events (`inbox`) and the interaction timeline (`timeline`) independently with the same keyset. Paginating one list keeps the other cursor. Official replies are still blocked when the lead is `do_not_contact`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
