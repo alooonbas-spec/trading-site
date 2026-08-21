@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 33: Social Accounts index uses created_at keyset pagination with platform and status filters. Group/compose pickers keep unbounded `listSocialAccounts`. No new SQL.
+PHASE 34: Campaign, post, and monitoring rule detail job lists filter by JobStatus. Filter forms omit the jobs cursor so a new filter starts from the newest created_at keyset page. Retry still does not rewrite LeadStatus or do_not_contact. No new SQL.

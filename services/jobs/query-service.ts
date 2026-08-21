@@ -24,25 +24,30 @@ const JOB_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 export async function listCampaignJobsPage(
   workspaceId: string,
   campaignId: string,
-  after?: string,
+  options?: { after?: string; status?: JobStatus },
 ): Promise<KeysetPage<Job>> {
-  return listScopedJobsPage({ workspaceId, campaignId, after });
+  return listScopedJobsPage({ workspaceId, campaignId, after: options?.after, status: options?.status });
 }
 
 export async function listPostJobsPage(
   workspaceId: string,
   postId: string,
-  after?: string,
+  options?: { after?: string; status?: JobStatus },
 ): Promise<KeysetPage<Job>> {
-  return listScopedJobsPage({ workspaceId, postId, after });
+  return listScopedJobsPage({ workspaceId, postId, after: options?.after, status: options?.status });
 }
 
 export async function listMonitoringJobsPage(
   workspaceId: string,
   ruleId: string,
-  after?: string,
+  options?: { after?: string; status?: JobStatus },
 ): Promise<KeysetPage<Job>> {
-  return listScopedJobsPage({ workspaceId, monitoringRuleId: ruleId, after });
+  return listScopedJobsPage({
+    workspaceId,
+    monitoringRuleId: ruleId,
+    after: options?.after,
+    status: options?.status,
+  });
 }
 
 async function listScopedJobsPage(input: {
@@ -51,6 +56,7 @@ async function listScopedJobsPage(input: {
   postId?: string;
   monitoringRuleId?: string;
   after?: string;
+  status?: JobStatus;
 }): Promise<KeysetPage<Job>> {
   if (!input.campaignId && !input.postId && !input.monitoringRuleId) {
     throw new ValidationError("A campaign, post, or monitoring rule is required");
@@ -73,6 +79,9 @@ async function listScopedJobsPage(input: {
   }
   if (input.monitoringRuleId) {
     request = request.eq("monitoring_rule_id", input.monitoringRuleId);
+  }
+  if (input.status) {
+    request = request.eq("status", input.status);
   }
   if (cursor) {
     request = request.or(keysetOrFilter(cursor));

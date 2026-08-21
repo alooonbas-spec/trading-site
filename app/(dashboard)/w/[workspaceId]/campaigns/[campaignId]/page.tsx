@@ -6,10 +6,12 @@ import { getCampaign, listCampaignAccountIds, listCampaignLeadsPage } from "@/se
 import { listCampaignJobsPage } from "@/services/jobs/query-service";
 import { listLeadsByIds } from "@/services/leads/lead-service";
 import { listSocialAccountsByIds } from "@/services/social-accounts/account-service";
+import { parseJobStatusFilter } from "@/lib/jobs/filters";
 import { CampaignControls } from "@/components/campaigns/campaign-controls";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -20,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
+import { JOB_STATUSES } from "@/types/status";
 import { ValidationError } from "@/lib/errors";
 
 export default async function CampaignDetailPage({
@@ -27,11 +30,12 @@ export default async function CampaignDetailPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string; campaignId: string }>;
-  searchParams: Promise<{ after?: string; leads?: string }>;
+  searchParams: Promise<{ after?: string; leads?: string; status?: string }>;
 }) {
   const { workspaceId, campaignId } = await params;
   const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
+  const status = parseJobStatusFilter(query.status);
 
   let campaign;
   try {
@@ -46,7 +50,7 @@ export default async function CampaignDetailPage({
   const [leadsPage, accountIds, jobsPage] = await Promise.all([
     listCampaignLeadsPage(workspaceId, campaignId, query.leads),
     listCampaignAccountIds(workspaceId, campaignId),
-    listCampaignJobsPage(workspaceId, campaignId, query.after),
+    listCampaignJobsPage(workspaceId, campaignId, { after: query.after, status }),
   ]);
   const jobs = jobsPage.items;
   const campaignLeads = leadsPage.items;
@@ -123,10 +127,14 @@ export default async function CampaignDetailPage({
               ))
             )}
             <ListPagination
-              newestHref={query.leads ? searchHref(campaignPath, { after: query.after }) : null}
+              newestHref={query.leads ? searchHref(campaignPath, { after: query.after, status }) : null}
               olderHref={
                 leadsPage.nextCursor
-                  ? searchHref(campaignPath, { after: query.after, leads: leadsPage.nextCursor })
+                  ? searchHref(campaignPath, {
+                      after: query.after,
+                      status,
+                      leads: leadsPage.nextCursor,
+                    })
                   : null
               }
             />
@@ -159,13 +167,35 @@ export default async function CampaignDetailPage({
           <CardTitle>Jobs</CardTitle>
           <CardDescription>
             Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. Retry stays on the Jobs
-            queue and does not rewrite LeadStatus or do_not_contact. Older pages use a created_at keyset,
-            not OFFSET.
+            queue and does not rewrite LeadStatus or do_not_contact. JobStatus stays on its own machine.
+            Older pages use a created_at keyset, not OFFSET.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <form className="mb-4 grid gap-2 md:grid-cols-[220px_auto]" method="get">
+            {query.leads ? <input type="hidden" name="leads" value={query.leads} /> : null}
+            <select
+              name="status"
+              defaultValue={status ?? ""}
+              className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            >
+              <option value="">All job statuses</option>
+              {JOB_STATUSES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+            <Button type="submit" variant="outline">
+              Filter
+            </Button>
+          </form>
           {jobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No jobs yet. Start the campaign to enqueue work.</p>
+            <p className="text-sm text-muted-foreground">
+              {status
+                ? "No jobs match this JobStatus."
+                : "No jobs yet. Start the campaign to enqueue work."}
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -205,10 +235,14 @@ export default async function CampaignDetailPage({
           )}
           <div className="mt-4">
             <ListPagination
-              newestHref={query.after ? searchHref(campaignPath, { leads: query.leads }) : null}
+              newestHref={query.after ? searchHref(campaignPath, { leads: query.leads, status }) : null}
               olderHref={
                 jobsPage.nextCursor
-                  ? searchHref(campaignPath, { after: jobsPage.nextCursor, leads: query.leads })
+                  ? searchHref(campaignPath, {
+                      after: jobsPage.nextCursor,
+                      leads: query.leads,
+                      status,
+                    })
                   : null
               }
             />

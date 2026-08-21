@@ -243,6 +243,10 @@ Campaigns, Posts, and Monitoring index pages filter by their own status machines
 
 The Social Accounts page paginates connected-account cards with the same `created_at` keyset and filters by stored platform identity and `SocialAccountStatus`. Group create still uses unbounded `listSocialAccounts` so operators can assign any account. Tokens stay server-side. Filtering does not rewrite `LeadStatus` or `do_not_contact`.
 
+## Detail job status filters (PHASE 34)
+
+Campaign, post, and monitoring rule pages filter their paginated job lists by `JobStatus`. Filter GET forms omit the jobs cursor (`after` on campaign/post, `jobs` on monitoring) so a new filter starts from the newest keyset page. Independent cursors (campaign leads, monitoring events) stay in hidden fields. Filtering does not rewrite `LeadStatus` or `do_not_contact`. Retry still lives on the Jobs queue.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

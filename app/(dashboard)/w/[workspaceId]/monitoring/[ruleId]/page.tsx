@@ -5,10 +5,12 @@ import { canManageWorkspace, canMutateWorkspaceData } from "@/lib/auth/permissio
 import { getMonitoringRule, listMonitoringEventsPage } from "@/services/monitoring/rule-service";
 import { listMonitoringJobsPage } from "@/services/jobs/query-service";
 import { listSocialAccountsByIds } from "@/services/social-accounts/account-service";
+import { parseJobStatusFilter } from "@/lib/jobs/filters";
 import { MonitoringRuleControls } from "@/components/monitoring/monitoring-rule-controls";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -19,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
+import { JOB_STATUSES } from "@/types/status";
 import { ValidationError } from "@/lib/errors";
 
 export default async function MonitoringRuleDetailPage({
@@ -26,11 +29,12 @@ export default async function MonitoringRuleDetailPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string; ruleId: string }>;
-  searchParams: Promise<{ after?: string; jobs?: string }>;
+  searchParams: Promise<{ after?: string; jobs?: string; status?: string }>;
 }) {
   const { workspaceId, ruleId } = await params;
   const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
+  const status = parseJobStatusFilter(query.status);
 
   let rule;
   try {
@@ -44,7 +48,7 @@ export default async function MonitoringRuleDetailPage({
 
   const [eventsPage, jobsPage] = await Promise.all([
     listMonitoringEventsPage(workspaceId, ruleId, query.after),
-    listMonitoringJobsPage(workspaceId, ruleId, query.jobs),
+    listMonitoringJobsPage(workspaceId, ruleId, { after: query.jobs, status }),
   ]);
   const events = eventsPage.items;
   const jobs = jobsPage.items;
@@ -153,10 +157,14 @@ export default async function MonitoringRuleDetailPage({
           )}
           <div className="mt-4">
             <ListPagination
-              newestHref={query.after ? searchHref(rulePath, { jobs: query.jobs }) : null}
+              newestHref={query.after ? searchHref(rulePath, { jobs: query.jobs, status }) : null}
               olderHref={
                 eventsPage.nextCursor
-                  ? searchHref(rulePath, { after: eventsPage.nextCursor, jobs: query.jobs })
+                  ? searchHref(rulePath, {
+                      after: eventsPage.nextCursor,
+                      jobs: query.jobs,
+                      status,
+                    })
                   : null
               }
             />
@@ -167,13 +175,33 @@ export default async function MonitoringRuleDetailPage({
         <CardHeader>
           <CardTitle>Jobs</CardTitle>
           <CardDescription>
-            Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. Older pages use a
-            created_at keyset, not OFFSET.
+            Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. JobStatus stays on its
+            own machine. Older pages use a created_at keyset, not OFFSET.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <form className="mb-4 grid gap-2 md:grid-cols-[220px_auto]" method="get">
+            {query.after ? <input type="hidden" name="after" value={query.after} /> : null}
+            <select
+              name="status"
+              defaultValue={status ?? ""}
+              className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            >
+              <option value="">All job statuses</option>
+              {JOB_STATUSES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+            <Button type="submit" variant="outline">
+              Filter
+            </Button>
+          </form>
           {jobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No jobs yet.</p>
+            <p className="text-sm text-muted-foreground">
+              {status ? "No jobs match this JobStatus." : "No jobs yet."}
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -200,10 +228,14 @@ export default async function MonitoringRuleDetailPage({
           )}
           <div className="mt-4">
             <ListPagination
-              newestHref={query.jobs ? searchHref(rulePath, { after: query.after }) : null}
+              newestHref={query.jobs ? searchHref(rulePath, { after: query.after, status }) : null}
               olderHref={
                 jobsPage.nextCursor
-                  ? searchHref(rulePath, { after: query.after, jobs: jobsPage.nextCursor })
+                  ? searchHref(rulePath, {
+                      after: query.after,
+                      status,
+                      jobs: jobsPage.nextCursor,
+                    })
                   : null
               }
             />

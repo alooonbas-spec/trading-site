@@ -5,10 +5,12 @@ import { canManageWorkspace, canMutateWorkspaceData } from "@/lib/auth/permissio
 import { getPost, listPostTargets } from "@/services/posts/post-service";
 import { listPostJobsPage } from "@/services/jobs/query-service";
 import { listSocialAccountsByIds } from "@/services/social-accounts/account-service";
+import { parseJobStatusFilter } from "@/lib/jobs/filters";
 import { PostControls } from "@/components/posts/post-controls";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -19,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
+import { JOB_STATUSES } from "@/types/status";
 import { ValidationError } from "@/lib/errors";
 
 export default async function PostDetailPage({
@@ -26,11 +29,12 @@ export default async function PostDetailPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string; postId: string }>;
-  searchParams: Promise<{ after?: string }>;
+  searchParams: Promise<{ after?: string; status?: string }>;
 }) {
   const { workspaceId, postId } = await params;
   const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
+  const status = parseJobStatusFilter(query.status);
 
   let post;
   try {
@@ -44,7 +48,7 @@ export default async function PostDetailPage({
 
   const [targets, jobsPage] = await Promise.all([
     listPostTargets(workspaceId, postId),
-    listPostJobsPage(workspaceId, postId, query.after),
+    listPostJobsPage(workspaceId, postId, { after: query.after, status }),
   ]);
   const jobs = jobsPage.items;
   const accountIds = [
@@ -54,6 +58,7 @@ export default async function PostDetailPage({
   const accounts = await listSocialAccountsByIds(workspaceId, accountIds);
   const accountMap = new Map(accounts.map((account) => [account.id, account]));
   const postPath = `/w/${workspaceId}/posts/${postId}`;
+  const filterQuery = { status };
 
   return (
     <div className="space-y-6">
@@ -147,13 +152,32 @@ export default async function PostDetailPage({
         <CardHeader>
           <CardTitle>Jobs</CardTitle>
           <CardDescription>
-            Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. Older pages use a
-            created_at keyset, not OFFSET.
+            Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. JobStatus stays on its
+            own machine. Older pages use a created_at keyset, not OFFSET.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <form className="mb-4 grid gap-2 md:grid-cols-[220px_auto]" method="get">
+            <select
+              name="status"
+              defaultValue={status ?? ""}
+              className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            >
+              <option value="">All job statuses</option>
+              {JOB_STATUSES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+            <Button type="submit" variant="outline">
+              Filter
+            </Button>
+          </form>
           {jobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No jobs yet. Publish the post to enqueue work.</p>
+            <p className="text-sm text-muted-foreground">
+              {status ? "No jobs match this JobStatus." : "No jobs yet. Publish the post to enqueue work."}
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -187,9 +211,11 @@ export default async function PostDetailPage({
           )}
           <div className="mt-4">
             <ListPagination
-              newestHref={query.after ? postPath : null}
+              newestHref={query.after ? searchHref(postPath, filterQuery) : null}
               olderHref={
-                jobsPage.nextCursor ? searchHref(postPath, { after: jobsPage.nextCursor }) : null
+                jobsPage.nextCursor
+                  ? searchHref(postPath, { ...filterQuery, after: jobsPage.nextCursor })
+                  : null
               }
             />
           </div>
