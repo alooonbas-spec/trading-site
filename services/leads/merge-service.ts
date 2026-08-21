@@ -65,6 +65,17 @@ export async function mergeLeads(input: {
     const existing = targetByIdentity.get(identity);
     if (existing) {
       await reassignRelationships(supabase, profile.id, existing.id, target.id);
+      const { error: moveInboxProfileError } = await supabase
+        .from("inbox_events")
+        .update({
+          social_profile_id: existing.id,
+          lead_id: target.id,
+          matched: true,
+        })
+        .eq("social_profile_id", profile.id);
+      if (moveInboxProfileError) {
+        throw new ValidationError(moveInboxProfileError.message);
+      }
       const { error: deleteProfileError } = await supabase
         .from("social_profiles")
         .delete()
@@ -97,6 +108,14 @@ export async function mergeLeads(input: {
     .eq("lead_id", source.id);
   if (moveInteractionsError) {
     throw new ValidationError(moveInteractionsError.message);
+  }
+
+  const { error: moveInboxError } = await supabase
+    .from("inbox_events")
+    .update({ lead_id: target.id })
+    .eq("lead_id", source.id);
+  if (moveInboxError) {
+    throw new ValidationError(moveInboxError.message);
   }
 
   const nextDoNotContact = survivingDoNotContact(source.doNotContact, target.doNotContact);

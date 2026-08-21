@@ -1,14 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { ValidationError } from "@/lib/errors";
 import { inboxMessageMatchesProfile } from "@/lib/inbox/match-profile";
-import { recordLeadInteraction } from "@/services/leads/interaction-service";
+import { recordInboxReply } from "@/services/inbox/record-reply";
 import type { InboxMessage } from "@/social/core/adapter";
 import {
   CONTACT_RELATIONSHIP_PUBLIC_COLUMNS,
   SOCIAL_PROFILE_PUBLIC_COLUMNS,
 } from "@/types/crm";
 import type { SocialPlatform } from "@/types/social";
-import type { ContactStatus } from "@/types/status";
 
 export async function ingestInboxMessages(input: {
   workspaceId: string;
@@ -86,30 +85,18 @@ export async function ingestInboxMessages(input: {
     }
     matched += 1;
 
-    await recordLeadInteraction({
+    const markedReplied = await recordInboxReply({
       workspaceId: input.workspaceId,
       leadId: profile.lead_id,
       userId: input.userId ?? null,
-      type: "REPLY",
       socialProfileId: profile.id,
       socialAccountId: input.socialAccountId,
       relationshipId: relationship?.id ?? null,
       body: message.body,
-      metadata: { externalId: message.externalId, url: message.url },
+      externalId: message.externalId,
+      url: message.url,
     });
-
-    if (relationship && relationship.status !== "BLOCKED") {
-      const { error: statusError } = await supabase
-        .from("contact_relationships")
-        .update({
-          status: "REPLIED" satisfies ContactStatus,
-          last_interacted_at: new Date().toISOString(),
-          last_error: null,
-        })
-        .eq("id", relationship.id);
-      if (statusError) {
-        throw new ValidationError(statusError.message);
-      }
+    if (markedReplied) {
       replied += 1;
     }
   }

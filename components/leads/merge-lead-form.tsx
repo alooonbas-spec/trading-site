@@ -41,8 +41,8 @@ export function MergeLeadForm({
         </select>
       </div>
       <p className="text-xs text-muted-foreground">
-        Profiles, relationships, and interactions move to this lead. If either lead is marked do
-        not contact, the surviving lead keeps that flag.
+        Profiles, relationships, interactions, and matched inbox events move to this lead. If either
+        lead is marked do not contact, the surviving lead keeps that flag.
       </p>
       {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
       {state.success ? <p className="text-sm">{state.success}</p> : null}

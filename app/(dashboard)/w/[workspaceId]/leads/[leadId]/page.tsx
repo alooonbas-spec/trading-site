@@ -7,6 +7,7 @@ import { listSocialProfiles } from "@/services/leads/profile-service";
 import { listContactRelationships } from "@/services/leads/relationship-service";
 import { listLeadInteractions } from "@/services/leads/interaction-service";
 import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { listInboxEventsForLead } from "@/services/inbox/query-service";
 import { EditLeadForm } from "@/components/leads/edit-lead-form";
 import { CreateProfileForm } from "@/components/leads/create-profile-form";
 import { CreateRelationshipForm } from "@/components/leads/create-relationship-form";
@@ -15,6 +16,7 @@ import { InteractionTimeline } from "@/components/leads/interaction-timeline";
 import { MergeLeadForm } from "@/components/leads/merge-lead-form";
 import { DeleteLeadButton } from "@/components/leads/delete-lead-button";
 import { CollectPublicProfileForm } from "@/components/leads/collect-public-profile-form";
+import { LeadInboxEvents } from "@/components/inbox/lead-inbox-events";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
@@ -34,12 +36,13 @@ export default async function LeadDetailPage({
 
   const canMutate = canMutateWorkspaceData(context.role) && !lead.mergedIntoId;
   const collectionEnabled = isTinyFishConfigured();
-  const [profiles, relationships, interactions, accounts, others] = await Promise.all([
+  const [profiles, relationships, interactions, accounts, others, inboxEvents] = await Promise.all([
     listSocialProfiles(workspaceId, leadId),
     listContactRelationships(workspaceId, leadId),
     listLeadInteractions(workspaceId, leadId),
     listSocialAccounts(workspaceId),
     canMutate ? listLeads({ workspaceId }) : Promise.resolve([]),
+    listInboxEventsForLead(workspaceId, leadId),
   ]);
   const mergeCandidates = others.filter((item) => item.id !== lead.id);
 
@@ -160,6 +163,18 @@ export default async function LeadDetailPage({
               accounts={accounts}
             />
           ) : null}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Inbox replies</CardTitle>
+          <CardDescription>
+            Matched inbound events for this lead. Unmatched senders are attached from Inbox, never
+            auto-created as new people.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LeadInboxEvents events={inboxEvents} />
         </CardContent>
       </Card>
       <Card>

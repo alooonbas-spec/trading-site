@@ -58,3 +58,8 @@ export const collectPublicProfileSchema = z.object({
   platform: z.enum(SOCIAL_PLATFORMS),
   source: z.string().trim().min(1, "Username or public profile URL is required").max(500),
 });
+
+export const attachInboxEventSchema = z.object({
+  inboxEventId: z.uuid(),
+  leadId: z.uuid(),
+});

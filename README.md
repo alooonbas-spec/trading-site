@@ -20,6 +20,7 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
    - `supabase/migrations/20260821220000_phase7_monitoring.sql`
    - `supabase/migrations/20260821240000_phase10_worker.sql`
    - `supabase/migrations/20260821260000_phase13_inbox.sql`
+   - `supabase/migrations/20260821280000_phase14_inbox_ui.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
@@ -56,4 +57,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 13: inbound replies from official APIs. Matched messages set ContactStatus to REPLIED.
+PHASE 14: inbox UI. Operators attach unmatched senders to existing leads. Inbox never auto-creates people.

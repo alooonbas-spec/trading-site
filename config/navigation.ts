@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  Inbox,
   LayoutDashboard,
   Megaphone,
   Radio,
@@ -22,6 +23,7 @@ export function workspaceNav(workspaceId: string): NavItem[] {
   return [
     { title: "Dashboard", href: base, icon: LayoutDashboard },
     { title: "Leads", href: `${base}/leads`, icon: Users },
+    { title: "Inbox", href: `${base}/inbox`, icon: Inbox },
     { title: "Campaigns", href: `${base}/campaigns`, icon: Megaphone },
     { title: "Posts", href: `${base}/posts`, icon: Send },
     { title: "Monitoring", href: `${base}/monitoring`, icon: Radio },

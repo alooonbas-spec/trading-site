@@ -13,6 +13,7 @@ User → Workspace → Social Accounts
                  → Posts → Post Targets
                  → Monitoring Rules → Monitoring Events
                  → Jobs
+                 → Inbox Events
 ```
 
 One workspace has many social accounts. Never assume 1 platform = 1 account.
@@ -129,6 +130,14 @@ Safety policy:
 - Events are stored in `inbox_events` (unique per account + external id). Unknown senders are kept unmatched and are not turned into leads.
 - Matched CRM profiles record a `REPLY` interaction. Existing contact relationships move to `REPLIED` unless they are `BLOCKED`. `do_not_contact` does not block recording replies.
 - Instagram comment inbox needs `instagram_business_manage_comments` (reconnect). Telegram `getUpdates` is a single Bot API consumer; running inbox and Telegram monitoring together can skip updates.
+- The worker still branches on `job.type`, never `platform ===`.
+
+## Inbox UI (PHASE 14)
+
+- The Inbox page lists stored events with unmatched/matched filters. Unmatched senders are attached to an **existing** lead. Inbox never inserts a `leads` row.
+- Attach creates or reuses a `social_profiles` identity from the event (platform comes from the receiving social account). If that identity is already linked to another lead, attach fails honestly.
+- Sibling unmatched events for the same identity are rematched together. Each records a `REPLY` interaction. Existing contact relationships move to `REPLIED` unless they are `BLOCKED`. `do_not_contact` does not block recording replies.
+- Lead merge moves matched inbox events onto the surviving lead and reassigns events before a duplicate profile is deleted.
 - The worker still branches on `job.type`, never `platform ===`.
 
 ## Social adapters (PHASE 2)
