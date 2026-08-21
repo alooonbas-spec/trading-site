@@ -29,7 +29,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 5. Set `APP_URL` to the public origin (used for OAuth redirect URIs).
 6. Set platform OAuth credentials before connecting VK, X, Instagram, or Facebook. Telegram uses a BotFather token and does not need an app secret in env.
-7. Set `TINYFISH_API_KEY` (server-only) to enable public profile collection and public monitoring search. Do not prefix it with `NEXT_PUBLIC_`.
+7. Set `TINYFISH_API_KEY` (server-only) to enable public profile collection and public monitoring search. Do not prefix it with `NEXT_PUBLIC_`. VK keyword monitoring uses official `newsfeed.search` with a connected account or `VK_SERVICE_TOKEN` and does not require TinyFish.
 8. For the background worker, set `SUPABASE_SERVICE_ROLE_KEY` (never `NEXT_PUBLIC_*`) and `CRON_SECRET` or `WORKER_SECRET`. Vercel Cron calls `GET /api/jobs/process` with `Authorization: Bearer $CRON_SECRET`.
 9. Register these OAuth redirect URIs with each provider:
 
@@ -57,4 +57,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 18: official Facebook Messenger and Instagram Direct Messages (inbox + 24-hour MESSAGE replies). Existing Facebook and Instagram accounts must reconnect for messaging scopes. VK user messaging is not enabled for new apps.
+PHASE 19: official VK `newsfeed.search` monitoring with a user or service token. Facebook and Instagram stay on TinyFish Search.

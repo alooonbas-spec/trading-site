@@ -87,7 +87,7 @@ Safety policy:
 - `monitoring_rules` own `MonitoringRuleStatus` (`ACTIVE` / `PAUSED` / `DISABLED`). `monitoring_events` are append-only and unique per `(workspace_id, rule_id, external_id)`.
 - `do_not_contact` is not on monitoring tables.
 - Workers claim `MONITOR` jobs with `FOR UPDATE SKIP LOCKED` and skip paused/disabled rules. They branch on `job.type`, never `platform ===`.
-- Adapters collect mentions. X uses official `GET https://api.x.com/2/tweets/search/recent` when a token is present. Telegram uses official `getUpdates`. Other platforms and tokenless runs use TinyFish Search (`GET https://api.search.tinyfish.ai`) on official domains only.
+- Adapters collect mentions. X uses official `GET https://api.x.com/2/tweets/search/recent` when a token is present. Telegram uses official `getUpdates`. VK uses official `newsfeed.search` when a user or service token is present (PHASE 19). Other platforms and tokenless runs use TinyFish Search (`GET https://api.search.tinyfish.ai`) on official domains only.
 - TinyFish Search honors HTTP 429 with no tight-loop retry, never sends stealth browser profiles, and never bypasses captcha. Missing `TINYFISH_API_KEY` fails honestly.
 - Keyword matching happens after collection. Non-official source hosts are rejected.
 
@@ -170,6 +170,12 @@ Safety policy:
 - Public usernames cannot be messaged. Recipients must already have opened a conversation (24-hour window). Graph errors fail honestly. INVITE stays `UnsupportedActionError`.
 - Campaign start now enqueues MESSAGE for Facebook and Instagram through the same capability filter. Existing Facebook and Instagram accounts must reconnect.
 - VK user `messages.send` is not implemented: new apps are not granted the user `messages` scope. Community tokens would be a later phase.
+
+## VK newsfeed monitoring (PHASE 19)
+
+- VK monitoring uses official `newsfeed.search` with a connected user token, or `VK_SERVICE_TOKEN` when no user token is present. Keyword matching still happens after collection. The cursor is the newest Unix `date` and is sent back as `start_time`.
+- Tokenless runs without a service token fall back to TinyFish Search, or fail honestly if TinyFish is not configured. Facebook and Instagram still have no public keyword-search API, so they stay on TinyFish.
+- No new VK OAuth scope is required. The worker still branches on `job.type`, never `platform ===`.
 
 ## Social adapters (PHASE 2)
 

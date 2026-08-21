@@ -10,6 +10,8 @@ import type {
   ConnectResult,
   InboxInput,
   InboxResult,
+  MonitorInput,
+  MonitorResult,
   PublishInput,
   PublishResult,
   SocialAccountSnapshot,
@@ -19,7 +21,9 @@ import type {
 import { VK_SCOPES } from "@/social/vk/api";
 import { executeVkPublish, planVkPublish } from "@/social/vk/publish";
 import { collectVkInbox } from "@/social/vk/inbox";
+import { collectVkNewsfeedSearch, vkMonitorAccessToken } from "@/social/vk/monitor";
 import { resolveVkPublicProfile } from "@/social/vk/public-profile";
+import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 
 export { VK_SCOPES } from "@/social/vk/api";
 
@@ -210,7 +214,7 @@ export class VkAdapter extends BaseSocialAdapter {
   }
 
   protected extraCapabilities(): Partial<SocialCapabilities> {
-    return { publishing: true, inbox: true };
+    return { publishing: true, inbox: true, monitoring: true };
   }
 
   async publish(input: PublishInput): Promise<PublishResult> {
@@ -229,6 +233,15 @@ export class VkAdapter extends BaseSocialAdapter {
       throw new AuthenticationError("VK account has no access token");
     }
     return collectVkInbox(token, this.context.metadata, input);
+  }
+
+  async monitor(input: MonitorInput): Promise<MonitorResult> {
+    assertMonitorSourcesAllowed("vk", input.sources);
+    const token = vkMonitorAccessToken(this.context.accessToken);
+    if (!token) {
+      return super.monitor(input);
+    }
+    return collectVkNewsfeedSearch(token, input);
   }
 
   protected resolvePublicProfile(source: string) {

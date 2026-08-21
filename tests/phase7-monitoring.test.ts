@@ -71,10 +71,10 @@ describe("monitoring adapters", () => {
     vi.unstubAllGlobals();
   });
 
-  it("enables X monitoring without TinyFish and keeps VK disabled until TinyFish is set", async () => {
+  it("enables X, Telegram, and VK monitoring without TinyFish and keeps Meta on TinyFish", async () => {
     expect((await getSocialAdapter("x").getCapabilities()).monitoring).toBe(true);
     expect((await getSocialAdapter("telegram").getCapabilities()).monitoring).toBe(true);
-    expect((await getSocialAdapter("vk").getCapabilities()).monitoring).toBe(false);
+    expect((await getSocialAdapter("vk").getCapabilities()).monitoring).toBe(true);
     expect((await getSocialAdapter("facebook").getCapabilities()).monitoring).toBe(false);
     expect((await getSocialAdapter("instagram").getCapabilities()).monitoring).toBe(false);
     await expect(

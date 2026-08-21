@@ -35,7 +35,7 @@ describe("PHASE 2 adapter capabilities", () => {
     expect(capabilities.publishing).toBe(true);
     expect(capabilities.contactActions).toBe(false);
     expect(capabilities.publicCollection).toBe(false);
-    expect(capabilities.monitoring).toBe(false);
+    expect(capabilities.monitoring).toBe(true);
     await expect(
       adapter.monitor({ workspaceId: "w", socialAccountId: null, keywords: ["hello"], sources: [] }),
     ).rejects.toBeInstanceOf(UnsupportedActionError);
