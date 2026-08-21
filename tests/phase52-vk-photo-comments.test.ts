@@ -2,62 +2,67 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ValidationError } from "@/lib/errors";
 import { VkAdapter } from "@/social/vk/adapter";
 import { vkMethodUrl } from "@/social/vk/api";
-import { parseVkInboxMentionRef } from "@/social/vk/inbox";
+import { parseVkInboxPhotoCommentRef } from "@/social/vk/inbox";
 
-function mentionPosts(
+function photoComments(
   startId: number,
   count: number,
   dateStart: number,
-): Array<{ id: number; owner_id: number; from_id: number; text: string; date: number }> {
+  pid = 9,
+): Array<{ id: number; pid: number; from_id: number; text: string; date: number }> {
   return Array.from({ length: count }, (_, index) => {
     const id = startId - index;
     return {
       id,
-      owner_id: 77,
+      pid,
       from_id: 42,
-      text: `mentioned ${id}`,
+      text: `photo comment ${id}`,
       date: dateStart - index,
     };
   });
 }
 
-describe("PHASE 51 VK newsfeed.getMentions", () => {
+describe("PHASE 52 VK photos.getAllComments", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("parses mention refs and refuses comment ids", () => {
-    expect(parseVkInboxMentionRef("77:20")).toEqual({ ownerId: "77", postId: "20" });
-    expect(parseVkInboxMentionRef("-100:9")).toEqual({ ownerId: "-100", postId: "9" });
-    expect(() => parseVkInboxMentionRef("77:20:3")).toThrow(ValidationError);
-    expect(() => parseVkInboxMentionRef("owner:20")).toThrow(ValidationError);
+  it("parses photo comment refs and refuses wall comment ids", () => {
+    expect(parseVkInboxPhotoCommentRef("photo:9:4")).toEqual({ photoId: "9", commentId: "4" });
+    expect(parseVkInboxPhotoCommentRef("photo:12:80")).toEqual({ photoId: "12", commentId: "80" });
+    expect(() => parseVkInboxPhotoCommentRef("10:20:30")).toThrow(ValidationError);
+    expect(() => parseVkInboxPhotoCommentRef("photo:abc:4")).toThrow(ValidationError);
+    expect(() => parseVkInboxPhotoCommentRef("photo:9")).toThrow(ValidationError);
   });
 
-  it("walks the next official getMentions offset window and keeps older mentions", async () => {
-    const older = mentionPosts(20, 20, 1700000020);
+  it("walks the next official getAllComments offset window and keeps older photo comments", async () => {
+    const older = photoComments(50, 50, 1700000050);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const target = String(url);
       const body = String(init?.body ?? "");
-      if (target === vkMethodUrl("wall.get")) {
+      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("wall.getComments")) {
+      if (target === vkMethodUrl("newsfeed.getMentions")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("photos.getAllComments")) {
-        return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
-      }
-      expect(target).toBe(vkMethodUrl("newsfeed.getMentions"));
-      expect(body).toContain("count=20");
-      expect(body).not.toContain("start_time=");
-      if (body.includes("offset=20")) {
+      expect(target).toBe(vkMethodUrl("photos.getAllComments"));
+      expect(body).toContain("count=50");
+      expect(body).not.toContain("album_id=");
+      expect(body).not.toContain("owner_id=");
+      if (body.includes("offset=50")) {
         return new Response(JSON.stringify({ response: { items: older } }), { status: 200 });
       }
       expect(body).not.toContain("offset=");
       return new Response(
         JSON.stringify({
           response: {
-            items: [{ id: 80, owner_id: 77, from_id: 42, text: "newer mention", date: 1710000200 }],
+            items: [
+              { id: 80, pid: 9, from_id: 42, text: "newer photo", date: 1710000200 },
+              { id: 79, pid: 9, from_id: 42, text: "   ", date: 1710000199 },
+              { id: 78, from_id: 42, text: "missing pid", date: 1710000198 },
+              { id: 77, pid: 9, text: "missing from", date: 1710000197 },
+            ],
           },
         }),
         { status: 200 },
@@ -71,18 +76,18 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
     });
     expect(first.messages).toEqual([
       {
-        externalId: "77:80",
+        externalId: "photo:9:80",
         externalProfileId: "42",
         username: null,
-        body: "newer mention",
-        url: "https://vk.com/wall77_80",
+        body: "newer photo",
+        url: null,
         receivedAt: new Date(1710000200 * 1000).toISOString(),
-        replyKind: "mention",
+        replyKind: "comment",
       },
     ]);
-    expect(first.cursor).toBe("mentionpages:1|mentions:1710000200|photocomments:1|wall:1|wallcomments:1");
+    expect(first.cursor).toBe("mentionpages:1|photocomments:1|photos:1710000200|wall:1|wallcomments:1");
     expect(
-      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
+      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toHaveLength(1);
 
     const second = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
@@ -90,31 +95,32 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
       socialAccountId: "a",
       cursor: first.cursor,
     });
-    expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `77:${item.id}`));
-    expect(second.cursor).toBe("mentionpages:2|mentions:1710000200|photocomments:done|wall:done|wallcomments:done");
+    expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `photo:${item.pid}:${item.id}`));
+    expect(second.cursor).toBe("mentionpages:done|photocomments:2|photos:1710000200|wall:done|wallcomments:done");
     expect(
-      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
+      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toHaveLength(3);
   });
 
-  it("skips getMentions offset once mentionpages:done is stored", async () => {
+  it("skips getAllComments offset once photocomments:done is stored", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const target = String(url);
       const body = String(init?.body ?? "");
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("photos.getAllComments")) {
+      if (target === vkMethodUrl("newsfeed.getMentions")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      expect(target).toBe(vkMethodUrl("newsfeed.getMentions"));
+      expect(target).toBe(vkMethodUrl("photos.getAllComments"));
       if (body.includes("offset=")) {
-        throw new Error(`unexpected mentions offset ${body}`);
+        throw new Error(`unexpected photo comments offset ${body}`);
       }
+      expect(body).toContain("count=50");
       return new Response(
         JSON.stringify({
           response: {
-            items: [{ id: 81, owner_id: 77, from_id: 42, text: "newer mention", date: 1710000081 }],
+            items: [{ id: 81, pid: 9, from_id: 42, text: "newer photo", date: 1710000081 }],
           },
         }),
         { status: 200 },
@@ -125,20 +131,20 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
     const result = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "mentionpages:done|mentions:1710000000",
+      cursor: "photocomments:done|photos:1710000000",
     });
-    expect(result.messages.map((item) => item.externalId)).toEqual(["77:81"]);
-    expect(result.cursor).toBe("mentionpages:done|mentions:1710000081|photocomments:1|wall:1|wallcomments:1");
+    expect(result.messages.map((item) => item.externalId)).toEqual(["photo:9:81"]);
+    expect(result.cursor).toBe("mentionpages:1|photocomments:done|photos:1710000081|wall:1|wallcomments:1");
     expect(
-      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
+      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toHaveLength(1);
   });
 
-  it("does not call newsfeed.getMentions for community inbox", async () => {
+  it("does not call photos.getAllComments for community inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments")) {
-        throw new Error("community inbox must not call user newsfeed or photos.getAllComments");
+      if (target === vkMethodUrl("photos.getAllComments")) {
+        throw new Error("community inbox must not call photos.getAllComments");
       }
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
@@ -158,28 +164,28 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
       socialAccountId: "a",
     });
     expect(
-      fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
+      fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toBe(false);
   });
 
-  it("replies to VK mentions through wall.createComment on the source post", async () => {
+  it("replies to VK photo comments through photos.createComment", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      expect(String(url)).toBe(vkMethodUrl("wall.createComment"));
+      expect(String(url)).toBe(vkMethodUrl("photos.createComment"));
       const body = String(init?.body ?? "");
-      expect(body).toContain("owner_id=77");
-      expect(body).toContain("post_id=80");
+      expect(body).toContain("photo_id=9");
+      expect(body).toContain("reply_to_comment=4");
       expect(body).toContain("message=Thanks");
-      expect(body).not.toContain("reply_to_comment=");
-      return new Response(JSON.stringify({ response: { comment_id: 99 } }), { status: 200 });
+      expect(body).not.toContain("owner_id=");
+      return new Response(JSON.stringify({ response: 99 }), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const sent = await new VkAdapter({ accessToken: "vk-token" }).replyToInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      kind: "mention",
+      kind: "comment",
       body: "Thanks",
-      externalEventId: "77:80",
+      externalEventId: "photo:9:4",
       target: { externalProfileId: "42", username: null },
     });
     expect(sent.externalMessageId).toBe("99");

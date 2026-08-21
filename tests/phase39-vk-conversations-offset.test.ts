@@ -264,10 +264,13 @@ describe("PHASE 39 VK community conversation offset", () => {
           status: 200,
         });
       }
-      if (target === vkMethodUrl("newsfeed.getMentions")) {
-        return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
-      }
-      expect(target).toBe(vkMethodUrl("wall.getComments"));
+        if (target === vkMethodUrl("newsfeed.getMentions")) {
+          return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+        }
+        if (target === vkMethodUrl("photos.getAllComments")) {
+          return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+        }
+        expect(target).toBe(vkMethodUrl("wall.getComments"));
       return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);

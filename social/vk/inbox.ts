@@ -51,6 +51,20 @@ const mentionsSchema = z.object({
     .optional(),
 });
 
+const photoCommentsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.number(),
+        pid: z.number().optional(),
+        from_id: z.number().optional(),
+        date: z.number().optional(),
+        text: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
 const vkMessageItemSchema = z.object({
   id: z.number(),
   date: z.number().optional(),
@@ -102,6 +116,7 @@ const VK_COMMUNITY_CONVERSATION_COUNT = "20";
 const VK_WALL_COUNT = "10";
 const VK_WALL_COMMENT_COUNT = "50";
 const VK_MENTIONS_COUNT = "20";
+const VK_PHOTO_COMMENT_COUNT = "50";
 const VK_CHAT_PEER_FLOOR = 2_000_000_000;
 
 type VkOffsetPage = number | "done";
@@ -323,12 +338,21 @@ async function collectVkWallCommentInbox(
     mentionPage.page !== 0 && mentionPage.page !== "done"
       ? mentionPage.page * Number(VK_MENTIONS_COUNT)
       : null;
-  const [wallComments, latestMentions, olderMentions] = await Promise.all([
+  const photoPage = vkOffsetCursor(named.photocomments);
+  const photoOffset =
+    photoPage.page !== 0 && photoPage.page !== "done"
+      ? photoPage.page * Number(VK_PHOTO_COMMENT_COUNT)
+      : null;
+  const [wallComments, latestMentions, olderMentions, latestPhotos, olderPhotos] = await Promise.all([
     collectVkWallComments(accessToken, metadata, parsed.wallPage, parsed.wallcommentsPage),
     collectVkMentions(accessToken, 0),
     mentionOffset === null
       ? Promise.resolve(emptyVkMentionPage(true))
       : collectVkMentions(accessToken, mentionOffset),
+    collectVkPhotoComments(accessToken, 0),
+    photoOffset === null
+      ? Promise.resolve(emptyVkMentionPage(true))
+      : collectVkPhotoComments(accessToken, photoOffset),
   ]);
   return {
     messages: [
@@ -336,6 +360,8 @@ async function collectVkWallCommentInbox(
       ...wallComments.older,
       ...filterMessagesAfterCursor(latestMentions.messages, named.mentions ?? null),
       ...olderMentions.messages,
+      ...filterMessagesAfterCursor(latestPhotos.messages, named.photos ?? null),
+      ...olderPhotos.messages,
     ],
     cursor: serializeNamedInboxCursor({
       comments: laterDigitId(parsed.comments, newestVkCommentUnix([...wallComments.latest, ...wallComments.older])) ?? "",
@@ -345,6 +371,10 @@ async function collectVkWallCommentInbox(
           named.mentions,
           newestVkCommentUnix([...latestMentions.messages, ...olderMentions.messages]),
         ) ?? "",
+      photocomments: nextVkOffsetCursor(photoPage.page, olderPhotos.reachedEnd),
+      photos:
+        laterDigitId(named.photos, newestVkCommentUnix([...latestPhotos.messages, ...olderPhotos.messages])) ??
+        "",
       wall: nextVkOffsetCursor(parsed.wallPage, wallComments.reachedEnd),
       wallcomments: nextVkOffsetCursor(parsed.wallcommentsPage, wallComments.commentsReachedEnd),
     }),
@@ -394,6 +424,45 @@ async function collectVkMentions(
 
 function emptyVkMentionPage(reachedEnd: boolean): { messages: InboxMessage[]; reachedEnd: boolean } {
   return { messages: [], reachedEnd };
+}
+
+async function collectVkPhotoComments(
+  accessToken: string,
+  offset: number,
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+  const pageSize = Number(VK_PHOTO_COMMENT_COUNT);
+  const params: Record<string, string> = {
+    access_token: accessToken,
+    count: VK_PHOTO_COMMENT_COUNT,
+  };
+  if (offset > 0) {
+    params.offset = String(offset);
+  }
+  const payload = await vkCall("photos.getAllComments", params);
+  const parsed = photoCommentsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK photos.getAllComments returned an unexpected payload");
+  }
+  const messages: InboxMessage[] = [];
+  for (const comment of parsed.data.items ?? []) {
+    const text = comment.text?.trim();
+    if (!text || comment.from_id === undefined || comment.pid === undefined) {
+      continue;
+    }
+    messages.push({
+      externalId: `photo:${comment.pid}:${comment.id}`,
+      externalProfileId: String(comment.from_id),
+      username: null,
+      body: text,
+      url: null,
+      receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
+      replyKind: "comment",
+    });
+  }
+  return {
+    messages,
+    reachedEnd: (parsed.data.items ?? []).length < pageSize,
+  };
 }
 
 async function collectVkWallComments(
@@ -741,6 +810,26 @@ export function parseVkInboxMentionRef(externalId: string): {
   return { ownerId, postId };
 }
 
+export function parseVkInboxPhotoCommentRef(externalId: string): {
+  photoId: string;
+  commentId: string;
+} {
+  const parts = externalId.split(":");
+  const photoId = parts[1];
+  const commentId = parts[2];
+  if (
+    parts[0] !== "photo" ||
+    parts.length !== 3 ||
+    !photoId ||
+    !commentId ||
+    !/^\d+$/.test(photoId) ||
+    !/^\d+$/.test(commentId)
+  ) {
+    throw new ValidationError("VK photo comment replies require photo and comment ids from photos.getAllComments");
+  }
+  return { photoId, commentId };
+}
+
 export async function replyToVkWallComment(
   accessToken: string,
   input: { externalId: string; text: string },
@@ -789,4 +878,27 @@ async function postVkWallComment(
     throw new SocialError("VK wall.createComment returned an unexpected payload");
   }
   return { externalMessageId: String(parsed.data.comment_id) };
+}
+
+export async function replyToVkPhotoComment(
+  accessToken: string,
+  input: { externalId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("VK photo comment replies require a body");
+  }
+
+  const ref = parseVkInboxPhotoCommentRef(input.externalId);
+  const payload = await vkCall("photos.createComment", {
+    access_token: accessToken,
+    photo_id: ref.photoId,
+    reply_to_comment: ref.commentId,
+    message: text,
+  });
+  const parsed = z.number().safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK photos.createComment returned an unexpected payload");
+  }
+  return { externalMessageId: String(parsed.data) };
 }

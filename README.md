@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 51: Official VK `newsfeed.getMentions` offset paging for user OAuth inbox. No new SQL.
+PHASE 52: Official VK `photos.getAllComments` offset paging for user OAuth inbox. No new SQL.

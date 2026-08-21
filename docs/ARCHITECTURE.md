@@ -315,6 +315,10 @@ Facebook `GET /{page-id}/tagged` and Instagram `GET /{ig-user-id}/tags` collect 
 
 User OAuth inbox calls official `newsfeed.getMentions` (count 20). `start_time` and `end_time` are omitted so VK returns the mention archive rather than the 24-hour default window. After `mentionpages:1`, each later poll requests `offset = page * 20`. A full 20-item page advances `mentionpages:2`. A short page stores `mentionpages:done`. Extra mention pages are not dropped by the independent unix `mentions` watermark. Mention events store `owner:post` ids and `replyKind=mention`. Replies use `wall.createComment` on that post without `reply_to_comment`. Community tokens skip this method (user newsfeed). No new VK OAuth scope.
 
+## VK photo comments (PHASE 52)
+
+User OAuth inbox calls official `photos.getAllComments` (count 50) for comments across albums in one request. `album_id` and `owner_id` are omitted so VK uses all albums of the current user. Offset is omitted when `0`. After `photocomments:1`, each later poll requests `offset = page * 50`. A full 50-item page advances `photocomments:2`. A short page stores `photocomments:done`. Extra photo-comment pages are not dropped by the independent unix `photos` watermark. Events store `photo:{pid}:{commentId}` ids, `replyKind=comment`, and `url=null` (owner id is not in this payload). Replies use official `photos.createComment` with `photo_id` and `reply_to_comment`; `owner_id` is omitted so the comment lands on the current user's photo. Community tokens skip this method. No new VK OAuth scope.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
