@@ -84,43 +84,71 @@ const historySchema = z.object({
 });
 
 const VK_COMMUNITY_HISTORY_COUNT = "50";
+const VK_COMMUNITY_CONVERSATION_COUNT = "20";
 const VK_CHAT_PEER_FLOOR = 2_000_000_000;
+
+type VkOffsetPage = number | "done";
 
 export function parseVkInboxCursor(cursor?: string | null): {
   comments: string | null;
   messages: string | null;
   history: boolean;
-  historyPage: number | "done";
+  historyPage: VkOffsetPage;
+  conversations: boolean;
+  conversationsPage: VkOffsetPage;
 } {
   const value = cursor?.trim();
   if (!value) {
-    return { comments: null, messages: null, history: false, historyPage: 0 };
+    return emptyVkInboxCursor();
   }
   if (isNamedInboxCursor(value)) {
     const named = parseNamedInboxCursor(value);
+    const history = vkOffsetCursor(named.history);
+    const conversations = vkOffsetCursor(named.conversations);
     return {
       comments: named.comments ?? null,
       messages: named.messages ?? null,
-      ...vkHistoryCursor(named.history),
+      history: history.started,
+      historyPage: history.page,
+      conversations: conversations.started,
+      conversationsPage: conversations.page,
     };
   }
   if (/^\d{10}$/.test(value)) {
-    return { comments: value, messages: null, history: false, historyPage: 0 };
+    return { ...emptyVkInboxCursor(), comments: value };
   }
-  return { comments: null, messages: null, history: false, historyPage: 0 };
+  return emptyVkInboxCursor();
 }
 
-function vkHistoryCursor(value: string | undefined): {
+function emptyVkInboxCursor(): {
+  comments: string | null;
+  messages: string | null;
   history: boolean;
-  historyPage: number | "done";
+  historyPage: VkOffsetPage;
+  conversations: boolean;
+  conversationsPage: VkOffsetPage;
+} {
+  return {
+    comments: null,
+    messages: null,
+    history: false,
+    historyPage: 0,
+    conversations: false,
+    conversationsPage: 0,
+  };
+}
+
+function vkOffsetCursor(value: string | undefined): {
+  started: boolean;
+  page: VkOffsetPage;
 } {
   if (value === "done") {
-    return { history: true, historyPage: "done" };
+    return { started: true, page: "done" };
   }
   if (value && /^\d+$/.test(value) && value !== "0") {
-    return { history: true, historyPage: Number(value) };
+    return { started: true, page: Number(value) };
   }
-  return { history: false, historyPage: 0 };
+  return { started: false, page: 0 };
 }
 
 export function parseVkCommunityConversations(
@@ -190,18 +218,31 @@ async function collectVkCommunityInbox(
 ): Promise<InboxResult> {
   const groupId = vkCommunityGroupId(metadata);
   const cursor = parseVkInboxCursor(input.cursor);
-  const [comments, peers] = await Promise.all([
+  const conversationOffset =
+    cursor.conversationsPage !== 0 && cursor.conversationsPage !== "done"
+      ? cursor.conversationsPage * Number(VK_COMMUNITY_CONVERSATION_COUNT)
+      : null;
+  const [comments, latestPeers, olderPeers] = await Promise.all([
     collectVkWallComments(accessToken, metadata),
-    listVkCommunityUserPeers(accessToken, groupId),
+    listVkCommunityUserPeers(accessToken, groupId, 0),
+    conversationOffset === null
+      ? Promise.resolve(emptyVkCommunityPeers(true))
+      : listVkCommunityUserPeers(accessToken, groupId, conversationOffset),
   ]);
+  const peers = mergeVkCommunityPeers(latestPeers, olderPeers);
   const latestPage = await collectVkCommunityHistoryForPeers(accessToken, groupId, peers, 0);
   const newestMessageId = latestPage.messages.reduce<string | null>(
     (newest, message) => laterDigitId(newest, message.externalId),
     null,
   );
-  const inboundLatest = cursor.history
-    ? latestPage.messages.filter((message) => isDigitIdAfter(message.externalId, cursor.messages))
-    : latestPage.messages;
+  const latestPeerIds = new Set(latestPeers.peerIds);
+  const inboundLatest = latestPage.messages.filter((message) => {
+    const peerId = Number(message.externalProfileId);
+    if (cursor.history && latestPeerIds.has(peerId)) {
+      return isDigitIdAfter(message.externalId, cursor.messages);
+    }
+    return true;
+  });
   let olderMessages: InboxMessage[] = [];
   let reachedEnd = true;
   if (cursor.historyPage !== 0 && cursor.historyPage !== "done") {
@@ -221,7 +262,8 @@ async function collectVkCommunityInbox(
     ],
     cursor: serializeNamedInboxCursor({
       comments: laterDigitId(cursor.comments, newestVkCommentUnix(comments)) ?? "",
-      history: nextVkHistoryCursor(cursor.historyPage, reachedEnd),
+      conversations: nextVkOffsetCursor(cursor.conversationsPage, olderPeers.reachedEnd),
+      history: nextVkOffsetCursor(cursor.historyPage, reachedEnd),
       messages: laterDigitId(cursor.messages, newestMessageId) ?? "",
     }),
   };
@@ -289,17 +331,29 @@ async function collectVkWallComments(
   return messages;
 }
 
+type VkCommunityPeers = {
+  peerIds: number[];
+  seedProfiles: Map<number, { screen_name?: string }>;
+  reachedEnd: boolean;
+};
+
 async function listVkCommunityUserPeers(
   accessToken: string,
   groupId: string,
-): Promise<{ peerIds: number[]; seedProfiles: Map<number, { screen_name?: string }> }> {
-  const payload = await vkCall("messages.getConversations", {
+  offset: number,
+): Promise<VkCommunityPeers> {
+  const pageSize = Number(VK_COMMUNITY_CONVERSATION_COUNT);
+  const params: Record<string, string> = {
     access_token: accessToken,
-    count: "20",
+    count: VK_COMMUNITY_CONVERSATION_COUNT,
     filter: "all",
     extended: "1",
     group_id: groupId,
-  });
+  };
+  if (offset > 0) {
+    params.offset = String(offset);
+  }
+  const payload = await vkCall("messages.getConversations", params);
   const parsed = conversationsSchema.safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("VK messages.getConversations returned an unexpected payload");
@@ -316,7 +370,32 @@ async function listVkCommunityUserPeers(
     seenPeers.add(peer.id);
     peerIds.push(peer.id);
   }
-  return { peerIds, seedProfiles };
+  return {
+    peerIds,
+    seedProfiles,
+    reachedEnd: (parsed.data.items ?? []).length < pageSize,
+  };
+}
+
+function emptyVkCommunityPeers(reachedEnd: boolean): VkCommunityPeers {
+  return { peerIds: [], seedProfiles: new Map(), reachedEnd };
+}
+
+function mergeVkCommunityPeers(latest: VkCommunityPeers, older: VkCommunityPeers): VkCommunityPeers {
+  const seedProfiles = new Map(latest.seedProfiles);
+  for (const [id, profile] of older.seedProfiles) {
+    seedProfiles.set(id, profile);
+  }
+  const seen = new Set(latest.peerIds);
+  const peerIds = [...latest.peerIds];
+  for (const id of older.peerIds) {
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    peerIds.push(id);
+  }
+  return { peerIds, seedProfiles, reachedEnd: older.reachedEnd };
 }
 
 async function collectVkCommunityHistoryForPeers(
@@ -359,7 +438,7 @@ async function collectVkCommunityHistoryForPeers(
   return { messages, reachedEnd: peers.peerIds.length === 0 ? true : reachedEnd };
 }
 
-function nextVkHistoryCursor(current: number | "done", reachedEnd: boolean): string {
+function nextVkOffsetCursor(current: VkOffsetPage, reachedEnd: boolean): string {
   if (current === "done") {
     return "done";
   }

@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 38: Campaign accounts and post targets on detail pages use created_at keyset pagination. Unbounded `listCampaignAccountIds` and `listPostTargets` remain for enqueue. No new SQL.
+PHASE 39: Official VK community `messages.getConversations` offset walks older 20-conversation windows after `conversations:1`. Unbounded history offset is unchanged. No new SQL.

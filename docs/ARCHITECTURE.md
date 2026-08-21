@@ -253,7 +253,7 @@ Campaign, post, group, monitoring, inbox, jobs, activity, and lead-relationship 
 
 ## VK community history offset (PHASE 36)
 
-After the first 50-message window (`history:1`), each later inbox poll calls official `messages.getHistory` with `offset = page * 50` for the same 1:1 user peers. A full 50-item page advances `history:2`, `history:3`, and so on. A short page stores `history:done` and later polls only keep Direct Message ids after the messages watermark. This is still not a full archive: chat peers stay skipped, conversations are the latest 20 from `getConversations`, and user OAuth inbox is still wall comments only. Unique `(workspace, account, external_id)` still dedups.
+After the first 50-message window (`history:1`), each later inbox poll calls official `messages.getHistory` with `offset = page * 50` for the same 1:1 user peers. A full 50-item page advances `history:2`, `history:3`, and so on. A short page stores `history:done` and later polls only keep Direct Message ids after the messages watermark. Chat peers stay skipped. User OAuth inbox is still wall comments only. Unique `(workspace, account, external_id)` still dedups.
 
 ## Workspace members pagination (PHASE 37)
 
@@ -262,6 +262,10 @@ The Settings members table uses the same `created_at` keyset as other operator l
 ## Detail membership pagination (PHASE 38)
 
 Campaign accounts (`accounts`) and post targets (`targets`) paginate independently from jobs (`after`) and campaign leads (`leads`) with the same `created_at` keyset. JobStatus filter forms keep the other cursors in hidden fields and omit the jobs cursor. Unbounded `listCampaignAccountIds` and `listPostTargets` remain for enqueue. Paginating membership lists does not rewrite `LeadStatus`, `PostTargetStatus`, or `do_not_contact`.
+
+## VK community conversation offset (PHASE 39)
+
+After the first 20-conversation window (`conversations:1`), each later inbox poll calls official `messages.getConversations` with `offset = page * 20`. A full 20-item raw page (including chats) advances `conversations:2`, `conversations:3`, and so on. A short page stores `conversations:done` and later polls only list the latest 20 conversations. Newly discovered older 1:1 peers still get `messages.getHistory` (latest 50 plus the current history offset window). Their inbound Direct Messages are not dropped by the messages watermark on first sight. Chat peers stay skipped. User OAuth inbox is still wall comments only. This is still not a full archive in one poll: each poll walks one extra 20-conversation page, and history remains 50-message windows.
 
 ## Social adapters (PHASE 2)
 
