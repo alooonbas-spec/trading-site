@@ -45,6 +45,14 @@ Tokens, API keys, and session cookies never go to the client.
 
 Outbound contact status changes (`QUEUED`, invite/message pending/sent) are blocked when `do_not_contact` is true. Recording replies, failures, or blocks is still allowed.
 
+## Campaigns and jobs (PHASE 4)
+
+- Campaigns select many leads and many social accounts. Start enqueues one CONTACT job per matching (lead profile, our account) pair on the same platform.
+- Workers claim jobs with `FOR UPDATE SKIP LOCKED`. They skip paused campaigns, `do_not_contact` leads, and inoperable accounts.
+- `AccountRateLimiter` consumes per-account windows via `increment_account_rate_bucket`. Limits come from `adapter.getRateLimit()`, not from `if (platform === …)` in the worker.
+- INVITE/MESSAGE call `adapter.executeContactAction`. Until adapters enable contact actions, those jobs fail with `UnsupportedActionError` instead of fake success.
+
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

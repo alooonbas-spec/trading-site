@@ -14,6 +14,7 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
    - `supabase/migrations/20260821100000_phase1_foundation.sql`
    - `supabase/migrations/20260821120000_phase2_social_accounts.sql`
    - `supabase/migrations/20260821140000_phase3_crm.sql`
+   - `supabase/migrations/20260821160000_phase4_campaigns.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
@@ -48,6 +49,6 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 3: CRM leads, social profiles, contact relationships, interactions, and merge.
+PHASE 4: campaigns, job queue, workers, and per-account rate limits.
 
-Later phases add campaigns, TinyFish, publishing, monitoring, and analytics.
+Later phases add TinyFish, publishing, monitoring, and analytics.

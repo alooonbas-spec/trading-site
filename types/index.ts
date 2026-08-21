@@ -9,3 +9,5 @@ export type { Database } from "@/types/database";
 export type { SocialAccountPublic, SocialAccountHealth, AccountGroup } from "@/types/social-account";
 export type { Lead, SocialProfile, ContactRelationship, LeadInteraction, InteractionType } from "@/types/crm";
 export { INTERACTION_TYPES } from "@/types/crm";
+export type { Campaign, Job, CampaignAction, JobType } from "@/types/campaign";
+export { CAMPAIGN_ACTIONS, JOB_TYPES } from "@/types/campaign";

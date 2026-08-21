@@ -340,6 +340,144 @@ export type Database = {
         };
         Relationships: [];
       };
+      campaigns: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          name: string;
+          description: string | null;
+          status: import("@/types/status").CampaignStatus;
+          action: import("@/types/campaign").CampaignAction;
+          body: string | null;
+          created_by: string | null;
+          started_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          name: string;
+          description?: string | null;
+          status?: import("@/types/status").CampaignStatus;
+          action: import("@/types/campaign").CampaignAction;
+          body?: string | null;
+          created_by?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          name?: string;
+          description?: string | null;
+          status?: import("@/types/status").CampaignStatus;
+          action?: import("@/types/campaign").CampaignAction;
+          body?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      campaign_leads: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          campaign_id: string;
+          lead_id: string;
+          created_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          campaign_id: string;
+          lead_id: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      campaign_accounts: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          campaign_id: string;
+          social_account_id: string;
+          created_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          campaign_id: string;
+          social_account_id: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      jobs: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          campaign_id: string | null;
+          social_account_id: string;
+          lead_id: string;
+          social_profile_id: string | null;
+          relationship_id: string | null;
+          type: import("@/types/campaign").JobType;
+          action: import("@/types/campaign").CampaignAction;
+          body: string | null;
+          status: import("@/types/status").JobStatus;
+          attempts: number;
+          max_attempts: number;
+          run_after: string;
+          locked_at: string | null;
+          locked_by: string | null;
+          last_error: string | null;
+          result: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          workspace_id: string;
+          campaign_id?: string | null;
+          social_account_id: string;
+          lead_id: string;
+          social_profile_id?: string | null;
+          relationship_id?: string | null;
+          type?: import("@/types/campaign").JobType;
+          action: import("@/types/campaign").CampaignAction;
+          body?: string | null;
+          status?: import("@/types/status").JobStatus;
+          attempts?: number;
+          max_attempts?: number;
+          run_after?: string;
+          last_error?: string | null;
+          result?: Record<string, unknown>;
+        };
+        Update: {
+          status?: import("@/types/status").JobStatus;
+          attempts?: number;
+          run_after?: string;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          last_error?: string | null;
+          result?: Record<string, unknown>;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      account_rate_buckets: {
+        Row: {
+          social_account_id: string;
+          window_start: string;
+          action_count: number;
+        };
+        Insert: {
+          social_account_id: string;
+          window_start: string;
+          action_count?: number;
+        };
+        Update: {
+          action_count?: number;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -385,6 +523,36 @@ export type Database = {
           status: import("@/types/status").SocialAccountStatus;
         }[];
       };
+      claim_jobs: {
+        Args: { p_workspace_id: string; p_limit: number; p_worker_id: string };
+        Returns: {
+          id: string;
+          workspace_id: string;
+          campaign_id: string | null;
+          social_account_id: string;
+          lead_id: string;
+          social_profile_id: string | null;
+          relationship_id: string | null;
+          type: import("@/types/campaign").JobType;
+          action: import("@/types/campaign").CampaignAction;
+          body: string | null;
+          status: import("@/types/status").JobStatus;
+          attempts: number;
+          max_attempts: number;
+          run_after: string;
+          locked_at: string | null;
+          locked_by: string | null;
+          last_error: string | null;
+          result: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+          completed_at: string | null;
+        }[];
+      };
+      increment_account_rate_bucket: {
+        Args: { p_account_id: string; p_window_start: string; p_max: number };
+        Returns: number;
+      };
     };
     Enums: {
       workspace_role: WorkspaceRole;
@@ -393,6 +561,10 @@ export type Database = {
       lead_status: import("@/types/status").LeadStatus;
       contact_status: import("@/types/status").ContactStatus;
       interaction_type: import("@/types/crm").InteractionType;
+      campaign_status: import("@/types/status").CampaignStatus;
+      job_status: import("@/types/status").JobStatus;
+      campaign_action: import("@/types/campaign").CampaignAction;
+      job_type: import("@/types/campaign").JobType;
     };
     CompositeTypes: Record<string, never>;
   };

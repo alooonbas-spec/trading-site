@@ -105,6 +105,11 @@ export type ContactActionResult = {
   externalMessageId: string | null;
 };
 
+export type AccountRateLimit = {
+  maxActions: number;
+  windowMs: number;
+};
+
 export interface SocialAdapter {
   platform: SocialPlatform;
   connectMode: "credential" | "oauth";
@@ -113,6 +118,7 @@ export interface SocialAdapter {
   disconnect(): Promise<void>;
   getAccount(): Promise<SocialAccountSnapshot>;
   getCapabilities(): Promise<SocialCapabilities>;
+  getRateLimit(): AccountRateLimit;
   collectPublicData(input: CollectInput): Promise<CollectResult>;
   publish(input: PublishInput): Promise<PublishResult>;
   monitor(input: MonitorInput): Promise<MonitorResult>;

@@ -14,6 +14,7 @@ import type {
   SocialAdapter,
   SocialCapabilities,
   SocialAccountSnapshot,
+  AccountRateLimit,
 } from "@/social/core/adapter";
 import type { SocialPlatform } from "@/types/social";
 
@@ -34,6 +35,11 @@ export const DISABLED_CAPABILITIES: SocialCapabilities = {
   messaging: false,
 };
 
+export const DEFAULT_ACCOUNT_RATE_LIMIT: AccountRateLimit = {
+  maxActions: 10,
+  windowMs: 60 * 60 * 1000,
+};
+
 export abstract class BaseSocialAdapter implements SocialAdapter {
   abstract readonly platform: SocialPlatform;
   abstract readonly connectMode: "credential" | "oauth";
@@ -41,6 +47,10 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
   abstract connect(input?: ConnectInput): Promise<ConnectResult>;
   abstract getAccount(): Promise<SocialAccountSnapshot>;
   abstract getCapabilities(): Promise<SocialCapabilities>;
+
+  getRateLimit(): AccountRateLimit {
+    return DEFAULT_ACCOUNT_RATE_LIMIT;
+  }
 
   beginOAuth(_input: OAuthBeginInput): Promise<string> {
     throw new UnsupportedActionError(`${this.platform} does not use OAuth`);

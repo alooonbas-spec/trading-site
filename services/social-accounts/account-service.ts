@@ -17,6 +17,7 @@ import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
 import type { SocialAccountHealth, SocialAccountPublic } from "@/types/social-account";
 import type { SocialPlatform } from "@/types/social";
 import { SOCIAL_PLATFORMS } from "@/types/social";
+import { countJobsByAccount } from "@/services/jobs/worker-service";
 
 function isSocialPlatform(value: string): value is SocialPlatform {
   return (SOCIAL_PLATFORMS as readonly string[]).includes(value);
@@ -252,14 +253,16 @@ export async function listSocialAccountHealth(workspaceId: string): Promise<Soci
     }
   }
 
-  return accounts.map((account) => {
+    const queueCounts = await countJobsByAccount(workspaceId, ids);
+
+    return accounts.map((account) => {
     const last = activityByAccount.get(account.id);
     return {
       account,
       tokenStatus: deriveTokenStatus(account),
       lastAction: last?.action ?? null,
       lastActionAt: last?.created_at ?? null,
-      queueCount: 0,
+      queueCount: queueCounts.get(account.id) ?? 0,
       operable: isAccountOperable(account.status) && deriveTokenStatus(account) === "CONNECTED",
     };
   });
