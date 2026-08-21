@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canManageWorkspace, canMutateWorkspaceData } from "@/lib/auth/permissions";
 import { getPost, listPostTargets } from "@/services/posts/post-service";
-import { listPostJobs } from "@/services/jobs/worker-service";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { listPostJobsPage } from "@/services/jobs/query-service";
+import { listSocialAccountsByIds } from "@/services/social-accounts/account-service";
 import { PostControls } from "@/components/posts/post-controls";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -21,10 +23,13 @@ import { ValidationError } from "@/lib/errors";
 
 export default async function PostDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceId: string; postId: string }>;
+  searchParams: Promise<{ after?: string }>;
 }) {
   const { workspaceId, postId } = await params;
+  const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
 
   let post;
@@ -37,12 +42,18 @@ export default async function PostDetailPage({
     throw error;
   }
 
-  const [targets, jobs, accounts] = await Promise.all([
+  const [targets, jobsPage] = await Promise.all([
     listPostTargets(workspaceId, postId),
-    listPostJobs(workspaceId, postId),
-    listSocialAccounts(workspaceId),
+    listPostJobsPage(workspaceId, postId, query.after),
   ]);
+  const jobs = jobsPage.items;
+  const accountIds = [
+    ...targets.map((target) => target.socialAccountId),
+    ...jobs.map((job) => job.socialAccountId).filter((id): id is string => id !== null),
+  ];
+  const accounts = await listSocialAccountsByIds(workspaceId, accountIds);
   const accountMap = new Map(accounts.map((account) => [account.id, account]));
+  const postPath = `/w/${workspaceId}/posts/${postId}`;
 
   return (
     <div className="space-y-6">
@@ -135,6 +146,10 @@ export default async function PostDetailPage({
       <Card>
         <CardHeader>
           <CardTitle>Jobs</CardTitle>
+          <CardDescription>
+            Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. Older pages use a
+            created_at keyset, not OFFSET.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {jobs.length === 0 ? (
@@ -170,6 +185,14 @@ export default async function PostDetailPage({
               </TableBody>
             </Table>
           )}
+          <div className="mt-4">
+            <ListPagination
+              newestHref={query.after ? postPath : null}
+              olderHref={
+                jobsPage.nextCursor ? searchHref(postPath, { after: jobsPage.nextCursor }) : null
+              }
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

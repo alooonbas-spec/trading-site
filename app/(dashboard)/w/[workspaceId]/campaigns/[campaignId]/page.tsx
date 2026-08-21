@@ -2,15 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canManageWorkspace, canMutateWorkspaceData } from "@/lib/auth/permissions";
-import {
-  getCampaign,
-  listCampaignAccountIds,
-  listCampaignLeadIds,
-} from "@/services/campaigns/campaign-service";
-import { listCampaignJobs } from "@/services/jobs/worker-service";
-import { listLeads } from "@/services/leads/lead-service";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { getCampaign, listCampaignAccountIds, listCampaignLeadsPage } from "@/services/campaigns/campaign-service";
+import { listCampaignJobsPage } from "@/services/jobs/query-service";
+import { listLeadsByIds } from "@/services/leads/lead-service";
+import { listSocialAccountsByIds } from "@/services/social-accounts/account-service";
 import { CampaignControls } from "@/components/campaigns/campaign-controls";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -26,10 +24,13 @@ import { ValidationError } from "@/lib/errors";
 
 export default async function CampaignDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceId: string; campaignId: string }>;
+  searchParams: Promise<{ after?: string; leads?: string }>;
 }) {
   const { workspaceId, campaignId } = await params;
+  const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
 
   let campaign;
@@ -42,16 +43,27 @@ export default async function CampaignDetailPage({
     throw error;
   }
 
-  const [leadIds, accountIds, jobs, leads, accounts] = await Promise.all([
-    listCampaignLeadIds(workspaceId, campaignId),
+  const [leadsPage, accountIds, jobsPage] = await Promise.all([
+    listCampaignLeadsPage(workspaceId, campaignId, query.leads),
     listCampaignAccountIds(workspaceId, campaignId),
-    listCampaignJobs(workspaceId, campaignId),
-    listLeads({ workspaceId, includeMerged: true }),
-    listSocialAccounts(workspaceId),
+    listCampaignJobsPage(workspaceId, campaignId, query.after),
   ]);
-
-  const leadMap = new Map(leads.map((lead) => [lead.id, lead]));
+  const jobs = jobsPage.items;
+  const campaignLeads = leadsPage.items;
+  const jobLeadIds = jobs
+    .map((job) => job.leadId)
+    .filter((id): id is string => id !== null)
+    .filter((id) => !campaignLeads.some((lead) => lead.id === id));
+  const jobAccountIds = jobs
+    .map((job) => job.socialAccountId)
+    .filter((id): id is string => id !== null);
+  const [jobLeads, accounts] = await Promise.all([
+    listLeadsByIds(workspaceId, jobLeadIds),
+    listSocialAccountsByIds(workspaceId, [...accountIds, ...jobAccountIds]),
+  ]);
+  const leadMap = new Map([...campaignLeads, ...jobLeads].map((lead) => [lead.id, lead]));
   const accountMap = new Map(accounts.map((account) => [account.id, account]));
+  const campaignPath = `/w/${workspaceId}/campaigns/${campaignId}`;
 
   return (
     <div className="space-y-6">
@@ -89,23 +101,35 @@ export default async function CampaignDetailPage({
         <Card>
           <CardHeader>
             <CardTitle>Leads</CardTitle>
+            <CardDescription>
+              {campaign.leadCount} selected. This page does not load the whole CRM. Older pages use a
+              created_at keyset, not OFFSET.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {leadIds.map((id) => {
-              const lead = leadMap.get(id);
-              return (
-                <p key={id}>
-                  {lead ? (
-                    <Link className="underline-offset-4 hover:underline" href={`/w/${workspaceId}/leads/${id}`}>
-                      {lead.displayName}
-                    </Link>
-                  ) : (
-                    id
-                  )}
-                  {lead?.doNotContact ? " · DNC" : ""}
+            {campaignLeads.length === 0 ? (
+              <p className="text-muted-foreground">No leads on this page.</p>
+            ) : (
+              campaignLeads.map((lead) => (
+                <p key={lead.id}>
+                  <Link
+                    className="underline-offset-4 hover:underline"
+                    href={`/w/${workspaceId}/leads/${lead.id}`}
+                  >
+                    {lead.displayName}
+                  </Link>
+                  {lead.doNotContact ? " · DNC" : ""}
                 </p>
-              );
-            })}
+              ))
+            )}
+            <ListPagination
+              newestHref={query.leads ? searchHref(campaignPath, { after: query.after }) : null}
+              olderHref={
+                leadsPage.nextCursor
+                  ? searchHref(campaignPath, { after: query.after, leads: leadsPage.nextCursor })
+                  : null
+              }
+            />
           </CardContent>
         </Card>
         <Card>
@@ -113,23 +137,31 @@ export default async function CampaignDetailPage({
             <CardTitle>Accounts</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {accountIds.map((id) => {
-              const account = accountMap.get(id);
-              return (
-                <p key={id}>
-                  {account
-                    ? `${SOCIAL_PLATFORM_LABELS[account.platform]} ${account.username ?? account.externalAccountId}`
-                    : id}
-                </p>
-              );
-            })}
+            {accountIds.length === 0 ? (
+              <p className="text-muted-foreground">No accounts selected.</p>
+            ) : (
+              accountIds.map((id) => {
+                const account = accountMap.get(id);
+                return (
+                  <p key={id}>
+                    {account
+                      ? `${SOCIAL_PLATFORM_LABELS[account.platform]} ${account.username ?? account.externalAccountId}`
+                      : id}
+                  </p>
+                );
+              })
+            )}
           </CardContent>
         </Card>
       </div>
       <Card>
         <CardHeader>
           <CardTitle>Jobs</CardTitle>
-          <CardDescription>{jobs.length} queued or finished contact jobs.</CardDescription>
+          <CardDescription>
+            Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. Retry stays on the Jobs
+            queue and does not rewrite LeadStatus or do_not_contact. Older pages use a created_at keyset,
+            not OFFSET.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {jobs.length === 0 ? (
@@ -146,29 +178,41 @@ export default async function CampaignDetailPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {jobs.map((job) => (
-                  <TableRow key={job.id}>
-                    <TableCell>{job.leadId ? (leadMap.get(job.leadId)?.displayName ?? job.leadId) : "—"}</TableCell>
-                    <TableCell>
-                      {(() => {
-                        const account = job.socialAccountId ? accountMap.get(job.socialAccountId) : undefined;
-                        return account
+                {jobs.map((job) => {
+                  const account = job.socialAccountId ? accountMap.get(job.socialAccountId) : undefined;
+                  return (
+                    <TableRow key={job.id}>
+                      <TableCell>
+                        {job.leadId ? (leadMap.get(job.leadId)?.displayName ?? job.leadId) : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {account
                           ? SOCIAL_PLATFORM_LABELS[account.platform]
-                          : (job.socialAccountId ?? "—");
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{job.status}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {job.attempts}/{job.maxAttempts}
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate">{job.lastError ?? "—"}</TableCell>
-                  </TableRow>
-                ))}
+                          : (job.socialAccountId ?? "—")}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{job.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {job.attempts}/{job.maxAttempts}
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate">{job.lastError ?? "—"}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
+          <div className="mt-4">
+            <ListPagination
+              newestHref={query.after ? searchHref(campaignPath, { leads: query.leads }) : null}
+              olderHref={
+                jobsPage.nextCursor
+                  ? searchHref(campaignPath, { after: jobsPage.nextCursor, leads: query.leads })
+                  : null
+              }
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

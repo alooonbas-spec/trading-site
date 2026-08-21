@@ -41,6 +41,30 @@ export async function listSocialAccounts(workspaceId: string): Promise<SocialAcc
   return (data ?? []).map(toPublicSocialAccount);
 }
 
+export async function listSocialAccountsByIds(
+  workspaceId: string,
+  accountIds: string[],
+): Promise<SocialAccountPublic[]> {
+  await requireWorkspaceContext(workspaceId);
+  const uniqueIds = [...new Set(accountIds)];
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("social_accounts")
+    .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .in("id", uniqueIds);
+
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  return (data ?? []).map(toPublicSocialAccount);
+}
+
 export async function connectSocialAccount(input: {
   workspaceId: string;
   platform: SocialPlatform;

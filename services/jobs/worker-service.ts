@@ -79,8 +79,7 @@ export async function listMonitoringJobs(workspaceId: string, ruleId: string): P
     .select(JOB_PUBLIC_COLUMNS)
     .eq("workspace_id", workspaceId)
     .eq("monitoring_rule_id", ruleId)
-    .order("created_at", { ascending: false })
-    .limit(20);
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw new ValidationError(error.message);

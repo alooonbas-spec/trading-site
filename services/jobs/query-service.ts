@@ -11,7 +11,7 @@ import {
   type KeysetPage,
 } from "@/lib/pagination/keyset";
 import { toJob } from "@/services/campaigns/mapper";
-import { CAMPAIGN_PUBLIC_COLUMNS, JOB_PUBLIC_COLUMNS, type JobListItem, type JobType } from "@/types/campaign";
+import { CAMPAIGN_PUBLIC_COLUMNS, JOB_PUBLIC_COLUMNS, type Job, type JobListItem, type JobType } from "@/types/campaign";
 import { LEAD_PUBLIC_COLUMNS } from "@/types/crm";
 import { MONITORING_RULE_PUBLIC_COLUMNS } from "@/types/monitoring";
 import { POST_PUBLIC_COLUMNS, POST_TARGET_PUBLIC_COLUMNS } from "@/types/post";
@@ -20,6 +20,75 @@ import type { CampaignStatus, JobStatus, MonitoringRuleStatus, PostStatus, PostT
 import type { SocialPlatform } from "@/types/social";
 
 const JOB_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+
+export async function listCampaignJobsPage(
+  workspaceId: string,
+  campaignId: string,
+  after?: string,
+): Promise<KeysetPage<Job>> {
+  return listScopedJobsPage({ workspaceId, campaignId, after });
+}
+
+export async function listPostJobsPage(
+  workspaceId: string,
+  postId: string,
+  after?: string,
+): Promise<KeysetPage<Job>> {
+  return listScopedJobsPage({ workspaceId, postId, after });
+}
+
+export async function listMonitoringJobsPage(
+  workspaceId: string,
+  ruleId: string,
+  after?: string,
+): Promise<KeysetPage<Job>> {
+  return listScopedJobsPage({ workspaceId, monitoringRuleId: ruleId, after });
+}
+
+async function listScopedJobsPage(input: {
+  workspaceId: string;
+  campaignId?: string;
+  postId?: string;
+  monitoringRuleId?: string;
+  after?: string;
+}): Promise<KeysetPage<Job>> {
+  if (!input.campaignId && !input.postId && !input.monitoringRuleId) {
+    throw new ValidationError("A campaign, post, or monitoring rule is required");
+  }
+  await requireWorkspaceContext(input.workspaceId);
+  const supabase = await createClient();
+  const cursor = parseKeysetCursor(input.after);
+  let request = supabase
+    .from("jobs")
+    .select(JOB_PUBLIC_COLUMNS)
+    .eq("workspace_id", input.workspaceId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(JOB_PAGE_SIZE + 1);
+  if (input.campaignId) {
+    request = request.eq("campaign_id", input.campaignId);
+  }
+  if (input.postId) {
+    request = request.eq("post_id", input.postId);
+  }
+  if (input.monitoringRuleId) {
+    request = request.eq("monitoring_rule_id", input.monitoringRuleId);
+  }
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  const { page, hasMore } = splitKeysetRows(data ?? [], JOB_PAGE_SIZE);
+  return {
+    items: page.map(toJob),
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
+}
 
 export async function listWorkspaceJobs(input: {
   workspaceId: string;

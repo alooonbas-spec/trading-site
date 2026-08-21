@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 29: Leads, Campaigns, Posts, Monitoring rules, and monitoring events use created_at keyset pagination. Picker `listLeads` stays unbounded. No new SQL.
+PHASE 30: campaign, post, and monitoring detail jobs (and campaign leads) use created_at keyset pagination. Detail pages load leads and accounts by id. No new SQL.

@@ -75,6 +75,26 @@ export async function listLeadsPage(
   };
 }
 
+export async function listLeadsByIds(workspaceId: string, leadIds: string[]): Promise<Lead[]> {
+  await requireWorkspaceContext(workspaceId);
+  const uniqueIds = [...new Set(leadIds)];
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select(LEAD_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .in("id", uniqueIds);
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  return attachLeadProfileCounts(workspaceId, data ?? []);
+}
+
 export async function findLead(workspaceId: string, leadId: string): Promise<Lead | null> {
   await requireWorkspaceContext(workspaceId);
   const supabase = await createClient();

@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { canManageWorkspace, canMutateWorkspaceData } from "@/lib/auth/permissions";
 import { getMonitoringRule, listMonitoringEventsPage } from "@/services/monitoring/rule-service";
-import { listMonitoringJobs } from "@/services/jobs/worker-service";
-import { listSocialAccounts } from "@/services/social-accounts/account-service";
+import { listMonitoringJobsPage } from "@/services/jobs/query-service";
+import { listSocialAccountsByIds } from "@/services/social-accounts/account-service";
 import { MonitoringRuleControls } from "@/components/monitoring/monitoring-rule-controls";
 import { ListPagination } from "@/components/dashboard/list-pagination";
 import { searchHref } from "@/lib/pagination/keyset";
@@ -26,7 +26,7 @@ export default async function MonitoringRuleDetailPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string; ruleId: string }>;
-  searchParams: Promise<{ after?: string }>;
+  searchParams: Promise<{ after?: string; jobs?: string }>;
 }) {
   const { workspaceId, ruleId } = await params;
   const query = await searchParams;
@@ -42,12 +42,17 @@ export default async function MonitoringRuleDetailPage({
     throw error;
   }
 
-  const [eventsPage, jobs, accounts] = await Promise.all([
+  const [eventsPage, jobsPage] = await Promise.all([
     listMonitoringEventsPage(workspaceId, ruleId, query.after),
-    listMonitoringJobs(workspaceId, ruleId),
-    listSocialAccounts(workspaceId),
+    listMonitoringJobsPage(workspaceId, ruleId, query.jobs),
   ]);
   const events = eventsPage.items;
+  const jobs = jobsPage.items;
+  const accountIds = [
+    ...(rule.socialAccountId ? [rule.socialAccountId] : []),
+    ...jobs.map((job) => job.socialAccountId).filter((id): id is string => id !== null),
+  ];
+  const accounts = await listSocialAccountsByIds(workspaceId, accountIds);
   const rulePath = `/w/${workspaceId}/monitoring/${ruleId}`;
   const account = rule.socialAccountId
     ? accounts.find((item) => item.id === rule.socialAccountId)
@@ -148,9 +153,11 @@ export default async function MonitoringRuleDetailPage({
           )}
           <div className="mt-4">
             <ListPagination
-              newestHref={query.after ? rulePath : null}
+              newestHref={query.after ? searchHref(rulePath, { jobs: query.jobs }) : null}
               olderHref={
-                eventsPage.nextCursor ? searchHref(rulePath, { after: eventsPage.nextCursor }) : null
+                eventsPage.nextCursor
+                  ? searchHref(rulePath, { after: eventsPage.nextCursor, jobs: query.jobs })
+                  : null
               }
             />
           </div>
@@ -159,6 +166,10 @@ export default async function MonitoringRuleDetailPage({
       <Card>
         <CardHeader>
           <CardTitle>Jobs</CardTitle>
+          <CardDescription>
+            Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. Older pages use a
+            created_at keyset, not OFFSET.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {jobs.length === 0 ? (
@@ -187,6 +198,16 @@ export default async function MonitoringRuleDetailPage({
               </TableBody>
             </Table>
           )}
+          <div className="mt-4">
+            <ListPagination
+              newestHref={query.jobs ? searchHref(rulePath, { after: query.after }) : null}
+              olderHref={
+                jobsPage.nextCursor
+                  ? searchHref(rulePath, { after: query.after, jobs: jobsPage.nextCursor })
+                  : null
+              }
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

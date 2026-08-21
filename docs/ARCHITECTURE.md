@@ -227,6 +227,10 @@ The lead page paginates matched inbox events (`inbox`) and the interaction timel
 
 Leads, Campaigns, Posts, and Monitoring index pages use the same `created_at` keyset as Inbox. Filter forms omit `after`. Campaign/post compose pickers and inbox/lead-merge `listLeads` stay unbounded. Monitoring rule events replace the previous 100-row cap with a 200-row keyset. There is no SQL `OFFSET`.
 
+## Detail jobs and campaign leads (PHASE 30)
+
+Campaign, post, and monitoring rule pages paginate their job lists with the same keyset. Campaign leads paginate independently (`leads`) from campaign jobs (`after`). Monitoring events (`after`) and jobs (`jobs`) stay independent. Detail pages load leads and social accounts by id instead of the whole workspace CRM. Retry still lives on the Jobs queue and does not rewrite `LeadStatus` or `do_not_contact`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

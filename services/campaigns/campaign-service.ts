@@ -17,6 +17,8 @@ import { CAMPAIGN_PUBLIC_COLUMNS, type Campaign, type CampaignAction } from "@/t
 import { emptyToNull } from "@/services/leads/mapper";
 import { toCampaign } from "@/services/campaigns/mapper";
 import { enqueueCampaignJobs } from "@/services/jobs/enqueue-service";
+import { listLeadsByIds } from "@/services/leads/lead-service";
+import type { Lead } from "@/types/crm";
 
 const CAMPAIGN_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
@@ -65,6 +67,46 @@ export async function listCampaignsPage(
       workspaceId,
       page.map((row) => toCampaign(row)),
     ),
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
+}
+
+export async function listCampaignLeadsPage(
+  workspaceId: string,
+  campaignId: string,
+  after?: string,
+): Promise<KeysetPage<Lead>> {
+  await requireWorkspaceContext(workspaceId);
+  const supabase = await createClient();
+  const cursor = parseKeysetCursor(after);
+  let request = supabase
+    .from("campaign_leads")
+    .select("id, lead_id, created_at")
+    .eq("workspace_id", workspaceId)
+    .eq("campaign_id", campaignId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(CAMPAIGN_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  const { page, hasMore } = splitKeysetRows(data ?? [], CAMPAIGN_PAGE_SIZE);
+  const leads = await listLeadsByIds(
+    workspaceId,
+    page.map((row) => row.lead_id),
+  );
+  const leadsById = new Map(leads.map((lead) => [lead.id, lead]));
+  return {
+    items: page.flatMap((row) => {
+      const lead = leadsById.get(row.lead_id);
+      return lead ? [lead] : [];
+    }),
     nextCursor: nextKeysetCursor(page, hasMore),
   };
 }
