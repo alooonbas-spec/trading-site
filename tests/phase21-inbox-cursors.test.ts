@@ -116,6 +116,7 @@ describe("PHASE 21 collector watermarks", () => {
             JSON.stringify({
               data: [
                 {
+                  id: "555_1",
                   comments: {
                     data: [
                       {
