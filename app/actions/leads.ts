@@ -8,6 +8,7 @@ import { createSocialProfile } from "@/services/leads/profile-service";
 import { createContactRelationship, updateContactRelationship } from "@/services/leads/relationship-service";
 import { addLeadNote } from "@/services/leads/note-service";
 import { mergeLeads } from "@/services/leads/merge-service";
+import { collectLeadPublicProfile } from "@/services/leads/collect-service";
 import { parsePlatform } from "@/services/social-accounts/account-service";
 import type { ContactStatus, LeadStatus } from "@/types/status";
 import { CONTACT_STATUSES, LEAD_STATUSES } from "@/types/status";
@@ -197,6 +198,35 @@ export async function mergeLeadAction(
     revalidatePath(`/w/${workspaceId}/leads`);
     revalidatePath(`/w/${workspaceId}/leads/${targetLeadId}`);
     return { error: null, success: "Leads merged" };
+  } catch (error) {
+    return { error: errorMessage(error), success: null };
+  }
+}
+
+export async function collectPublicProfileAction(
+  workspaceId: string,
+  leadId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const result = await collectLeadPublicProfile({
+      workspaceId,
+      leadId,
+      platform: parsePlatform(String(formData.get("platform") ?? "")),
+      source: String(formData.get("source") ?? ""),
+    });
+    revalidatePath(`/w/${workspaceId}/leads/${leadId}`);
+    if (result.created > 0 && result.updated === 0) {
+      return { error: null, success: `Collected ${result.created} public profile(s)` };
+    }
+    if (result.updated > 0 && result.created === 0) {
+      return { error: null, success: `Refreshed ${result.updated} public profile(s)` };
+    }
+    return {
+      error: null,
+      success: `Collected ${result.created} and refreshed ${result.updated} public profile(s)`,
+    };
   } catch (error) {
     return { error: errorMessage(error), success: null };
   }

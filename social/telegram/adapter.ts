@@ -1,7 +1,8 @@
 import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
-import { BaseSocialAdapter, DISABLED_CAPABILITIES, type AdapterContext, type ConnectInput } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot, SocialCapabilities } from "@/social/core/adapter";
+import { BaseSocialAdapter, type AdapterContext, type ConnectInput } from "@/social/core/base-adapter";
+import type { ConnectResult, SocialAccountSnapshot } from "@/social/core/adapter";
+import { resolveTelegramPublicProfile } from "@/social/telegram/public-profile";
 
 const TELEGRAM_API_ORIGIN = "https://api.telegram.org";
 
@@ -67,8 +68,8 @@ export class TelegramAdapter extends BaseSocialAdapter {
     };
   }
 
-  async getCapabilities(): Promise<SocialCapabilities> {
-    return DISABLED_CAPABILITIES;
+  protected resolvePublicProfile(source: string) {
+    return resolveTelegramPublicProfile(source);
   }
 
   private async fetchBot(token: string) {

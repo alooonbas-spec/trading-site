@@ -26,12 +26,13 @@ describe("adapter registry", () => {
 });
 
 describe("PHASE 2 adapter capabilities", () => {
-  it("keeps collect, publish, monitor, and contact actions disabled", async () => {
+  afterEach(() => {
+    delete process.env.TINYFISH_API_KEY;
+  });
+
+  it("keeps publish, monitor, and contact actions disabled", async () => {
     const adapter = getSocialAdapter("telegram");
     expect(await adapter.getCapabilities()).toEqual(DISABLED_CAPABILITIES);
-    await expect(
-      adapter.collectPublicData({ workspaceId: "w", socialAccountId: "a", source: "x" }),
-    ).rejects.toBeInstanceOf(UnsupportedActionError);
     await expect(
       adapter.publish({ workspaceId: "w", socialAccountId: "a", body: "hi", media: [] }),
     ).rejects.toBeInstanceOf(UnsupportedActionError);
@@ -47,6 +48,24 @@ describe("PHASE 2 adapter capabilities", () => {
         action: "MESSAGE",
       }),
     ).rejects.toBeInstanceOf(UnsupportedActionError);
+  });
+
+  it("refuses public collection until TINYFISH_API_KEY is configured", async () => {
+    const adapter = getSocialAdapter("telegram");
+    expect((await adapter.getCapabilities()).publicCollection).toBe(false);
+    await expect(
+      adapter.collectPublicData({ workspaceId: "w", source: "durov" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("enables publicCollection when TINYFISH_API_KEY is set and still disables contact actions", async () => {
+    process.env.TINYFISH_API_KEY = "test-key";
+    const adapter = getSocialAdapter("vk");
+    const capabilities = await adapter.getCapabilities();
+    expect(capabilities.publicCollection).toBe(true);
+    expect(capabilities.contactActions).toBe(false);
+    expect(capabilities.publishing).toBe(false);
+    expect(capabilities.monitoring).toBe(false);
   });
 });
 

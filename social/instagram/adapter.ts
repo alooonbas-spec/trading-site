@@ -2,12 +2,12 @@ import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
   BaseSocialAdapter,
-  DISABLED_CAPABILITIES,
   type AdapterContext,
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot, SocialCapabilities } from "@/social/core/adapter";
+import type { ConnectResult, SocialAccountSnapshot } from "@/social/core/adapter";
+import { resolveInstagramPublicProfile } from "@/social/instagram/public-profile";
 
 const INSTAGRAM_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize";
 const INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
@@ -134,8 +134,8 @@ export class InstagramAdapter extends BaseSocialAdapter {
     };
   }
 
-  async getCapabilities(): Promise<SocialCapabilities> {
-    return DISABLED_CAPABILITIES;
+  protected resolvePublicProfile(source: string) {
+    return resolveInstagramPublicProfile(source);
   }
 
   private async fetchMe(accessToken: string) {

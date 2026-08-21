@@ -47,7 +47,7 @@ export type SocialAccountSnapshot = {
 
 export type CollectInput = {
   workspaceId: string;
-  socialAccountId: string;
+  socialAccountId?: string | null;
   source: string;
 };
 

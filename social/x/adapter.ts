@@ -2,12 +2,12 @@ import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
   BaseSocialAdapter,
-  DISABLED_CAPABILITIES,
   type AdapterContext,
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot, SocialCapabilities } from "@/social/core/adapter";
+import type { ConnectResult, SocialAccountSnapshot } from "@/social/core/adapter";
+import { resolveXPublicProfile } from "@/social/x/public-profile";
 
 const X_AUTHORIZE_URL = "https://twitter.com/i/oauth2/authorize";
 const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
@@ -149,8 +149,8 @@ export class XAdapter extends BaseSocialAdapter {
     });
   }
 
-  async getCapabilities(): Promise<SocialCapabilities> {
-    return DISABLED_CAPABILITIES;
+  protected resolvePublicProfile(source: string) {
+    return resolveXPublicProfile(source);
   }
 
   private async fetchMe(accessToken: string) {

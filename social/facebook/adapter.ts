@@ -2,12 +2,12 @@ import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
   BaseSocialAdapter,
-  DISABLED_CAPABILITIES,
   type AdapterContext,
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot, SocialCapabilities } from "@/social/core/adapter";
+import type { ConnectResult, SocialAccountSnapshot } from "@/social/core/adapter";
+import { resolveFacebookPublicProfile } from "@/social/facebook/public-profile";
 
 const FACEBOOK_GRAPH_VERSION = "v25.0";
 const FACEBOOK_AUTHORIZE_URL = `https://www.facebook.com/${FACEBOOK_GRAPH_VERSION}/dialog/oauth`;
@@ -125,8 +125,8 @@ export class FacebookAdapter extends BaseSocialAdapter {
     await socialFetch(url.toString(), { method: "DELETE" });
   }
 
-  async getCapabilities(): Promise<SocialCapabilities> {
-    return DISABLED_CAPABILITIES;
+  protected resolvePublicProfile(source: string) {
+    return resolveFacebookPublicProfile(source);
   }
 
   private async fetchMe(accessToken: string) {

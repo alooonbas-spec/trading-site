@@ -15,6 +15,7 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
    - `supabase/migrations/20260821120000_phase2_social_accounts.sql`
    - `supabase/migrations/20260821140000_phase3_crm.sql`
    - `supabase/migrations/20260821160000_phase4_campaigns.sql`
+   - `supabase/migrations/20260821180000_phase5_tinyfish.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
@@ -23,14 +24,15 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 5. Set `APP_URL` to the public origin (used for OAuth redirect URIs).
 6. Set platform OAuth credentials before connecting VK, X, Instagram, or Facebook. Telegram uses a BotFather token and does not need an app secret in env.
-7. Register these OAuth redirect URIs with each provider:
+7. Set `TINYFISH_API_KEY` (server-only) to enable public profile collection. Do not prefix it with `NEXT_PUBLIC_`.
+8. Register these OAuth redirect URIs with each provider:
 
 - `{APP_URL}/api/social/vk/callback`
 - `{APP_URL}/api/social/x/callback`
 - `{APP_URL}/api/social/facebook/callback`
 - `{APP_URL}/api/social/instagram/callback`
 
-8. Install and run:
+9. Install and run:
 
 ```bash
 npm install
@@ -49,6 +51,6 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 4: campaigns, job queue, workers, and per-account rate limits.
+PHASE 5: TinyFish public collection. Server-only. No captcha bypass. No rate-limit bypass.
 
-Later phases add TinyFish, publishing, monitoring, and analytics.
+Later phases add publishing, monitoring, and analytics.

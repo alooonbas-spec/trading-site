@@ -1,4 +1,5 @@
-import { UnsupportedActionError } from "@/lib/errors";
+import { UnsupportedActionError, ValidationError } from "@/lib/errors";
+import { isTinyFishConfigured } from "@/lib/tinyfish/config";
 import type {
   CollectInput,
   CollectResult,
@@ -16,6 +17,8 @@ import type {
   SocialAccountSnapshot,
   AccountRateLimit,
 } from "@/social/core/adapter";
+import { collectResolvedPublicProfile } from "@/social/core/public-collect";
+import type { PublicProfileRef } from "@/social/core/public-profile";
 import type { SocialPlatform } from "@/types/social";
 
 export type { ConnectInput, OAuthBeginInput };
@@ -46,7 +49,7 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
 
   abstract connect(input?: ConnectInput): Promise<ConnectResult>;
   abstract getAccount(): Promise<SocialAccountSnapshot>;
-  abstract getCapabilities(): Promise<SocialCapabilities>;
+  protected abstract resolvePublicProfile(source: string): PublicProfileRef;
 
   getRateLimit(): AccountRateLimit {
     return DEFAULT_ACCOUNT_RATE_LIMIT;
@@ -60,8 +63,22 @@ export abstract class BaseSocialAdapter implements SocialAdapter {
     return;
   }
 
-  async collectPublicData(_input: CollectInput): Promise<CollectResult> {
-    throw new UnsupportedActionError(`${this.platform} public collection is not enabled yet`);
+  async getCapabilities(): Promise<SocialCapabilities> {
+    return {
+      ...DISABLED_CAPABILITIES,
+      publicCollection: isTinyFishConfigured(),
+    };
+  }
+
+  async collectPublicData(input: CollectInput): Promise<CollectResult> {
+    if (!isTinyFishConfigured()) {
+      throw new ValidationError("TINYFISH_API_KEY is not configured. Public collection is disabled.");
+    }
+
+    return collectResolvedPublicProfile({
+      platform: this.platform,
+      profile: this.resolvePublicProfile(input.source),
+    });
   }
 
   async publish(_input: PublishInput): Promise<PublishResult> {

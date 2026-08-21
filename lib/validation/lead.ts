@@ -53,3 +53,8 @@ export const mergeLeadsSchema = z.object({
   sourceLeadId: z.uuid(),
   targetLeadId: z.uuid(),
 });
+
+export const collectPublicProfileSchema = z.object({
+  platform: z.enum(SOCIAL_PLATFORMS),
+  source: z.string().trim().min(1, "Username or public profile URL is required").max(500),
+});

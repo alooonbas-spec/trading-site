@@ -52,12 +52,27 @@ Outbound contact status changes (`QUEUED`, invite/message pending/sent) are bloc
 - `AccountRateLimiter` consumes per-account windows via `increment_account_rate_bucket`. Limits come from `adapter.getRateLimit()`, not from `if (platform === …)` in the worker.
 - INVITE/MESSAGE call `adapter.executeContactAction`. Until adapters enable contact actions, those jobs fail with `UnsupportedActionError` instead of fake success.
 
+## Public collection (PHASE 5)
+
+TinyFish is server-only. The API key is `TINYFISH_API_KEY` (never `NEXT_PUBLIC_*`) and is sent as `X-API-Key` to official endpoints:
+
+- Fetch: `POST https://api.fetch.tinyfish.ai`
+- Search: `GET https://api.search.tinyfish.ai`
+- Agent: `POST https://agent.tinyfish.ai/v1/automation/run`
+
+PHASE 5 uses Fetch to collect a public profile page. Each adapter resolves an official public URL (Telegram `t.me`, VK `vk.com`, X `x.com`, Instagram `instagram.com`, Facebook `facebook.com`). Arbitrary URLs are rejected.
+
+Safety policy:
+
+- Goals/purpose text that mentions captcha solving, stealth, or rate-limit bypass is rejected.
+- `bot_blocked` fails honestly. There is no stealth retry.
+- HTTP 429 is surfaced as `RateLimitError`. The client does not tight-loop.
+
+`publicCollection` is true only when the server key is configured. Publishing, monitoring, and contact actions stay disabled.
 
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
 
-PHASE 2 capabilities are all disabled. `collect`, `publish`, `monitor`, and `executeContactAction` throw `UnsupportedActionError` instead of returning fake success.
-
-Encrypted access and refresh tokens are omitted from authenticated `SELECT` on `social_accounts`. Owners and admins read them through `read_social_account_secrets`.
+Encrypted access and refresh tokens are omitted from authenticated `SELECT` on `social_accounts`. Operators, owners, and admins read them through `read_social_account_secrets`.
 

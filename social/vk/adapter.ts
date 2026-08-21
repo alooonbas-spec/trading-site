@@ -2,12 +2,12 @@ import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { readJson, socialFetch } from "@/social/core/http";
 import {
   BaseSocialAdapter,
-  DISABLED_CAPABILITIES,
   type AdapterContext,
   type ConnectInput,
   type OAuthBeginInput,
 } from "@/social/core/base-adapter";
-import type { ConnectResult, SocialAccountSnapshot, SocialCapabilities } from "@/social/core/adapter";
+import type { ConnectResult, SocialAccountSnapshot } from "@/social/core/adapter";
+import { resolveVkPublicProfile } from "@/social/vk/public-profile";
 
 const VK_AUTHORIZE_URL = "https://id.vk.ru/authorize";
 const VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth";
@@ -153,8 +153,8 @@ export class VkAdapter extends BaseSocialAdapter {
     });
   }
 
-  async getCapabilities(): Promise<SocialCapabilities> {
-    return DISABLED_CAPABILITIES;
+  protected resolvePublicProfile(source: string) {
+    return resolveVkPublicProfile(source);
   }
 
   private async fetchUser(accessToken: string) {

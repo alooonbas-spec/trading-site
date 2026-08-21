@@ -14,9 +14,11 @@ import { RelationshipList } from "@/components/leads/relationship-list";
 import { InteractionTimeline } from "@/components/leads/interaction-timeline";
 import { MergeLeadForm } from "@/components/leads/merge-lead-form";
 import { DeleteLeadButton } from "@/components/leads/delete-lead-button";
+import { CollectPublicProfileForm } from "@/components/leads/collect-public-profile-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
+import { isTinyFishConfigured } from "@/lib/tinyfish/config";
 
 export default async function LeadDetailPage({
   params,
@@ -31,6 +33,7 @@ export default async function LeadDetailPage({
   }
 
   const canMutate = canMutateWorkspaceData(context.role) && !lead.mergedIntoId;
+  const collectionEnabled = isTinyFishConfigured();
   const [profiles, relationships, interactions, accounts, others] = await Promise.all([
     listSocialProfiles(workspaceId, leadId),
     listContactRelationships(workspaceId, leadId),
@@ -114,7 +117,23 @@ export default async function LeadDetailPage({
               ))}
             </ul>
           )}
-          {canMutate ? <CreateProfileForm workspaceId={workspaceId} leadId={lead.id} /> : null}
+          {canMutate ? (
+            <div className="space-y-6">
+              <CreateProfileForm workspaceId={workspaceId} leadId={lead.id} />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Collect from a public profile</p>
+                <p className="text-sm text-muted-foreground">
+                  Uses TinyFish Fetch on an official public URL. Captcha bypass and stealth retries are
+                  disabled.
+                </p>
+                <CollectPublicProfileForm
+                  workspaceId={workspaceId}
+                  leadId={lead.id}
+                  enabled={collectionEnabled}
+                />
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
       <Card>

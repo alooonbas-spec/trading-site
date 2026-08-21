@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  BotBlockedError,
   DoNotContactError,
   PermissionError,
+  PolicyError,
   RateLimitError,
   SocialAccountUnavailableError,
   isAppError,
@@ -14,6 +16,8 @@ describe("error model", () => {
     expect(new PermissionError().status).toBe(403);
     expect(new RateLimitError().status).toBe(429);
     expect(new SocialAccountUnavailableError().code).toBe("SOCIAL_ACCOUNT_UNAVAILABLE");
+    expect(new PolicyError().code).toBe("POLICY_DENIED");
+    expect(new BotBlockedError().code).toBe("BOT_BLOCKED");
     expect(isAppError(new DoNotContactError())).toBe(true);
   });
 });

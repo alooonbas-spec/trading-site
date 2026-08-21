@@ -74,6 +74,21 @@ export class SocialAccountUnavailableError extends AppError {
   }
 }
 
+export class PolicyError extends AppError {
+  constructor(message = "This request is blocked by safety policy", details?: Record<string, unknown>) {
+    super(message, { code: "POLICY_DENIED", status: 403, details });
+  }
+}
+
+export class BotBlockedError extends AppError {
+  constructor(
+    message = "The public page blocked automated fetching. Social Hub will not retry with stealth or captcha bypass.",
+    details?: Record<string, unknown>,
+  ) {
+    super(message, { code: "BOT_BLOCKED", status: 403, details });
+  }
+}
+
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }
