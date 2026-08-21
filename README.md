@@ -18,6 +18,7 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
    - `supabase/migrations/20260821180000_phase5_tinyfish.sql`
    - `supabase/migrations/20260821200000_phase6_posts.sql`
    - `supabase/migrations/20260821220000_phase7_monitoring.sql`
+   - `supabase/migrations/20260821240000_phase10_worker.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
@@ -27,14 +28,15 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 5. Set `APP_URL` to the public origin (used for OAuth redirect URIs).
 6. Set platform OAuth credentials before connecting VK, X, Instagram, or Facebook. Telegram uses a BotFather token and does not need an app secret in env.
 7. Set `TINYFISH_API_KEY` (server-only) to enable public profile collection and public monitoring search. Do not prefix it with `NEXT_PUBLIC_`.
-8. Register these OAuth redirect URIs with each provider:
+8. For the background worker, set `SUPABASE_SERVICE_ROLE_KEY` (never `NEXT_PUBLIC_*`) and `CRON_SECRET` or `WORKER_SECRET`. Vercel Cron calls `GET /api/jobs/process` with `Authorization: Bearer $CRON_SECRET`.
+9. Register these OAuth redirect URIs with each provider:
 
 - `{APP_URL}/api/social/vk/callback`
 - `{APP_URL}/api/social/x/callback`
 - `{APP_URL}/api/social/facebook/callback`
 - `{APP_URL}/api/social/instagram/callback`
 
-9. Install and run:
+10. Install and run:
 
 ```bash
 npm install
@@ -53,4 +55,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 9: official token refresh and Telegram Bot API `sendMessage` for text publish and MESSAGE.
+PHASE 10: background worker claims due jobs across workspaces through `GET|POST /api/jobs/process`.

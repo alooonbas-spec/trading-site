@@ -691,6 +691,35 @@ export type Database = {
           completed_at: string | null;
         }[];
       };
+      claim_due_jobs: {
+        Args: { p_limit: number; p_worker_id: string };
+        Returns: {
+          id: string;
+          workspace_id: string;
+          campaign_id: string | null;
+          social_account_id: string | null;
+          lead_id: string | null;
+          social_profile_id: string | null;
+          relationship_id: string | null;
+          post_id: string | null;
+          post_target_id: string | null;
+          monitoring_rule_id: string | null;
+          type: import("@/types/campaign").JobType;
+          action: import("@/types/campaign").CampaignAction | null;
+          body: string | null;
+          status: import("@/types/status").JobStatus;
+          attempts: number;
+          max_attempts: number;
+          run_after: string;
+          locked_at: string | null;
+          locked_by: string | null;
+          last_error: string | null;
+          result: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+          completed_at: string | null;
+        }[];
+      };
       increment_account_rate_bucket: {
         Args: { p_account_id: string; p_window_start: string; p_max: number };
         Returns: number;

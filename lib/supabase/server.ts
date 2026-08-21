@@ -1,9 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { readPublicEnv } from "@/lib/validation/env";
+import { isWorkerRuntime } from "@/lib/supabase/runtime";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Database } from "@/types/database";
 
 export async function createClient() {
+  if (isWorkerRuntime()) {
+    return createServiceRoleClient();
+  }
+
   const env = readPublicEnv();
   const cookieStore = await cookies();
 

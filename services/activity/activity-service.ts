@@ -4,7 +4,7 @@ import type { SocialPlatform } from "@/types/social";
 
 export async function logActivity(input: {
   workspaceId: string;
-  userId: string;
+  userId?: string | null;
   action: ActivityAction;
   platform?: SocialPlatform | null;
   socialAccountId?: string | null;
@@ -15,7 +15,7 @@ export async function logActivity(input: {
   const supabase = await createClient();
   const { error } = await supabase.from("activity_log").insert({
     workspace_id: input.workspaceId,
-    user_id: input.userId,
+    user_id: input.userId ?? null,
     action: input.action,
     platform: input.platform ?? null,
     social_account_id: input.socialAccountId ?? null,

@@ -2,7 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, readPublicEnv } from "@/lib/validation/env";
 
-const PUBLIC_PATHS = ["/auth/login", "/auth/signup", "/auth/callback", "/api/health", "/social-accounts/oauth-error"];
+const PUBLIC_PATHS = [
+  "/auth/login",
+  "/auth/signup",
+  "/auth/callback",
+  "/api/health",
+  "/api/jobs/process",
+  "/social-accounts/oauth-error",
+];
 const AUTH_PATHS = ["/auth/login", "/auth/signup"];
 const WORKSPACE_COOKIE = "sh_workspace";
 

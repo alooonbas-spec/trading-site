@@ -231,14 +231,24 @@ export async function deletePost(input: { workspaceId: string; postId: string })
 }
 
 export async function refreshPostRollup(workspaceId: string, postId: string): Promise<void> {
-  const targets = await listPostTargets(workspaceId, postId);
+  const supabase = await createClient();
+  const { data, error: targetError } = await supabase
+    .from("post_targets")
+    .select(POST_TARGET_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+  if (targetError) {
+    throw new ValidationError(targetError.message);
+  }
+
+  const targets = (data ?? []).map(toPostTarget);
   const status = rollupPostStatus(targets.map((target) => target.status));
   const publishedAt =
     status === "PUBLISHED" || status === "PARTIAL"
       ? (targets.find((target) => target.publishedAt)?.publishedAt ?? new Date().toISOString())
       : null;
 
-  const supabase = await createClient();
   const { error } = await supabase
     .from("posts")
     .update({

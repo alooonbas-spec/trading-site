@@ -15,7 +15,7 @@ import type { SocialPlatform } from "@/types/social";
 
 export async function prepareAccountAdapter(
   accountId: string,
-  options?: { userId?: string },
+  options?: { userId?: string | null },
 ): Promise<{
   adapter: SocialAdapter;
   platform: SocialPlatform;
@@ -66,7 +66,7 @@ export async function prepareAccountAdapter(
 
 export async function refreshAccountTokens(
   accountId: string,
-  options?: { userId?: string },
+  options?: { userId?: string | null },
 ): Promise<void> {
   const supabase = await createClient();
   const { data: account, error: accountError } = await supabase

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { runAsWorker } from "@/lib/supabase/runtime";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { assertCanMutateWorkspaceData } from "@/lib/auth/permissions";
 import {
@@ -170,7 +171,30 @@ export async function processJobBatch(input: {
   return { claimed: jobs.length, processed: jobs.length };
 }
 
-async function processClaimedJob(job: Job, userId: string): Promise<void> {
+export async function processDueJobs(input?: {
+  limit?: number;
+}): Promise<{ claimed: number; processed: number }> {
+  return runAsWorker(async () => {
+    const supabase = await createClient();
+    const { data: claimed, error } = await supabase.rpc("claim_due_jobs", {
+      p_limit: input?.limit ?? 20,
+      p_worker_id: "cron",
+    });
+
+    if (error) {
+      throw new ValidationError(error.message);
+    }
+
+    const jobs = claimed ?? [];
+    for (const row of jobs) {
+      await processClaimedJob(toJob(row), null);
+    }
+
+    return { claimed: jobs.length, processed: jobs.length };
+  });
+}
+
+async function processClaimedJob(job: Job, userId: string | null): Promise<void> {
   if (job.type === "MONITOR") {
     await processMonitorJob(job, userId);
     return;
@@ -184,7 +208,7 @@ async function processClaimedJob(job: Job, userId: string): Promise<void> {
   await processContactJob(job, userId);
 }
 
-async function processContactJob(job: Job, userId: string): Promise<void> {
+async function processContactJob(job: Job, userId: string | null): Promise<void> {
   const supabase = await createClient();
   if (!job.leadId || !job.action || !job.socialAccountId) {
     throw new ValidationError("Contact job is missing a lead, action, or social account");
@@ -302,7 +326,7 @@ async function processContactJob(job: Job, userId: string): Promise<void> {
   }
 }
 
-async function processPublishJob(job: Job, userId: string): Promise<void> {
+async function processPublishJob(job: Job, userId: string | null): Promise<void> {
   const supabase = await createClient();
 
   try {
@@ -402,7 +426,7 @@ async function processPublishJob(job: Job, userId: string): Promise<void> {
   }
 }
 
-async function processMonitorJob(job: Job, userId: string): Promise<void> {
+async function processMonitorJob(job: Job, userId: string | null): Promise<void> {
   const supabase = await createClient();
 
   try {
@@ -531,7 +555,7 @@ async function markRelationship(job: Job, status: ContactStatus): Promise<void> 
 
 async function finishJob(
   job: Job,
-  userId: string,
+  userId: string | null,
   input: {
     status: "SUCCESS" | "FAILED";
     relationshipStatus?: ContactStatus;
@@ -597,7 +621,7 @@ async function finishJob(
   }
 }
 
-async function failOrRetry(job: Job, userId: string, caught: unknown): Promise<void> {
+async function failOrRetry(job: Job, userId: string | null, caught: unknown): Promise<void> {
   const retryable =
     caught instanceof NetworkError ||
     caught instanceof RateLimitError ||

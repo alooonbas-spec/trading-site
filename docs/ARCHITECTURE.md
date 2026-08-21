@@ -104,6 +104,14 @@ Safety policy:
 - Successful refreshes persist encrypted tokens and log `SOCIAL_ACCOUNT_TOKEN_REFRESHED`. If a provider omits a new refresh token, the previous encrypted refresh token is kept.
 - Telegram text publish and MESSAGE use official `sendMessage`. Publishing needs `metadata.publishChatId`. INVITE and Telegram media still throw `UnsupportedActionError` / validation errors. VK, Facebook, and Instagram contact/publish stay disabled.
 
+## Background worker (PHASE 10)
+
+- `GET`/`POST /api/jobs/process` is a public path authenticated with `Authorization: Bearer $CRON_SECRET` or `WORKER_SECRET`. Missing or wrong secrets fail honestly.
+- The handler runs inside `runAsWorker()`, so `createClient()` uses `SUPABASE_SERVICE_ROLE_KEY` (never `NEXT_PUBLIC_*`) and never cookies.
+- `claim_due_jobs` is granted only to `service_role`. It claims due `PENDING`/`RETRY` jobs across workspaces with `FOR UPDATE SKIP LOCKED`, still skipping paused campaigns and non-ACTIVE monitoring rules.
+- UI "Process queue" still uses workspace-scoped `claim_jobs`. The worker does not introduce `if (platform === …)`.
+- Vercel Cron is configured daily (`0 0 * * *`) so Hobby deploys stay valid. More frequent processing uses the same endpoint from an external scheduler.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

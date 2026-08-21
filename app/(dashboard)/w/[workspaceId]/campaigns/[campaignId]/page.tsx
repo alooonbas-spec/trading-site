@@ -73,6 +73,7 @@ export default async function CampaignDetailPage({
           <CardTitle>Controls</CardTitle>
           <CardDescription>
             Start enqueues jobs. Process queue claims PENDING/RETRY jobs with SKIP LOCKED.
+            A background worker can also claim due jobs across workspaces.
           </CardDescription>
         </CardHeader>
         <CardContent>
