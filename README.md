@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 36: VK community inbox walks the next official `messages.getHistory` offset window (50 messages) per 1:1 peer after `history:1`. A short page stores `history:done`. User OAuth inbox is still wall comments only. No new SQL.
+PHASE 37: Workspace Settings members list uses created_at keyset pagination. Unbounded `listWorkspaceMembers` remains for programmatic use. No new SQL.

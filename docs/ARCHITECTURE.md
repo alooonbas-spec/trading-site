@@ -255,6 +255,10 @@ Campaign, post, group, monitoring, inbox, jobs, activity, and lead-relationship 
 
 After the first 50-message window (`history:1`), each later inbox poll calls official `messages.getHistory` with `offset = page * 50` for the same 1:1 user peers. A full 50-item page advances `history:2`, `history:3`, and so on. A short page stores `history:done` and later polls only keep Direct Message ids after the messages watermark. This is still not a full archive: chat peers stay skipped, conversations are the latest 20 from `getConversations`, and user OAuth inbox is still wall comments only. Unique `(workspace, account, external_id)` still dedups.
 
+## Workspace members pagination (PHASE 37)
+
+The Settings members table uses the same `created_at` keyset as other operator lists (newest first, 200 per page). Unbounded `listWorkspaceMembers` remains for programmatic use. Membership changes do not rewrite `LeadStatus` or `do_not_contact`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

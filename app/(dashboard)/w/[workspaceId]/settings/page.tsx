@@ -1,20 +1,27 @@
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
-import { listWorkspaceMembers } from "@/services/workspaces/queries";
+import { listWorkspaceMembersPage } from "@/services/workspaces/queries";
 import { canManageMembers, canManageWorkspace } from "@/lib/auth/permissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceSettingsForm } from "@/components/settings/workspace-settings-form";
 import { InviteMemberForm } from "@/components/settings/invite-member-form";
 import { MembersTable } from "@/components/settings/members-table";
 import { DeleteWorkspaceButton } from "@/components/settings/delete-workspace-button";
+import { ListPagination } from "@/components/dashboard/list-pagination";
+import { searchHref } from "@/lib/pagination/keyset";
 
 export default async function SettingsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
+  searchParams: Promise<{ after?: string }>;
 }) {
   const { workspaceId } = await params;
+  const query = await searchParams;
   const context = await requireWorkspaceContext(workspaceId);
-  const members = await listWorkspaceMembers(workspaceId);
+  const membersPage = await listWorkspaceMembersPage(workspaceId, query.after);
+  const members = membersPage.items;
+  const settingsPath = `/w/${workspaceId}/settings`;
 
   return (
     <div className="space-y-6">
@@ -40,7 +47,8 @@ export default async function SettingsPage({
           <CardTitle>Members</CardTitle>
           <CardDescription>
             OWNER has full access. ADMIN manages accounts and members. OPERATOR runs day-to-day
-            work. VIEWER is read-only.
+            work. VIEWER is read-only. Showing {members.length} member{members.length === 1 ? "" : "s"} on
+            this page. Older pages use a created_at keyset, not OFFSET.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -53,6 +61,12 @@ export default async function SettingsPage({
             members={members}
             currentUserId={context.user.id}
             currentRole={context.role}
+          />
+          <ListPagination
+            newestHref={query.after ? settingsPath : null}
+            olderHref={
+              membersPage.nextCursor ? searchHref(settingsPath, { after: membersPage.nextCursor }) : null
+            }
           />
         </CardContent>
       </Card>
