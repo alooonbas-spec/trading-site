@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertCanAssignRole,
   canAssignRole,
+  canManageAccounts,
   canManageMembers,
   canMutateWorkspaceData,
   isReadOnlyRole,
@@ -13,6 +14,9 @@ describe("workspace permissions", () => {
     expect(canManageMembers("OWNER")).toBe(true);
     expect(canManageMembers("ADMIN")).toBe(true);
     expect(canManageMembers("OPERATOR")).toBe(false);
+    expect(canManageAccounts("OWNER")).toBe(true);
+    expect(canManageAccounts("ADMIN")).toBe(true);
+    expect(canManageAccounts("OPERATOR")).toBe(false);
     expect(canMutateWorkspaceData("OPERATOR")).toBe(true);
     expect(isReadOnlyRole("VIEWER")).toBe(true);
   });

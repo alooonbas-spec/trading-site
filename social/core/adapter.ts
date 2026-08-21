@@ -10,6 +10,21 @@ export type SocialCapabilities = {
   messaging: boolean;
 };
 
+export type ConnectInput = {
+  credential?: string;
+  authorizationCode?: string;
+  redirectUri?: string;
+  codeVerifier?: string;
+  deviceId?: string;
+  oauthState?: string;
+};
+
+export type OAuthBeginInput = {
+  redirectUri: string;
+  state: string;
+  codeChallenge: string;
+};
+
 export type ConnectResult = {
   externalAccountId: string;
   username: string | null;
@@ -92,7 +107,9 @@ export type ContactActionResult = {
 
 export interface SocialAdapter {
   platform: SocialPlatform;
-  connect(): Promise<ConnectResult>;
+  connectMode: "credential" | "oauth";
+  beginOAuth?(input: OAuthBeginInput): Promise<string>;
+  connect(input?: ConnectInput): Promise<ConnectResult>;
   disconnect(): Promise<void>;
   getAccount(): Promise<SocialAccountSnapshot>;
   getCapabilities(): Promise<SocialCapabilities>;

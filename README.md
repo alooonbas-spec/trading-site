@@ -10,14 +10,25 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
 
 1. Copy `.env.example` to `.env.local`.
 2. Create a Supabase project and set `NEXT_PUBLIC_SUPABASE_URL` plus `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-3. Apply `supabase/migrations/20260821100000_phase1_foundation.sql` in the Supabase SQL editor, or with the Supabase CLI.
+3. Apply migrations in order:
+   - `supabase/migrations/20260821100000_phase1_foundation.sql`
+   - `supabase/migrations/20260821120000_phase2_social_accounts.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-5. Install and run:
+5. Set `APP_URL` to the public origin (used for OAuth redirect URIs).
+6. Set platform OAuth credentials before connecting VK, X, Instagram, or Facebook. Telegram uses a BotFather token and does not need an app secret in env.
+7. Register these OAuth redirect URIs with each provider:
+
+- `{APP_URL}/api/social/vk/callback`
+- `{APP_URL}/api/social/x/callback`
+- `{APP_URL}/api/social/facebook/callback`
+- `{APP_URL}/api/social/instagram/callback`
+
+8. Install and run:
 
 ```bash
 npm install
@@ -36,6 +47,6 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 1: auth, workspaces, RLS, types, dark-theme navigation.
+PHASE 2: multi-account social connections, adapters, OAuth, account health, and account groups.
 
-PHASE 2 will add multi-account social connections.
+Later phases add CRM, campaigns, TinyFish, publishing, monitoring, and analytics.

@@ -20,6 +20,10 @@ export function canManageMembers(role: WorkspaceRole): boolean {
   return role === "OWNER" || role === "ADMIN";
 }
 
+export function canManageAccounts(role: WorkspaceRole): boolean {
+  return role === "OWNER" || role === "ADMIN";
+}
+
 export function canMutateWorkspaceData(role: WorkspaceRole): boolean {
   return role === "OWNER" || role === "ADMIN" || role === "OPERATOR";
 }

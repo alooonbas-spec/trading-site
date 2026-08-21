@@ -1,5 +1,6 @@
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { countTodayActivity, countWorkspaceMembers } from "@/services/workspaces/queries";
+import { countSocialAccounts } from "@/services/social-accounts/account-service";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { EmptyState } from "@/components/dashboard/empty-state";
 
@@ -10,9 +11,10 @@ export default async function WorkspaceDashboardPage({
 }) {
   const { workspaceId } = await params;
   const context = await requireWorkspaceContext(workspaceId);
-  const [memberCount, actionsToday] = await Promise.all([
+  const [memberCount, actionsToday, accountCount] = await Promise.all([
     countWorkspaceMembers(workspaceId),
     countTodayActivity(workspaceId),
+    countSocialAccounts(workspaceId),
   ]);
 
   return (
@@ -25,6 +27,7 @@ export default async function WorkspaceDashboardPage({
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Members" value={String(memberCount)} hint="People in this workspace" />
+        <StatCard title="Social accounts" value={String(accountCount)} hint="Connected and disconnected accounts" />
         <StatCard title="Actions today" value={String(actionsToday)} hint="Workspace activity log" />
         <StatCard title="New leads" value="—" hint="CRM metrics appear after PHASE 3" />
         <StatCard title="Active campaigns" value="—" hint="Campaign metrics appear after PHASE 4" />
@@ -34,8 +37,12 @@ export default async function WorkspaceDashboardPage({
         <StatCard title="Replies" value="—" hint="Contact metrics appear after PHASE 3" />
       </div>
       <EmptyState
-        title="Connect accounts next"
-        description="PHASE 2 adds multi-account social connections, adapters, and account health. This workspace is isolated and ready."
+        title={accountCount === 0 ? "Connect a social account" : "Workspace is ready"}
+        description={
+          accountCount === 0
+            ? "Open Social Accounts to connect Telegram, VK, X, Instagram, or Facebook. One workspace can hold many accounts per platform."
+            : `${accountCount} social account${accountCount === 1 ? "" : "s"} in this workspace. CRM, campaigns, and publishing come in later phases.`
+        }
       />
     </div>
   );

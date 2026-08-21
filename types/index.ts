@@ -6,3 +6,4 @@ export { ACTIVITY_ACTIONS } from "@/types/activity";
 export type { ActivityAction } from "@/types/activity";
 export type { Profile, Workspace, WorkspaceMember, WorkspaceMembership, SessionWorkspaceContext } from "@/types/workspace";
 export type { Database } from "@/types/database";
+export type { SocialAccountPublic, SocialAccountHealth, AccountGroup } from "@/types/social-account";

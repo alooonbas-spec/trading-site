@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, readPublicEnv } from "@/lib/validation/env";
 
-const PUBLIC_PATHS = ["/auth/login", "/auth/signup", "/auth/callback", "/api/health"];
+const PUBLIC_PATHS = ["/auth/login", "/auth/signup", "/auth/callback", "/api/health", "/social-accounts/oauth-error"];
 const AUTH_PATHS = ["/auth/login", "/auth/signup"];
 const WORKSPACE_COOKIE = "sh_workspace";
 
@@ -47,7 +47,8 @@ export async function updateSession(request: NextRequest) {
   if (!userId && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
-    url.searchParams.set("next", pathname);
+    url.search = "";
+    url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
   }
 

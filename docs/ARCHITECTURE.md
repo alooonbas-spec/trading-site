@@ -34,3 +34,12 @@ One workspace has many social accounts. Never assume 1 platform = 1 account.
 UI → Route / Server Action → Domain Service → Social Adapter → Platform API or TinyFish (server-side only)
 
 Tokens, API keys, and session cookies never go to the client.
+
+## Social adapters (PHASE 2)
+
+`getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
+
+PHASE 2 capabilities are all disabled. `collect`, `publish`, `monitor`, and `executeContactAction` throw `UnsupportedActionError` instead of returning fake success.
+
+Encrypted access and refresh tokens are omitted from authenticated `SELECT` on `social_accounts`. Owners and admins read them through `read_social_account_secrets`.
+
