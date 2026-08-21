@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { errorMessage } from "@/lib/errors";
-import { connectSocialAccount, disconnectSocialAccount, parsePlatform, refreshSocialAccountHealth, startInboxPolling, updateSocialAccountPublishDestination } from "@/services/social-accounts/account-service";
+import { connectSocialAccount, disconnectSocialAccount, parsePlatform, refreshSocialAccountHealth, startInboxPolling, startWorkspaceInboxPolling, updateSocialAccountPublishDestination } from "@/services/social-accounts/account-service";
 import { startOAuthConnect } from "@/services/social-accounts/oauth-service";
 import { createAccountGroup, deleteAccountGroup } from "@/services/social-accounts/group-service";
 import { normalizeTelegramChatId } from "@/social/telegram/adapter";
@@ -71,9 +71,39 @@ export async function startInboxPollingAction(workspaceId: string, accountId: st
   try {
     const result = await startInboxPolling({ workspaceId, accountId });
     revalidatePath(`/w/${workspaceId}/social-accounts`);
+    revalidatePath(`/w/${workspaceId}/inbox`);
     return {
       error: null,
       success: result.queued > 0 ? "Inbox polling queued" : "Inbox polling is already queued",
+    };
+  } catch (error) {
+    return { error: errorMessage(error, "Unable to start inbox polling"), success: null };
+  }
+}
+
+export async function startWorkspaceInboxPollingAction(
+  workspaceId: string,
+  accountId?: string,
+): Promise<ActionState> {
+  try {
+    const result = await startWorkspaceInboxPolling({ workspaceId, accountId });
+    revalidatePath(`/w/${workspaceId}/social-accounts`);
+    revalidatePath(`/w/${workspaceId}/inbox`);
+    if (result.queued === 0) {
+      return {
+        error: null,
+        success:
+          result.considered === 1
+            ? "Inbox polling is already queued"
+            : "Inbox polling is already queued for connected accounts",
+      };
+    }
+    return {
+      error: null,
+      success:
+        result.considered === 1
+          ? "Inbox polling queued"
+          : `Queued inbox polls for ${result.queued} of ${result.considered} inbox-capable accounts`,
     };
   } catch (error) {
     return { error: errorMessage(error, "Unable to start inbox polling"), success: null };

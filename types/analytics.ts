@@ -47,6 +47,8 @@ export type JobFamilyAnalytics = {
 export type InboxAnalytics = {
   eventsToday: number;
   matchedToday: number;
+  unmatchedOpen: number;
+  repliesToday: number;
 };
 
 export type WorkspaceAnalytics = {

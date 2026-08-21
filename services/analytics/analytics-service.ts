@@ -75,6 +75,8 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     postsPublishedToday,
     inboxTodayResult,
     inboxMatchedTodayResult,
+    inboxUnmatchedResult,
+    inboxRepliesTodayResult,
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -127,6 +129,17 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
       .eq("workspace_id", workspaceId)
       .eq("matched", true)
       .gte("created_at", today),
+    supabase
+      .from("inbox_events")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("matched", false),
+    supabase
+      .from("activity_log")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("action", "INBOX_REPLIED")
+      .gte("created_at", today),
   ]);
 
   const queryError =
@@ -143,7 +156,9 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     contactFailedToday.error ??
     postsPublishedToday.error ??
     inboxTodayResult.error ??
-    inboxMatchedTodayResult.error;
+    inboxMatchedTodayResult.error ??
+    inboxUnmatchedResult.error ??
+    inboxRepliesTodayResult.error;
   if (queryError) {
     throw new ValidationError(queryError.message);
   }
@@ -214,6 +229,8 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     inbox: {
       eventsToday: inboxTodayResult.count ?? 0,
       matchedToday: inboxMatchedTodayResult.count ?? 0,
+      unmatchedOpen: inboxUnmatchedResult.count ?? 0,
+      repliesToday: inboxRepliesTodayResult.count ?? 0,
     },
     jobs: {
       contactByStatus: tallyByStatus(JOB_STATUSES, contactJobStatuses),

@@ -64,6 +64,8 @@ describe("PHASE 8 source boundaries", () => {
     expect(service).toContain("tallyByStatus(POST_STATUSES");
     expect(service).toContain("tallyByStatus(MONITORING_RULE_STATUSES");
     expect(service).toContain("inboxByStatus");
+    expect(service).toContain("unmatchedOpen");
+    expect(service).toContain("repliesToday");
     expect(service).toContain('eq("type", "CONTACT")');
     expect(service).not.toMatch(/platform\s*===\s*["']telegram["']/);
     expect(service).not.toMatch(/do_not_contact boolean/);

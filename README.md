@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 21: inbox cursors for X DMs, Facebook, Instagram, and VK so polls skip already-seen events.
+PHASE 22: Inbox operator filters (account, platform, stored reply kind), poll/process from the Inbox page, and separate unmatched/reply analytics.

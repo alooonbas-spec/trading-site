@@ -153,6 +153,48 @@ export async function startInboxPolling(input: {
   return { queued };
 }
 
+export async function startWorkspaceInboxPolling(input: {
+  workspaceId: string;
+  accountId?: string;
+}): Promise<{ queued: number; considered: number }> {
+  if (input.accountId) {
+    const result = await startInboxPolling({
+      workspaceId: input.workspaceId,
+      accountId: input.accountId,
+    });
+    return { queued: result.queued, considered: 1 };
+  }
+
+  const context = await requireWorkspaceContext(input.workspaceId);
+  if (!canManageAccounts(context.role)) {
+    throw new PermissionError("Only owners and admins can start inbox polling");
+  }
+
+  const accounts = await listSocialAccounts(input.workspaceId);
+  let queued = 0;
+  let considered = 0;
+  for (const account of accounts) {
+    if (account.status === "DISCONNECTED") {
+      continue;
+    }
+    const adapter = getSocialAdapter(account.platform);
+    if (!(await adapter.getCapabilities()).inbox) {
+      continue;
+    }
+    considered += 1;
+    queued += await enqueueInboxJob({
+      workspaceId: input.workspaceId,
+      socialAccountId: account.id,
+    });
+  }
+
+  if (considered === 0) {
+    throw new ValidationError("No connected accounts with inbox collection");
+  }
+
+  return { queued, considered };
+}
+
 export async function updateSocialAccountPublishDestination(input: {
   workspaceId: string;
   accountId: string;

@@ -70,10 +70,12 @@ export default async function AnalyticsPage({
       />
       <AnalyticsSection
         title="Inbox"
-        description="Inbound messages stored from official APIs. Matched events update ContactStatus to REPLIED. Unmatched senders are not turned into leads."
+        description="Inbound messages stored from official APIs. Matched events update ContactStatus to REPLIED. Unmatched senders are not turned into leads. Outbound replies are counted separately from inbound events."
         stats={[
           { title: "Events today", value: String(analytics.inbox.eventsToday) },
           { title: "Matched today", value: String(analytics.inbox.matchedToday) },
+          { title: "Unmatched open", value: String(analytics.inbox.unmatchedOpen), hint: "All unmatched events, not only today" },
+          { title: "Replies today", value: String(analytics.inbox.repliesToday), hint: "INBOX_REPLIED activity, including unmatched senders" },
         ]}
         counts={[]}
       />

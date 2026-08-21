@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { errorMessage } from "@/lib/errors";
 import { attachInboxEventToLead } from "@/services/inbox/attach-service";
 import { replyToInboxEvent } from "@/services/inbox/reply-service";
+import { processJobBatch } from "@/services/jobs/worker-service";
 
 export type ActionState = {
   error: string | null;
@@ -57,5 +58,20 @@ export async function replyInboxEventAction(
     return { error: null, success: "Reply sent" };
   } catch (error) {
     return { error: errorMessage(error, "Unable to send inbox reply"), success: null };
+  }
+}
+
+export async function processInboxQueueAction(workspaceId: string): Promise<ActionState> {
+  try {
+    const result = await processJobBatch({ workspaceId, limit: 20 });
+    revalidatePath(`/w/${workspaceId}/inbox`);
+    revalidatePath(`/w/${workspaceId}/social-accounts`);
+    revalidatePath(`/w/${workspaceId}/leads`);
+    return {
+      error: null,
+      success: `Processed ${result.processed} job${result.processed === 1 ? "" : "s"} (${result.claimed} claimed)`,
+    };
+  } catch (error) {
+    return { error: errorMessage(error, "Unable to process inbox queue"), success: null };
   }
 }
