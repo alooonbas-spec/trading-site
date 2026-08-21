@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 44: Official Facebook and Instagram nested comment Graph paging walks one `after` page per stored post/media id (cap 20). No new SQL.
+PHASE 45: Official Facebook and Instagram nested conversation message Graph paging walks one `after` page per stored thread id (cap 20). No new SQL.

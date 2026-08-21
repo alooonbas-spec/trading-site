@@ -77,6 +77,7 @@ const conversationsSchema = z.object({
                 }),
               )
               .optional(),
+            paging: graphPagingSchema,
           })
           .optional(),
       }),
@@ -230,11 +231,30 @@ async function collectInstagramCommentReplies(
   return { messages, nextAfters, fetchedIds: ids };
 }
 
+const instagramMessageEdgeSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        message: z.string().optional(),
+        created_time: z.string().optional(),
+        from: z
+          .object({
+            id: z.union([z.string(), z.number()]).optional(),
+            username: z.string().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+  paging: graphPagingSchema,
+});
+
 async function collectInstagramDirectMessages(
   accessToken: string,
   userId: string,
   after?: string | null,
-): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
+): Promise<{ messages: InboxMessage[]; nextAfter: string | null; threadAfters: GraphRepliesMap }> {
   const url = new URL(`${INSTAGRAM_GRAPH_ORIGIN}/${userId}/conversations`);
   url.searchParams.set("platform", "instagram");
   url.searchParams.set("fields", "id,messages.limit(20){id,created_time,from,message}");
@@ -246,10 +266,72 @@ async function collectInstagramDirectMessages(
   const response = await socialFetch(url.toString());
   const payload = await readJson<unknown>(response);
   throwIfGraphError(payload);
+  const parsed = conversationsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("Instagram conversations returned an unexpected payload");
+  }
+  const threadAfters: GraphRepliesMap = {};
+  for (const thread of parsed.data.data ?? []) {
+    const nestedAfter = graphPagingAfter(thread.messages);
+    if (nestedAfter && thread.id && GRAPH_OBJECT_ID.test(thread.id)) {
+      threadAfters[thread.id] = nestedAfter;
+    }
+  }
   return {
     messages: parseInstagramDirectConversations(payload, userId),
     nextAfter: graphPagingAfter(payload),
+    threadAfters,
   };
+}
+
+async function collectInstagramThreadMessages(
+  accessToken: string,
+  ownUserId: string,
+  stored: GraphRepliesMap,
+): Promise<{ messages: InboxMessage[]; nextAfters: GraphRepliesMap; fetchedIds: string[] }> {
+  const messages: InboxMessage[] = [];
+  const nextAfters: GraphRepliesMap = {};
+  const ids = Object.keys(stored).filter((id) => GRAPH_OBJECT_ID.test(id)).slice(0, GRAPH_REPLIES_FETCH_LIMIT);
+  for (const objectId of ids) {
+    const after = stored[objectId];
+    if (!after) {
+      continue;
+    }
+    const url = new URL(`${INSTAGRAM_GRAPH_ORIGIN}/${objectId}/messages`);
+    url.searchParams.set("fields", "id,created_time,from,message");
+    url.searchParams.set("limit", "20");
+    url.searchParams.set("after", after);
+    url.searchParams.set("access_token", accessToken);
+    const response = await socialFetch(url.toString());
+    const payload = await readJson<unknown>(response);
+    throwIfGraphError(payload);
+    const parsed = instagramMessageEdgeSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new SocialError("Instagram conversation messages returned an unexpected payload");
+    }
+    const nextAfter = graphPagingAfter(payload);
+    if (nextAfter) {
+      nextAfters[objectId] = nextAfter;
+    }
+    for (const event of parsed.data.data ?? []) {
+      const fromId = event.from?.id !== undefined ? String(event.from.id) : "";
+      const text = event.message?.trim();
+      if (!fromId || !text || fromId === ownUserId) {
+        continue;
+      }
+      const username = event.from?.username ? `@${event.from.username.replace(/^@/, "")}` : null;
+      messages.push({
+        externalId: event.id,
+        externalProfileId: fromId,
+        username,
+        body: text,
+        url: null,
+        receivedAt: event.created_time ?? null,
+        replyKind: "direct_message",
+      });
+    }
+  }
+  return { messages, nextAfters, fetchedIds: ids };
 }
 
 export async function collectInstagramInbox(
@@ -262,23 +344,29 @@ export async function collectInstagramInbox(
   const olderThreadAfter = decodeGraphAfter(cursor.threads);
   const olderPostsAfter = decodeGraphAfter(cursor.posts);
   const storedReplies = decodeGraphReplies(cursor.replies);
+  const storedThreadMsgs = decodeGraphReplies(cursor.threadmsgs);
   const emptyPage = { messages: [] as InboxMessage[], nextAfter: null, repliesAfter: {} as GraphRepliesMap };
+  const emptyDirect = { messages: [] as InboxMessage[], nextAfter: null, threadAfters: {} as GraphRepliesMap };
   const emptyReplies = {
     messages: [] as InboxMessage[],
     nextAfters: {} as GraphRepliesMap,
     fetchedIds: [] as string[],
   };
-  const [latestComments, olderComments, extraReplies, latestDirect, olderDirect] = await Promise.all([
-    collectInstagramComments(accessToken, userId),
-    olderPostsAfter
-      ? collectInstagramComments(accessToken, userId, olderPostsAfter)
-      : Promise.resolve(emptyPage),
-    storedReplies ? collectInstagramCommentReplies(accessToken, storedReplies) : Promise.resolve(emptyReplies),
-    collectInstagramDirectMessages(accessToken, userId),
-    olderThreadAfter
-      ? collectInstagramDirectMessages(accessToken, userId, olderThreadAfter)
-      : Promise.resolve(emptyPage),
-  ]);
+  const [latestComments, olderComments, extraReplies, latestDirect, olderDirect, extraThreadMsgs] =
+    await Promise.all([
+      collectInstagramComments(accessToken, userId),
+      olderPostsAfter
+        ? collectInstagramComments(accessToken, userId, olderPostsAfter)
+        : Promise.resolve(emptyPage),
+      storedReplies ? collectInstagramCommentReplies(accessToken, storedReplies) : Promise.resolve(emptyReplies),
+      collectInstagramDirectMessages(accessToken, userId),
+      olderThreadAfter
+        ? collectInstagramDirectMessages(accessToken, userId, olderThreadAfter)
+        : Promise.resolve(emptyDirect),
+      storedThreadMsgs
+        ? collectInstagramThreadMessages(accessToken, userId, storedThreadMsgs)
+        : Promise.resolve(emptyReplies),
+    ]);
   const latestMessages = latestDirect.messages;
   const olderMessages = olderDirect.messages;
   return {
@@ -291,6 +379,7 @@ export async function collectInstagramInbox(
       ...uniqueInboxMessages([
         ...filterMessagesAfterCursor(latestMessages, cursor.messages),
         ...olderMessages,
+        ...extraThreadMsgs.messages,
       ]),
     ],
     cursor: serializeNamedInboxCursor({
@@ -300,7 +389,10 @@ export async function collectInstagramInbox(
           newestReceivedAt([...latestComments.messages, ...olderComments.messages, ...extraReplies.messages]),
         ) ?? "",
       messages:
-        laterTimestampString(cursor.messages, newestReceivedAt([...latestMessages, ...olderMessages])) ?? "",
+        laterTimestampString(
+          cursor.messages,
+          newestReceivedAt([...latestMessages, ...olderMessages, ...extraThreadMsgs.messages]),
+        ) ?? "",
       posts: nextGraphAfterCursor({
         stored: cursor.posts,
         firstPageAfter: latestComments.nextAfter,
@@ -312,6 +404,12 @@ export async function collectInstagramInbox(
         nestedAfters: { ...latestComments.repliesAfter, ...olderComments.repliesAfter },
         fetchedNextAfters: extraReplies.nextAfters,
         fetchedIds: extraReplies.fetchedIds,
+      }),
+      threadmsgs: nextGraphRepliesCursor({
+        stored: cursor.threadmsgs,
+        nestedAfters: { ...latestDirect.threadAfters, ...olderDirect.threadAfters },
+        fetchedNextAfters: extraThreadMsgs.nextAfters,
+        fetchedIds: extraThreadMsgs.fetchedIds,
       }),
       threads: nextGraphAfterCursor({
         stored: cursor.threads,

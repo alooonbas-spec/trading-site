@@ -277,7 +277,7 @@ After the first 50-comment window (`wallcomments:1`), each later inbox poll call
 
 ## Graph conversation paging (PHASE 42)
 
-Facebook Messenger and Instagram Direct Message collectors follow official Graph `paging.cursors.after` (or `after` on `paging.next`) for `/conversations`. The first page stays `limit=15` with `messages.limit(20)`. If a next `after` exists, the next poll requests that page once. The opaque `after` value is stored base64url-encoded in `threads` so named cursors cannot split on `:` or `|`. A short page stores `threads:done` and later polls only read the latest conversations page. Older-page Direct Messages are not dropped by the `messages` timestamp watermark on first sight. Collectors do not fetch `paging.next` URLs, so Graph tokens never ride an untrusted next link.
+Facebook Messenger and Instagram Direct Message collectors follow official Graph `paging.cursors.after` (or `after` on `paging.next`) for `/conversations`. The first page stays `limit=15` with `messages.limit(20)`. If a next `after` exists, the next poll requests that page once. The opaque `after` value is stored base64url-encoded in `threads` so named cursors cannot split on `:` or `|`. A short page stores `threads:done` and later polls only read the latest conversations page. Older-page Direct Messages are not dropped by the `messages` timestamp watermark on first sight. Nested first message pages seed the `threadmsgs` walker in PHASE 45. Collectors do not fetch `paging.next` URLs, so Graph tokens never ride an untrusted next link.
 
 ## Graph feed and media paging (PHASE 43)
 
@@ -286,6 +286,10 @@ Facebook Page `/{page-id}/feed` and Instagram `/{ig-user-id}/media` follow the s
 ## Graph nested comment paging (PHASE 44)
 
 Facebook `/{post-id}/comments` and Instagram `/{media-id}/comments` follow official Graph `after` for extra nested comment pages. Graph `after` is per object id, so the named `replies` cursor stores a small `{ objectId: after }` map (base64url JSON, at most 20 ids). The first collect reads nested `comments.paging.cursors.after` from the current feed/media pages. Later polls request `GET /{object-id}/comments?after=` with official fields and `limit=50` for stored ids. The next map is fetched pages that still have `after`, plus newly discovered post/media ids that were not already stored. Stored ids are not reset from the nested first-page `after` (Graph would keep returning that cursor). An empty map stores `replies:done` and later polls stay done. Extra comment-page messages are not dropped by the `comments` timestamp watermark. Collectors still do not fetch `paging.next` URLs.
+
+## Graph nested conversation messages (PHASE 45)
+
+Facebook `/{conversation-id}/messages` and Instagram `/{conversation-id}/messages` follow the same per-object Graph `after` walker as nested comments. The named `threadmsgs` cursor stores `{ conversationId: after }` (base64url JSON, at most 20 ids). The first collect reads nested `messages.paging.cursors.after` from the current conversations pages. Later polls request `GET /{conversation-id}/messages?after=` with official fields and `limit=20`. Extra thread messages are not dropped by the `messages` timestamp watermark. An empty map stores `threadmsgs:done`. Collectors still do not fetch `paging.next` URLs.
 
 ## Social adapters (PHASE 2)
 

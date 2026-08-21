@@ -77,6 +77,7 @@ const conversationsSchema = z.object({
                 }),
               )
               .optional(),
+            paging: graphPagingSchema,
           })
           .optional(),
       }),
@@ -225,10 +226,29 @@ async function collectFacebookCommentReplies(
   return { messages, nextAfters, fetchedIds: ids };
 }
 
+const facebookMessageEdgeSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        message: z.string().optional(),
+        created_time: z.string().optional(),
+        from: z
+          .object({
+            id: z.union([z.string(), z.number()]).optional(),
+            name: z.string().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+  paging: graphPagingSchema,
+});
+
 async function collectFacebookMessenger(
   page: FacebookPageAuth,
   after?: string | null,
-): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
+): Promise<{ messages: InboxMessage[]; nextAfter: string | null; threadAfters: GraphRepliesMap }> {
   const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/conversations`);
   url.searchParams.set("platform", "MESSENGER");
   url.searchParams.set("fields", "id,messages.limit(20){id,message,from,created_time}");
@@ -240,10 +260,70 @@ async function collectFacebookMessenger(
   const response = await socialFetch(url.toString());
   const payload = await readJson<unknown>(response);
   throwIfGraphError(payload);
+  const parsed = conversationsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("Facebook Page conversations returned an unexpected payload");
+  }
+  const threadAfters: GraphRepliesMap = {};
+  for (const thread of parsed.data.data ?? []) {
+    const nestedAfter = graphPagingAfter(thread.messages);
+    if (nestedAfter && thread.id && GRAPH_OBJECT_ID.test(thread.id)) {
+      threadAfters[thread.id] = nestedAfter;
+    }
+  }
   return {
     messages: parseFacebookMessengerConversations(payload, page.id),
     nextAfter: graphPagingAfter(payload),
+    threadAfters,
   };
+}
+
+async function collectFacebookThreadMessages(
+  page: FacebookPageAuth,
+  stored: GraphRepliesMap,
+): Promise<{ messages: InboxMessage[]; nextAfters: GraphRepliesMap; fetchedIds: string[] }> {
+  const messages: InboxMessage[] = [];
+  const nextAfters: GraphRepliesMap = {};
+  const ids = Object.keys(stored).filter((id) => GRAPH_OBJECT_ID.test(id)).slice(0, GRAPH_REPLIES_FETCH_LIMIT);
+  for (const objectId of ids) {
+    const after = stored[objectId];
+    if (!after) {
+      continue;
+    }
+    const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${objectId}/messages`);
+    url.searchParams.set("fields", "id,message,from,created_time");
+    url.searchParams.set("limit", "20");
+    url.searchParams.set("after", after);
+    url.searchParams.set("access_token", page.accessToken);
+    const response = await socialFetch(url.toString());
+    const payload = await readJson<unknown>(response);
+    throwIfGraphError(payload);
+    const parsed = facebookMessageEdgeSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new SocialError("Facebook conversation messages returned an unexpected payload");
+    }
+    const nextAfter = graphPagingAfter(payload);
+    if (nextAfter) {
+      nextAfters[objectId] = nextAfter;
+    }
+    for (const event of parsed.data.data ?? []) {
+      const fromId = event.from?.id !== undefined ? String(event.from.id) : "";
+      const text = event.message?.trim();
+      if (!fromId || !text || fromId === page.id) {
+        continue;
+      }
+      messages.push({
+        externalId: event.id,
+        externalProfileId: fromId,
+        username: event.from?.name ?? null,
+        body: text,
+        url: null,
+        receivedAt: event.created_time ?? null,
+        replyKind: "direct_message",
+      });
+    }
+  }
+  return { messages, nextAfters, fetchedIds: ids };
 }
 
 export async function collectFacebookInbox(
@@ -256,19 +336,25 @@ export async function collectFacebookInbox(
   const olderThreadAfter = decodeGraphAfter(cursor.threads);
   const olderPostsAfter = decodeGraphAfter(cursor.posts);
   const storedReplies = decodeGraphReplies(cursor.replies);
+  const storedThreadMsgs = decodeGraphReplies(cursor.threadmsgs);
   const emptyPage = { messages: [] as InboxMessage[], nextAfter: null, repliesAfter: {} as GraphRepliesMap };
+  const emptyDirect = { messages: [] as InboxMessage[], nextAfter: null, threadAfters: {} as GraphRepliesMap };
   const emptyReplies = {
     messages: [] as InboxMessage[],
     nextAfters: {} as GraphRepliesMap,
     fetchedIds: [] as string[],
   };
-  const [latestComments, olderComments, extraReplies, latestDirect, olderDirect] = await Promise.all([
-    collectFacebookComments(page),
-    olderPostsAfter ? collectFacebookComments(page, olderPostsAfter) : Promise.resolve(emptyPage),
-    storedReplies ? collectFacebookCommentReplies(page, storedReplies) : Promise.resolve(emptyReplies),
-    collectFacebookMessenger(page),
-    olderThreadAfter ? collectFacebookMessenger(page, olderThreadAfter) : Promise.resolve(emptyPage),
-  ]);
+  const [latestComments, olderComments, extraReplies, latestDirect, olderDirect, extraThreadMsgs] =
+    await Promise.all([
+      collectFacebookComments(page),
+      olderPostsAfter ? collectFacebookComments(page, olderPostsAfter) : Promise.resolve(emptyPage),
+      storedReplies ? collectFacebookCommentReplies(page, storedReplies) : Promise.resolve(emptyReplies),
+      collectFacebookMessenger(page),
+      olderThreadAfter ? collectFacebookMessenger(page, olderThreadAfter) : Promise.resolve(emptyDirect),
+      storedThreadMsgs
+        ? collectFacebookThreadMessages(page, storedThreadMsgs)
+        : Promise.resolve(emptyReplies),
+    ]);
   const comments = uniqueInboxMessages([
     ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
     ...olderComments.messages,
@@ -282,6 +368,7 @@ export async function collectFacebookInbox(
       ...uniqueInboxMessages([
         ...filterMessagesAfterCursor(latestMessages, cursor.messages),
         ...olderMessages,
+        ...extraThreadMsgs.messages,
       ]),
     ],
     cursor: serializeNamedInboxCursor({
@@ -291,7 +378,10 @@ export async function collectFacebookInbox(
           newestReceivedAt([...latestComments.messages, ...olderComments.messages, ...extraReplies.messages]),
         ) ?? "",
       messages:
-        laterTimestampString(cursor.messages, newestReceivedAt([...latestMessages, ...olderMessages])) ?? "",
+        laterTimestampString(
+          cursor.messages,
+          newestReceivedAt([...latestMessages, ...olderMessages, ...extraThreadMsgs.messages]),
+        ) ?? "",
       posts: nextGraphAfterCursor({
         stored: cursor.posts,
         firstPageAfter: latestComments.nextAfter,
@@ -303,6 +393,12 @@ export async function collectFacebookInbox(
         nestedAfters: { ...latestComments.repliesAfter, ...olderComments.repliesAfter },
         fetchedNextAfters: extraReplies.nextAfters,
         fetchedIds: extraReplies.fetchedIds,
+      }),
+      threadmsgs: nextGraphRepliesCursor({
+        stored: cursor.threadmsgs,
+        nestedAfters: { ...latestDirect.threadAfters, ...olderDirect.threadAfters },
+        fetchedNextAfters: extraThreadMsgs.nextAfters,
+        fetchedIds: extraThreadMsgs.fetchedIds,
       }),
       threads: nextGraphAfterCursor({
         stored: cursor.threads,
