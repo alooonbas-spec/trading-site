@@ -44,7 +44,7 @@ describe("PHASE 49 Graph comment-to-comment reply after paging", () => {
         );
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/feed`);
-      expect(target).toContain("comments.limit(25)");
+      expect(decodeURIComponent(target)).toContain("comments.limit(25)");
       expect(target).not.toContain("after=");
       return new Response(
         JSON.stringify({
