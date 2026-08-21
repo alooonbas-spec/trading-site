@@ -13,6 +13,7 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
 3. Apply migrations in order:
    - `supabase/migrations/20260821100000_phase1_foundation.sql`
    - `supabase/migrations/20260821120000_phase2_social_accounts.sql`
+   - `supabase/migrations/20260821140000_phase3_crm.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
@@ -47,6 +48,6 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 2: multi-account social connections, adapters, OAuth, account health, and account groups.
+PHASE 3: CRM leads, social profiles, contact relationships, interactions, and merge.
 
-Later phases add CRM, campaigns, TinyFish, publishing, monitoring, and analytics.
+Later phases add campaigns, TinyFish, publishing, monitoring, and analytics.

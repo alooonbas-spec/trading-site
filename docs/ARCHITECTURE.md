@@ -35,6 +35,16 @@ UI → Route / Server Action → Domain Service → Social Adapter → Platform 
 
 Tokens, API keys, and session cookies never go to the client.
 
+## CRM (PHASE 3)
+
+- `leads` own `LeadStatus` and the only `do_not_contact` flag.
+- `social_profiles` are platform identities unique per workspace (`workspace_id, platform, external_profile_id`).
+- `contact_relationships` own `ContactStatus` for one (lead, their profile, our account) pair.
+- `lead_interactions` are an append-only timeline.
+- Merge moves profiles/relationships/interactions onto the surviving lead, ORs `do_not_contact`, and archives the source.
+
+Outbound contact status changes (`QUEUED`, invite/message pending/sent) are blocked when `do_not_contact` is true. Recording replies, failures, or blocks is still allowed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

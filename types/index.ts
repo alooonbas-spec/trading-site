@@ -7,3 +7,5 @@ export type { ActivityAction } from "@/types/activity";
 export type { Profile, Workspace, WorkspaceMember, WorkspaceMembership, SessionWorkspaceContext } from "@/types/workspace";
 export type { Database } from "@/types/database";
 export type { SocialAccountPublic, SocialAccountHealth, AccountGroup } from "@/types/social-account";
+export type { Lead, SocialProfile, ContactRelationship, LeadInteraction, InteractionType } from "@/types/crm";
+export { INTERACTION_TYPES } from "@/types/crm";

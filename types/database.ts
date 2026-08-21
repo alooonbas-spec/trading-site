@@ -203,6 +203,143 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      leads: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          display_name: string;
+          email: string | null;
+          phone: string | null;
+          notes: string | null;
+          status: import("@/types/status").LeadStatus;
+          do_not_contact: boolean;
+          merged_into_id: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          display_name: string;
+          email?: string | null;
+          phone?: string | null;
+          notes?: string | null;
+          status?: import("@/types/status").LeadStatus;
+          do_not_contact?: boolean;
+          merged_into_id?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          display_name?: string;
+          email?: string | null;
+          phone?: string | null;
+          notes?: string | null;
+          status?: import("@/types/status").LeadStatus;
+          do_not_contact?: boolean;
+          merged_into_id?: string | null;
+        };
+        Relationships: [];
+      };
+      social_profiles: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          lead_id: string;
+          platform: import("@/types/social").SocialPlatform;
+          external_profile_id: string;
+          username: string | null;
+          display_name: string | null;
+          profile_url: string | null;
+          avatar_url: string | null;
+          metadata: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          lead_id: string;
+          platform: import("@/types/social").SocialPlatform;
+          external_profile_id: string;
+          username?: string | null;
+          display_name?: string | null;
+          profile_url?: string | null;
+          avatar_url?: string | null;
+          metadata?: Record<string, unknown>;
+        };
+        Update: {
+          lead_id?: string;
+          username?: string | null;
+          display_name?: string | null;
+          profile_url?: string | null;
+          avatar_url?: string | null;
+          metadata?: Record<string, unknown>;
+        };
+        Relationships: [];
+      };
+      contact_relationships: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          lead_id: string;
+          social_profile_id: string;
+          social_account_id: string;
+          status: import("@/types/status").ContactStatus;
+          last_interacted_at: string | null;
+          last_error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          lead_id: string;
+          social_profile_id: string;
+          social_account_id: string;
+          status?: import("@/types/status").ContactStatus;
+          last_interacted_at?: string | null;
+          last_error?: string | null;
+        };
+        Update: {
+          lead_id?: string;
+          social_profile_id?: string;
+          status?: import("@/types/status").ContactStatus;
+          last_interacted_at?: string | null;
+          last_error?: string | null;
+        };
+        Relationships: [];
+      };
+      lead_interactions: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          lead_id: string;
+          social_profile_id: string | null;
+          social_account_id: string | null;
+          relationship_id: string | null;
+          user_id: string | null;
+          type: import("@/types/crm").InteractionType;
+          body: string | null;
+          metadata: Record<string, unknown>;
+          created_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          lead_id: string;
+          social_profile_id?: string | null;
+          social_account_id?: string | null;
+          relationship_id?: string | null;
+          user_id?: string | null;
+          type: import("@/types/crm").InteractionType;
+          body?: string | null;
+          metadata?: Record<string, unknown>;
+        };
+        Update: {
+          lead_id?: string;
+          social_profile_id?: string | null;
+          social_account_id?: string | null;
+          relationship_id?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -253,6 +390,9 @@ export type Database = {
       workspace_role: WorkspaceRole;
       social_account_status: import("@/types/status").SocialAccountStatus;
       social_platform: import("@/types/social").SocialPlatform;
+      lead_status: import("@/types/status").LeadStatus;
+      contact_status: import("@/types/status").ContactStatus;
+      interaction_type: import("@/types/crm").InteractionType;
     };
     CompositeTypes: Record<string, never>;
   };
