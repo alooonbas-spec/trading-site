@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UnsupportedActionError, ValidationError } from "@/lib/errors";
+import { UnsupportedActionError } from "@/lib/errors";
 import { canCancelPost, canDeletePost, canPublishPost, rollupPostStatus } from "@/lib/posts/status";
 import { createPostSchema, parseMediaList } from "@/lib/validation/post";
 import { getSocialAdapter } from "@/social/core/registry";
