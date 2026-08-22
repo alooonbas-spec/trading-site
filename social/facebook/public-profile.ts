@@ -20,6 +20,8 @@ const REJECTED_FACEBOOK_PATHS = new Set([
   "permalink.php",
   "photo.php",
   "story.php",
+  "pages",
+  "people",
 ]);
 
 export function resolveFacebookPublicProfile(source: string): PublicProfileRef {

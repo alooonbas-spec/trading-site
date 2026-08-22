@@ -175,6 +175,19 @@ describe("official public profile URLs", () => {
     expect(() => resolveInstagramPublicProfile("https://www.instagram.com/p/shortcode/")).toThrow(ValidationError);
     expect(() => resolveFacebookPublicProfile("https://www.facebook.com/groups/123")).toThrow(ValidationError);
   });
+
+  it("rejects Facebook pages/ and people/ permalinks instead of misreading the reserved path segment as a username", () => {
+    // facebook.com/pages/<name>/<id> and facebook.com/people/<name>/<id> are
+    // Facebook's own permalink formats, not usernames -- without an explicit
+    // reject, firstPathSegment would return "pages"/"people" and the code
+    // would treat that reserved word itself as a valid handle.
+    expect(() => resolveFacebookPublicProfile("https://www.facebook.com/pages/Some-Page/123456789012345")).toThrow(
+      ValidationError,
+    );
+    expect(() => resolveFacebookPublicProfile("https://www.facebook.com/people/John-Doe/100012345678901")).toThrow(
+      ValidationError,
+    );
+  });
 });
 
 describe("TinyFish Fetch client", () => {

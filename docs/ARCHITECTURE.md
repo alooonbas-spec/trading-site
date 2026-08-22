@@ -525,6 +525,12 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 `buildTelegramMediaPayload` now throws `ValidationError` whenever a GIF is present and `items.length > 1`, before the existing document-mixing check runs. Real fix, not test-only — `tests/phase11-media.test.ts` gained cases for a valid photo+video group, a GIF grouped with any other media (including a second GIF), and a document grouped with a photo/video.
 
+## Facebook pages/people permalink fix (PHASE 102)
+
+`resolveFacebookPublicProfile` (`social/facebook/public-profile.ts`) rejects a fixed set of known non-profile path segments (`watch`, `groups`, `photo.php`, ...) but was missing Facebook's own `pages/<name>/<id>` and `people/<name>/<id>` permalink formats. For those URLs, `firstPathSegment` returns the reserved word itself (`pages` or `people`), which was not in `REJECTED_FACEBOOK_PATHS` and happens to also satisfy `FACEBOOK_USERNAME`'s regex — so instead of throwing, the function silently returned a bogus `PublicProfileRef` with `externalProfileId: "pages"` / `"people"`, pointing at `https://www.facebook.com/pages`, a URL that identifies no real profile.
+
+Added `"pages"` and `"people"` to `REJECTED_FACEBOOK_PATHS`. Real fix, not test-only — new cases in `tests/phase5-tinyfish.test.ts` assert both permalink shapes now throw `ValidationError` instead of resolving.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

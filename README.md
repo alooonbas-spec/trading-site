@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 101: Telegram `sendMediaGroup` GIF fix. `buildTelegramMediaPayload` blocked documents from mixing with photos/videos in a media group, but let GIFs through — Telegram's `sendMediaGroup` has no `InputMediaAnimation` form at all, so a GIF grouped with any other media would have been rejected by the Bot API. A GIF paired with other media now throws `ValidationError` before the payload is built. Real production fix, with new coverage in `tests/phase11-media.test.ts`.
+PHASE 102: Facebook `pages/`/`people/` permalink fix. `resolveFacebookPublicProfile` was missing Facebook's `pages/<name>/<id>` and `people/<name>/<id>` permalink formats from its rejected-path list, so those URLs silently resolved to a bogus profile identified by the literal word `"pages"`/`"people"` instead of throwing. Real production fix, with new coverage in `tests/phase5-tinyfish.test.ts`.
