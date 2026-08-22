@@ -25,6 +25,45 @@ describe("public media URLs", () => {
     expect(isPrivateOrLocalIp("1.1.1.1")).toBe(false);
   });
 
+  it("blocks the cloud instance-metadata IP and the carrier-grade NAT range", () => {
+    // 169.254.169.254 serves cloud credentials on AWS/GCP/Azure if reachable.
+    expect(isPrivateOrLocalIp("169.254.169.254")).toBe(true);
+    expect(isPrivateOrLocalIp("100.64.0.1")).toBe(true);
+    expect(isPrivateOrLocalIp("100.127.255.254")).toBe(true);
+    expect(isPrivateOrLocalIp("100.128.0.0")).toBe(false);
+  });
+
+  it("respects the exact CIDR boundaries for the 172.16.0.0/12 private range", () => {
+    expect(isPrivateOrLocalIp("172.15.255.255")).toBe(false);
+    expect(isPrivateOrLocalIp("172.16.0.0")).toBe(true);
+    expect(isPrivateOrLocalIp("172.31.255.255")).toBe(true);
+    expect(isPrivateOrLocalIp("172.32.0.0")).toBe(false);
+  });
+
+  it("blocks loopback, link-local, and unique-local IPv6 addresses, including IPv4-mapped ones", () => {
+    expect(isPrivateOrLocalIp("::1")).toBe(true);
+    expect(isPrivateOrLocalIp("fe80::1")).toBe(true);
+    expect(isPrivateOrLocalIp("fc00::1")).toBe(true);
+    expect(isPrivateOrLocalIp("fd12:3456::1")).toBe(true);
+    expect(isPrivateOrLocalIp("::ffff:127.0.0.1")).toBe(true);
+    expect(isPrivateOrLocalIp("2001:4860:4860::8888")).toBe(false);
+  });
+
+  it("blocks the documented internal hostname suffixes and the cloud metadata hostname", () => {
+    expect(() => parsePublicMediaUrl("https://metadata.google.internal/latest")).toThrow(ValidationError);
+    expect(() => parsePublicMediaUrl("https://box.internal/photo.jpg")).toThrow(ValidationError);
+    expect(() => parsePublicMediaUrl("https://printer.local/photo.jpg")).toThrow(ValidationError);
+  });
+
+  it("rejects a non-http(s) scheme", () => {
+    expect(() => parsePublicMediaUrl("ftp://example.com/photo.jpg")).toThrow(ValidationError);
+    expect(() => parsePublicMediaUrl("file:///etc/passwd")).toThrow(ValidationError);
+  });
+
+  it("accepts an ordinary public https URL", () => {
+    expect(parsePublicMediaUrl("https://cdn.example.com/photo.jpg").hostname).toBe("cdn.example.com");
+  });
+
   it("distinguishes mime type variants that share an extension bucket", () => {
     expect(classifyMediaUrl("https://cdn.example/a.png").mimeType).toBe("image/png");
     expect(classifyMediaUrl("https://cdn.example/a.webp").mimeType).toBe("image/webp");

@@ -475,6 +475,10 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `downloadPublicMedia` is the media pipeline every VK/X publish call feeds a public URL through before uploading it to the platform — it had no direct test at all, only indirect coverage through publish end-to-end tests that never exercised its redirect or size-limit branches. New `tests/media-download.test.ts` pins down the parts that matter most: `assertPublicMediaHost` runs again on every redirect hop, not just the first URL, so a public URL that redirects to `169.254.169.254` (the cloud-provider instance-metadata endpoint) is refused mid-chain; `MAX_REDIRECTS` bounds the chain; and the size limit is enforced twice — once from a declared `content-length` before the body is read, and again from the actual downloaded size, so a response that under-declares its `content-length` still gets rejected. Tests only, no production code changed.
 
+## SSRF guard boundary test coverage (PHASE 91)
+
+`isPrivateOrLocalIp` and `parsePublicMediaUrl` (PHASE 90's underlying host guard) were checked on only a couple of obvious cases. New tests cover the ones most likely to matter in practice: the cloud instance-metadata IP `169.254.169.254`, the exact CIDR edges of the `172.16.0.0/12` private range (`172.15.255.255` public, `172.16.0.0` private, `172.31.255.255` private, `172.32.0.0` public), IPv6 loopback/link-local/unique-local addresses including an IPv4-mapped `::ffff:127.0.0.1`, the `metadata.google.internal` / `.internal` / `.local` hostname blocks, and rejection of non-http(s) schemes. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

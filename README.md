@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 90: downloadPublicMedia SSRF and size-limit test coverage. The public-media download pipeline behind VK/X publish had no direct test. New tests pin down that the private-IP host check re-runs on every redirect hop (not just the first URL) and that the size limit is enforced both from a declared content-length and the actual downloaded size. Tests only, no production code changed.
+PHASE 91: SSRF guard boundary test coverage. `isPrivateOrLocalIp` / `parsePublicMediaUrl` were checked on only a couple of obvious cases; new tests cover the cloud instance-metadata IP, exact 172.16.0.0/12 CIDR edges, IPv6 private ranges, and blocked hostname suffixes. Tests only, no production code changed.
