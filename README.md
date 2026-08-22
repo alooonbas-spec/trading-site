@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 76: Validation schema test coverage. Several `lib/validation/*.ts` boundary schemas (`createCampaignSchema`, most of `lib/validation/lead.ts`, `parseScheduledAt`, `parseSourceList`, `emptyToNull`) had no direct unit test. Tests only, no production code changed.
+PHASE 77: OAuth state expiry as a tested function. `isOAuthStateExpired(expiresAt, now)` in `lib/social/pkce.ts` replaces an inline `Date.now()` comparison in `completeOAuthConnect` with the same check, now unit-tested at its exact boundary. No behavior change.

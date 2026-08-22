@@ -4,7 +4,7 @@ import { canManageAccounts } from "@/lib/auth/permissions";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { PermissionError, ValidationError } from "@/lib/errors";
 import { getAppOrigin, oauthCallbackPath } from "@/lib/social/app-origin";
-import { createOAuthState, createPkcePair } from "@/lib/social/pkce";
+import { createOAuthState, createPkcePair, isOAuthStateExpired } from "@/lib/social/pkce";
 import { getSocialAdapter } from "@/social/core/registry";
 import { connectSocialAccount, parsePlatform } from "@/services/social-accounts/account-service";
 import type { SocialPlatform } from "@/types/social";
@@ -79,7 +79,7 @@ export async function completeOAuthConnect(input: {
     throw new ValidationError("OAuth state does not match this user or platform");
   }
 
-  if (new Date(oauthState.expires_at).getTime() <= Date.now()) {
+  if (isOAuthStateExpired(oauthState.expires_at)) {
     throw new ValidationError("OAuth state expired. Start the connection again.");
   }
 

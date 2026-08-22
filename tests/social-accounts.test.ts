@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AuthenticationError } from "@/lib/errors";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { filterSocialAccounts } from "@/lib/social/filter-accounts";
-import { createOAuthState, createPkcePair } from "@/lib/social/pkce";
+import { createOAuthState, createPkcePair, isOAuthStateExpired } from "@/lib/social/pkce";
 import { assertNoTokenLeak, toPublicSocialAccount } from "@/services/social-accounts/mapper";
 import type { SocialAccountPublic } from "@/types/social-account";
 
@@ -35,6 +35,13 @@ describe("PKCE", () => {
     expect(pkce.verifier.length).toBeGreaterThanOrEqual(32);
     expect(pkce.challenge).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(pkce.challenge).not.toBe(pkce.verifier);
+  });
+
+  it("expires an OAuth state exactly at its expiry, not a moment before", () => {
+    const now = new Date("2026-08-21T12:10:00.000Z");
+    expect(isOAuthStateExpired("2026-08-21T12:09:59.999Z", now)).toBe(true);
+    expect(isOAuthStateExpired("2026-08-21T12:10:00.000Z", now)).toBe(true);
+    expect(isOAuthStateExpired("2026-08-21T12:10:00.001Z", now)).toBe(false);
   });
 });
 

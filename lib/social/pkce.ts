@@ -9,3 +9,7 @@ export function createPkcePair(): { verifier: string; challenge: string } {
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   return { verifier, challenge };
 }
+
+export function isOAuthStateExpired(expiresAt: string, now: Date = new Date()): boolean {
+  return new Date(expiresAt).getTime() <= now.getTime();
+}
