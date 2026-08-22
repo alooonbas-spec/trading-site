@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { RateLimitError } from "@/lib/errors";
 import { AccountRateLimiter, windowStart } from "@/lib/jobs/account-rate-limiter";
 import {
@@ -141,6 +141,20 @@ describe("AccountRateLimiter", () => {
   it("aligns windows to the limit duration", () => {
     const now = new Date("2026-08-21T13:37:00.000Z");
     expect(windowStart(now, 60 * 60 * 1000).toISOString()).toBe("2026-08-21T13:00:00.000Z");
+  });
+
+  it("allows a count exactly at the limit, not just strictly under it", async () => {
+    const limiter = new AccountRateLimiter(async () => 10);
+    await expect(limiter.take("acc-1", { maxActions: 10, windowMs: 60_000 })).resolves.toBeUndefined();
+  });
+
+  it("refuses to consume at all when the adapter reports the limit as disabled", async () => {
+    const consume = vi.fn(async () => 0);
+    const limiter = new AccountRateLimiter(consume);
+    await expect(limiter.take("acc-1", { maxActions: 0, windowMs: 60_000 })).rejects.toBeInstanceOf(
+      RateLimitError,
+    );
+    expect(consume).not.toHaveBeenCalled();
   });
 });
 

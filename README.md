@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 96: Campaign status machine and retry backoff test coverage. `canPauseCampaign`, `canCancelCampaign`, and `retryDelayMs` had no direct test, only `canStartCampaign` did. `getTokenEncryptionKey` also had none. Tests only, no production code changed.
+PHASE 97: AccountRateLimiter boundary test coverage. The exact `count === maxActions` boundary and the "rate limit disabled" (`maxActions < 1` fails closed, skipping the consume call) guard had no test. Tests only, no production code changed.

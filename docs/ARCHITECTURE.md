@@ -503,6 +503,10 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 `canPauseCampaign`, `canCancelCampaign`, and `retryDelayMs` had no direct test — only `canStartCampaign` did, even though all four sit right next to each other in `lib/jobs/queue-rules.ts` and the pause/cancel machine gates the same Campaigns UI actions. `getTokenEncryptionKey` (the env-backed counterpart to PHASE 78's `encryptConnectResult`) also had none. Tests only, no production code changed.
 
+## AccountRateLimiter boundary test coverage (PHASE 97)
+
+`AccountRateLimiter.take` had two untested branches: the exact boundary (`count === maxActions` should pass, only strictly-over throws) and the "rate limit disabled" guard (`maxActions < 1` throws `RateLimitError` without even calling the consume callback — meaning a misconfigured adapter with a zero/negative limit fails closed instead of skipping the check). Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
