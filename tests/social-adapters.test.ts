@@ -213,3 +213,34 @@ describe("Telegram URL redaction", () => {
     expect(redactSensitiveUrl(url)).toBe("https://api.telegram.org/bot[redacted]/getMe");
   });
 });
+
+describe("Graph API URL redaction", () => {
+  it("strips access_token from Facebook and Instagram Graph query strings", () => {
+    // Facebook/Instagram send access_token as a query param, unlike Telegram
+    // (bot token in the path) or VK/X (token in the body/headers), so a
+    // failed Graph call's SocialError.details.url must not leak it here.
+    expect(
+      redactSensitiveUrl(
+        "https://graph.facebook.com/v21.0/555/feed?fields=id&access_token=EAA-secret-token&limit=10",
+      ),
+    ).toBe("https://graph.facebook.com/v21.0/555/feed?fields=id&access_token=[redacted]&limit=10");
+    expect(
+      redactSensitiveUrl("https://graph.facebook.com/v21.0/ig-1/media?access_token=EAA-secret-token"),
+    ).toBe("https://graph.facebook.com/v21.0/ig-1/media?access_token=[redacted]");
+  });
+
+  it("redacts access_token wherever it appears, first, middle, or only param", () => {
+    expect(redactSensitiveUrl("https://graph.facebook.com/x?access_token=abc")).toBe(
+      "https://graph.facebook.com/x?access_token=[redacted]",
+    );
+    expect(redactSensitiveUrl("https://graph.facebook.com/x?a=1&access_token=abc&b=2")).toBe(
+      "https://graph.facebook.com/x?a=1&access_token=[redacted]&b=2",
+    );
+  });
+
+  it("leaves a URL with no access_token untouched", () => {
+    expect(redactSensitiveUrl("https://graph.facebook.com/v21.0/555/feed?fields=id")).toBe(
+      "https://graph.facebook.com/v21.0/555/feed?fields=id",
+    );
+  });
+});

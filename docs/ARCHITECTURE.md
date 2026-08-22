@@ -485,6 +485,12 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 `CIRCUMVENTION_VERBS` and `PROTECTION_TARGETS` in `lib/tinyfish/policy.ts` now generate two symmetric patterns (verb-then-target, target-then-verb) covering `bypass|circumvent|evade|evasion|ignore|disable` against `bot|anti-bot|cloudflare|captcha|rate-limit|429`, replacing five ad-hoc, partly one-directional patterns. `circumvent` also gained its `-ing/-ed/-ion` inflections, matching the `evad(e|ing|es)` handling the code already had for evade. This is a real fix, not test-only — `assertTinyFishGoalAllowed("circumvent the rate limit")` now throws where it previously did not.
 
+## Graph API access_token URL redaction fix (PHASE 93)
+
+`redactSensitiveUrl` only stripped Telegram's bot token from the URL path; it did nothing for Facebook and Instagram Graph calls, which carry `access_token` as a query parameter on nearly every request (`social/facebook/inbox.ts`, `pages.ts`, `contact.ts`; `social/instagram/inbox.ts`, `publish.ts`, `contact.ts`, `adapter.ts`). A failed Graph request throws `SocialError` with `details: { url: redactSensitiveUrl(url), status }` — so a non-2xx response from either platform previously carried a live, unredacted access token straight into that error's details, and from there into anything that logs or serializes it, directly against README's "Do not put access tokens... in logs." VK and X were never affected: VK sends its token in the POST body, X in an `Authorization` header, neither in the URL.
+
+`redactSensitiveUrl` now also redacts `access_token=<value>` wherever it appears in the query string, first, middle, or only parameter, leaving everything else in the URL untouched. Real fix, not test-only.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

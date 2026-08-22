@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 92: TinyFish policy word-order fix. `isTinyFishGoalAllowed`'s rate-limit/evasion patterns only matched one word order, so "circumvent the rate limit" slipped through while "rate limit circumvent" was blocked. Real fix: `lib/tinyfish/policy.ts` now generates symmetric verb/target patterns covering both orders.
+PHASE 93: Graph API access_token URL redaction fix. `redactSensitiveUrl` stripped Telegram's bot token but not Facebook/Instagram's `access_token` query parameter, so a failed Graph request's `SocialError.details.url` carried a live token. Real fix: `access_token=<value>` is now redacted wherever it appears in the query string.

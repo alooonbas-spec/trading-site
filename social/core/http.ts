@@ -6,9 +6,12 @@ import {
 } from "@/lib/errors";
 
 const TELEGRAM_BOT_PATH = /\/bot[^/]+\//;
+// Facebook and Instagram Graph API calls carry access_token as a query
+// parameter (VK and X send tokens in the request body/headers instead).
+const ACCESS_TOKEN_PARAM = /([?&]access_token=)[^&]*/gi;
 
 export function redactSensitiveUrl(url: string): string {
-  return url.replace(TELEGRAM_BOT_PATH, "/bot[redacted]/");
+  return url.replace(TELEGRAM_BOT_PATH, "/bot[redacted]/").replace(ACCESS_TOKEN_PARAM, "$1[redacted]");
 }
 
 export async function socialFetch(url: string, init?: RequestInit): Promise<Response> {
