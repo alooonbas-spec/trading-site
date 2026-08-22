@@ -600,7 +600,7 @@ async function collectFacebookRatings(
     const storyId = rating.open_graph_story?.id?.trim();
     const fromId = rating.reviewer?.id !== undefined ? String(rating.reviewer.id) : "";
     const text = rating.review_text?.trim();
-    if (!storyId || !GRAPH_OBJECT_ID.test(storyId) || !fromId || !text) {
+    if (!storyId || !fromId || !text) {
       continue;
     }
     messages.push({
