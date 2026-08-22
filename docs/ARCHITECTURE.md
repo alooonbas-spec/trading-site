@@ -425,6 +425,10 @@ An audit of every `lib/validation/*.ts` schema against `tests/*.ts` found severa
 
 Continuing the PHASE 76/77 audit: `updateWorkspaceSchema`, `updateMemberRoleSchema`, and `removeMemberSchema` in `lib/validation/workspace.ts` had no direct test (only `createWorkspaceSchema` and `inviteMemberSchema` did). `encryptConnectResult` in `services/social-accounts/mapper.ts` — the wrapper that encrypts an OAuth connect result's access/refresh tokens before they reach `social_accounts`, and turns a missing `TOKEN_ENCRYPTION_KEY` into a `ValidationError` instead of an opaque crash — had no test at all despite being on the token-handling path. Tests only, no production code changed.
 
+## Full role-permission test coverage (PHASE 79)
+
+`lib/auth/permissions.ts` is the one place that maps a `WorkspaceRole` to what it can do, and every service's `assertCanMutateWorkspaceData` / `assertCanManageWorkspace` call traces back to it — but `roleRank`, `canManageWorkspace`, `assertCanManageWorkspace`, and `assertCanMutateWorkspaceData` had no direct test, and the functions that did have one were checked on 1–2 roles, not all four. Tests only, no production code changed: every predicate and assert function is now checked against all four roles (`OWNER`, `ADMIN`, `OPERATOR`, `VIEWER`), plus a check that `roleRank` gives each role a distinct rank in the documented order.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

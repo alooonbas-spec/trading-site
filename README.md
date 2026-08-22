@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 78: More validation and token-encryption test coverage. `updateWorkspaceSchema`, `updateMemberRoleSchema`, `removeMemberSchema`, and `encryptConnectResult` (the OAuth token-encryption wrapper) had no direct unit test. Tests only, no production code changed.
+PHASE 79: Full role-permission test coverage. `lib/auth/permissions.ts` is the one place mapping `WorkspaceRole` to access; several of its functions had no direct test, and the rest were only checked on 1–2 of the four roles. Every predicate and assert is now checked against all four roles. Tests only, no production code changed.
