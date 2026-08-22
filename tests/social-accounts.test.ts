@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { AuthenticationError } from "@/lib/errors";
+import { afterEach, describe, expect, it } from "vitest";
+import { randomBytes } from "node:crypto";
+import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { filterSocialAccounts } from "@/lib/social/filter-accounts";
 import { createOAuthState, createPkcePair, isOAuthStateExpired } from "@/lib/social/pkce";
-import { assertNoTokenLeak, toPublicSocialAccount } from "@/services/social-accounts/mapper";
+import {
+  assertNoTokenLeak,
+  encryptConnectResult,
+  toPublicSocialAccount,
+} from "@/services/social-accounts/mapper";
 import type { SocialAccountPublic } from "@/types/social-account";
 
 function account(overrides: Partial<SocialAccountPublic> = {}): SocialAccountPublic {
@@ -26,6 +31,57 @@ function account(overrides: Partial<SocialAccountPublic> = {}): SocialAccountPub
     ...overrides,
   };
 }
+
+describe("encryptConnectResult", () => {
+  afterEach(() => {
+    delete process.env.TOKEN_ENCRYPTION_KEY;
+  });
+
+  it("encrypts access and refresh tokens, and keeps a null refresh token null", () => {
+    process.env.TOKEN_ENCRYPTION_KEY = randomBytes(32).toString("hex");
+    const encrypted = encryptConnectResult({
+      externalAccountId: "42",
+      username: null,
+      displayName: null,
+      avatarUrl: null,
+      scopes: [],
+      accessToken: "access-token-value",
+      refreshToken: "refresh-token-value",
+      tokenExpiresAt: null,
+    });
+    expect(encrypted.access_token_encrypted.startsWith("v1:")).toBe(true);
+    expect(encrypted.access_token_encrypted).not.toContain("access-token-value");
+    expect(encrypted.refresh_token_encrypted?.startsWith("v1:")).toBe(true);
+
+    const withoutRefresh = encryptConnectResult({
+      externalAccountId: "42",
+      username: null,
+      displayName: null,
+      avatarUrl: null,
+      scopes: [],
+      accessToken: "access-token-value",
+      refreshToken: null,
+      tokenExpiresAt: null,
+    });
+    expect(withoutRefresh.refresh_token_encrypted).toBeNull();
+  });
+
+  it("fails honestly when TOKEN_ENCRYPTION_KEY is not configured", () => {
+    delete process.env.TOKEN_ENCRYPTION_KEY;
+    expect(() =>
+      encryptConnectResult({
+        externalAccountId: "42",
+        username: null,
+        displayName: null,
+        avatarUrl: null,
+        scopes: [],
+        accessToken: "access-token-value",
+        refreshToken: null,
+        tokenExpiresAt: null,
+      }),
+    ).toThrow(ValidationError);
+  });
+});
 
 describe("PKCE", () => {
   it("creates a state of at least 32 characters and an S256 challenge", () => {

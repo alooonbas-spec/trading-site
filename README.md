@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 77: OAuth state expiry as a tested function. `isOAuthStateExpired(expiresAt, now)` in `lib/social/pkce.ts` replaces an inline `Date.now()` comparison in `completeOAuthConnect` with the same check, now unit-tested at its exact boundary. No behavior change.
+PHASE 78: More validation and token-encryption test coverage. `updateWorkspaceSchema`, `updateMemberRoleSchema`, `removeMemberSchema`, and `encryptConnectResult` (the OAuth token-encryption wrapper) had no direct unit test. Tests only, no production code changed.

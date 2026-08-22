@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { loginSchema, signupSchema } from "@/lib/validation/auth";
-import { createWorkspaceSchema, inviteMemberSchema } from "@/lib/validation/workspace";
+import {
+  createWorkspaceSchema,
+  inviteMemberSchema,
+  removeMemberSchema,
+  updateMemberRoleSchema,
+  updateWorkspaceSchema,
+} from "@/lib/validation/workspace";
 import { publicEnvSchema } from "@/lib/validation/env";
 
 describe("validation", () => {
@@ -30,6 +36,24 @@ describe("validation", () => {
       role: "OWNER",
     });
     expect(result.success).toBe(false);
+  });
+
+  it("requires a workspace id and a valid name to rename a workspace", () => {
+    const workspaceId = "11111111-1111-4111-8111-111111111111";
+    expect(updateWorkspaceSchema.safeParse({ workspaceId, name: "Trading" }).success).toBe(true);
+    expect(updateWorkspaceSchema.safeParse({ workspaceId, name: "A" }).success).toBe(false);
+    expect(updateWorkspaceSchema.safeParse({ workspaceId: "not-a-uuid", name: "Trading" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects owner as a role change, and requires uuids to change or remove a member", () => {
+    const workspaceId = "11111111-1111-4111-8111-111111111111";
+    const userId = "22222222-2222-4222-8222-222222222222";
+    expect(updateMemberRoleSchema.safeParse({ workspaceId, userId, role: "ADMIN" }).success).toBe(true);
+    expect(updateMemberRoleSchema.safeParse({ workspaceId, userId, role: "OWNER" }).success).toBe(false);
+    expect(removeMemberSchema.safeParse({ workspaceId, userId }).success).toBe(true);
+    expect(removeMemberSchema.safeParse({ workspaceId, userId: "not-a-uuid" }).success).toBe(false);
   });
 
   it("requires a real supabase public url", () => {

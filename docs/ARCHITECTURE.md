@@ -421,6 +421,10 @@ An audit of every `lib/validation/*.ts` schema against `tests/*.ts` found severa
 
 `completeOAuthConnect` rejected an expired `oauth_states` row inline (`new Date(oauthState.expires_at).getTime() <= Date.now()`), a security check (this is the anti-replay window for the 10-minute-lived state `startOAuthConnect` writes) with no direct unit test. `isOAuthStateExpired(expiresAt, now = new Date())` in `lib/social/pkce.ts` is the same comparison as a pure, injectable-time function; `oauth-service.ts` now calls it instead of inlining `Date.now()`. Same boundary as before (`<=`, not `<`) — tested exactly at, one millisecond before, and one millisecond after expiry.
 
+## More validation and token-encryption test coverage (PHASE 78)
+
+Continuing the PHASE 76/77 audit: `updateWorkspaceSchema`, `updateMemberRoleSchema`, and `removeMemberSchema` in `lib/validation/workspace.ts` had no direct test (only `createWorkspaceSchema` and `inviteMemberSchema` did). `encryptConnectResult` in `services/social-accounts/mapper.ts` — the wrapper that encrypts an OAuth connect result's access/refresh tokens before they reach `social_accounts`, and turns a missing `TOKEN_ENCRYPTION_KEY` into a `ValidationError` instead of an opaque crash — had no test at all despite being on the token-handling path. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
