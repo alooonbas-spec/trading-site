@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 93: Graph API access_token URL redaction fix. `redactSensitiveUrl` stripped Telegram's bot token but not Facebook/Instagram's `access_token` query parameter, so a failed Graph request's `SocialError.details.url` carried a live token. Real fix: `access_token=<value>` is now redacted wherever it appears in the query string.
+PHASE 94: Official monitor source allowlist test coverage. `assertMonitorSourcesAllowed` / `isOfficialMonitorHost` gate what hosts TinyFish is pointed at; only the primary domain per platform was ever tested. New tests cover every documented alias, www./case normalization, bare-domain resolution, lookalike-host rejection, and blank/unparseable sources. Tests only — the allowlist already enforced all of this correctly.

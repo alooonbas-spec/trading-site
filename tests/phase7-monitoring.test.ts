@@ -15,7 +15,7 @@ import {
 import { searchPublicContents } from "@/lib/tinyfish/client";
 import { TINYFISH_ENDPOINTS } from "@/lib/tinyfish/endpoints";
 import { createMonitoringRuleSchema, parseSourceList } from "@/lib/validation/monitoring";
-import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
+import { assertMonitorSourcesAllowed, isOfficialMonitorHost } from "@/social/core/monitor-sources";
 import { getSocialAdapter } from "@/social/core/registry";
 import { TelegramAdapter } from "@/social/telegram/adapter";
 import { XAdapter, buildXRecentSearchQuery } from "@/social/x/adapter";
@@ -76,6 +76,38 @@ describe("official monitor sources", () => {
     expect(() => assertMonitorSourcesAllowed("telegram", ["https://t.me/durov"])).not.toThrow();
     expect(() => assertMonitorSourcesAllowed("x", ["https://evil.example/jack"])).toThrow(ValidationError);
     expect(() => assertMonitorSourcesAllowed("vk", ["https://example.com"])).toThrow(ValidationError);
+  });
+
+  it("allows every documented mobile/regional alias per platform", () => {
+    expect(isOfficialMonitorHost("facebook", "facebook.com")).toBe(true);
+    expect(isOfficialMonitorHost("facebook", "fb.com")).toBe(true);
+    expect(isOfficialMonitorHost("facebook", "m.facebook.com")).toBe(true);
+    expect(isOfficialMonitorHost("telegram", "telegram.me")).toBe(true);
+    expect(isOfficialMonitorHost("telegram", "telegram.dog")).toBe(true);
+    expect(isOfficialMonitorHost("vk", "vk.ru")).toBe(true);
+    expect(isOfficialMonitorHost("vk", "m.vk.com")).toBe(true);
+    expect(isOfficialMonitorHost("x", "mobile.twitter.com")).toBe(true);
+    expect(isOfficialMonitorHost("instagram", "m.instagram.com")).toBe(true);
+  });
+
+  it("normalizes a www. prefix and case before matching, and accepts a bare domain with no scheme", () => {
+    expect(() => assertMonitorSourcesAllowed("x", ["https://WWW.X.COM/jack"])).not.toThrow();
+    expect(() => assertMonitorSourcesAllowed("telegram", ["t.me/durov"])).not.toThrow();
+  });
+
+  it("does not let a lookalike host past exact matching", () => {
+    expect(() => assertMonitorSourcesAllowed("telegram", ["https://t.me.evil.example/durov"])).toThrow(
+      ValidationError,
+    );
+    expect(() => assertMonitorSourcesAllowed("telegram", ["https://evil-t.me/durov"])).toThrow(
+      ValidationError,
+    );
+  });
+
+  it("rejects a blank or unparseable source instead of silently skipping it", () => {
+    expect(() => assertMonitorSourcesAllowed("x", [""])).toThrow(ValidationError);
+    expect(() => assertMonitorSourcesAllowed("x", ["   "])).toThrow(ValidationError);
+    expect(() => assertMonitorSourcesAllowed("x", ["not a url at all"])).toThrow(ValidationError);
   });
 });
 

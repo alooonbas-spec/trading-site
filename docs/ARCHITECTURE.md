@@ -491,6 +491,10 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 `redactSensitiveUrl` now also redacts `access_token=<value>` wherever it appears in the query string, first, middle, or only parameter, leaving everything else in the URL untouched. Real fix, not test-only.
 
+## Official monitor source allowlist test coverage (PHASE 94)
+
+`assertMonitorSourcesAllowed` / `isOfficialMonitorHost` gate what hosts TinyFish is ever pointed at for a monitoring rule, but only checked the single primary domain per platform. New tests cover every documented mobile/regional alias (`fb.com`, `m.facebook.com`, `telegram.dog`, `vk.ru`, `mobile.twitter.com`, `m.instagram.com`, ...), that `www.` and case are normalized before matching, that a bare domain with no scheme still resolves, that a lookalike host (`t.me.evil.example`, `evil-t.me`) does not pass exact-match, and that a blank or unparseable source is rejected rather than silently skipped. Tests only, no production code changed — the allowlist already enforced all of this correctly.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
