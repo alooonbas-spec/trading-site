@@ -4,7 +4,8 @@ import { requireProfile } from "@/lib/auth/session";
 import { assertCanMutateWorkspaceData } from "@/lib/auth/permissions";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { ValidationError } from "@/lib/errors";
-import { canCancelJob, canRetryFailedJob } from "@/lib/jobs/status";
+import { canCancelJob, canRetryFailedJob, isStaleRunningJob } from "@/lib/jobs/status";
+import { STALE_RUNNING_JOB_MS } from "@/lib/jobs/queue-rules";
 import { logActivity } from "@/services/activity/activity-service";
 import { toJob } from "@/services/campaigns/mapper";
 import { refreshPostRollup } from "@/services/posts/post-service";
@@ -121,11 +122,13 @@ export async function cancelQueuedJob(input: {
   }
 
   const job = toJob(data);
-  if (!canCancelJob(job.status)) {
-    throw new ValidationError("Only PENDING and RETRY jobs can be cancelled");
+  const stale = isStaleRunningJob(job.status, job.lockedAt);
+  if (!canCancelJob(job.status) && !stale) {
+    throw new ValidationError("Only PENDING, RETRY, or stale RUNNING jobs can be cancelled");
   }
 
-  const { error: updateError } = await supabase
+  const staleThreshold = new Date(Date.now() - STALE_RUNNING_JOB_MS).toISOString();
+  const cancelQuery = supabase
     .from("jobs")
     .update({
       status: "CANCELLED",
@@ -134,8 +137,12 @@ export async function cancelQueuedJob(input: {
       completed_at: new Date().toISOString(),
     })
     .eq("id", job.id)
-    .eq("workspace_id", input.workspaceId)
-    .in("status", ["PENDING", "RETRY"]);
+    .eq("workspace_id", input.workspaceId);
+  const { error: updateError } = await (
+    stale
+      ? cancelQuery.eq("status", "RUNNING").lt("locked_at", staleThreshold)
+      : cancelQuery.in("status", ["PENDING", "RETRY"])
+  );
   if (updateError) {
     throw new ValidationError(updateError.message);
   }
@@ -148,7 +155,7 @@ export async function cancelQueuedJob(input: {
     socialAccountId: job.socialAccountId,
     entityType: "job",
     entityId: job.id,
-    metadata: { type: job.type },
+    metadata: { type: job.type, stale },
   });
 }
 

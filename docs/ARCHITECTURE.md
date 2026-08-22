@@ -409,6 +409,10 @@ Both claim functions now also reclaim a `RUNNING` job once its lock is older tha
 
 The Jobs page now shows a "Stale" badge next to a job's status when it is `RUNNING` and its lock (`locked_at`) is at least 15 minutes old, the same threshold PHASE 73 uses to reclaim it. `Job` now carries `lockedAt`; `isStaleRunningJob(status, lockedAt, now)` in `lib/jobs/status.ts` is the shared, unit-tested predicate (`STALE_RUNNING_JOB_MS` in `lib/jobs/queue-rules.ts` is the single source for the threshold both PHASE 73's SQL comment and this check reference). This is read-only: it does not add a cancel path for `RUNNING` jobs, so there is no new race with a worker that is still legitimately finishing. `locked_at` was added to `JOB_PUBLIC_COLUMNS`; every existing `toJob()` caller already selects that column set, so this needed no other query changes.
 
+## Stale job cancel (PHASE 75)
+
+`cancelQueuedJob` now also accepts a stale `RUNNING` job (PHASE 74's same `isStaleRunningJob` predicate), not only `PENDING`/`RETRY`. The `UPDATE` re-checks `status = 'RUNNING' and locked_at < <threshold computed at call time>` instead of trusting the value already read into `job`, so a worker that finishes between the read and the cancel simply leaves the row no longer matching — the cancel becomes a no-op rather than clobbering a real result, the same silent-no-op behavior the existing PENDING/RETRY path already has for a job someone else already touched. `JobListItem.canCancel` is `canCancelJob(status) || isStale`, so the Jobs page "Cancel" button now also appears next to the PHASE 74 "Stale" badge. Cancel activity records `stale: true|false` in its metadata; no new SQL, no new activity action.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

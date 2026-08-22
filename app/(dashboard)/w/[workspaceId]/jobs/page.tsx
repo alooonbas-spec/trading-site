@@ -135,8 +135,9 @@ export default async function JobsPage({
             <CardTitle>Queue</CardTitle>
             <CardDescription>
               Showing {jobs.length} job{jobs.length === 1 ? "" : "s"} on this page. Process queue still
-              uses SKIP LOCKED. Cancelled and successful jobs are not retried. Older pages use a
-              created_at keyset, not OFFSET.
+              uses SKIP LOCKED. Cancelled and successful jobs are not retried. A Stale RUNNING job can
+              be cancelled directly; claim_jobs would otherwise reclaim it automatically once its lock
+              is 15 minutes old. Older pages use a created_at keyset, not OFFSET.
             </CardDescription>
           </CardHeader>
           <CardContent>

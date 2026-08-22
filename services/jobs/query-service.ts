@@ -252,7 +252,7 @@ export async function listWorkspaceJobs(input: {
         postTargetStatus: job.postTargetId ? (targetsById.get(job.postTargetId) ?? null) : null,
         monitoringRuleStatus: rule?.status ?? null,
       }),
-      canCancel: canCancelJob(job.status),
+      canCancel: canCancelJob(job.status) || isStaleRunningJob(job.status, job.lockedAt),
       isStale: isStaleRunningJob(job.status, job.lockedAt),
     };
   });

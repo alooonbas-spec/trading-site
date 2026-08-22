@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 74: Stale job visibility. The Jobs page shows a "Stale" badge on a `RUNNING` job whose lock is at least 15 minutes old (the same threshold PHASE 73 uses to reclaim it). Read-only: no new cancel path, no new SQL.
+PHASE 75: Stale job cancel. An operator can now cancel a Stale `RUNNING` job (PHASE 74's badge) directly from the Jobs page instead of waiting for `claim_jobs` to reclaim it. The cancel re-checks `locked_at` at update time so a worker that finishes in the meantime is not clobbered. No new SQL.
