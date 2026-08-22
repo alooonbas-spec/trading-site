@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 97: AccountRateLimiter boundary test coverage. The exact `count === maxActions` boundary and the "rate limit disabled" (`maxActions < 1` fails closed, skipping the consume call) guard had no test. Tests only, no production code changed.
+PHASE 98: DNS-rebinding guard test coverage. `assertPublicMediaHost`'s actual DNS lookup branch (a hostname that resolves to a private/link-local address) had no direct test with `node:dns/promises` mocked; PHASE 90/91 only covered paths that never touch DNS. Tests only, no production code changed.
