@@ -33,8 +33,8 @@ describe("PHASE 55 VK video comment threads", () => {
       if (
         target === vkMethodUrl("wall.get") ||
         target === vkMethodUrl("wall.getComments") ||
-        target === vkMethodUrl("newsfeed.getMentions") ||
-        target === vkMethodUrl("photos.getAllComments")
+        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") ||
+        target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
@@ -93,7 +93,7 @@ describe("PHASE 55 VK video comment threads", () => {
       ...nested.map((item) => `video:10:20:${item.id}`),
     ]);
     expect(first.cursor).toBe(
-      `mentionpages:1|photocomments:1|video:1710000200|videocomments:1|videos:1|videothreads:${encodeVkThreadMap({ "10_20_80": "1" })}|wall:1|wallcomments:1|wallthreads:done`,
+      `mentionpages:1|photocomments:1|userphotos:1|video:1710000200|videocomments:1|videos:1|videothreads:${encodeVkThreadMap({ "10_20_80": "1" })}|wall:1|wallcomments:1|wallthreads:done`,
     );
 
     const second = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
@@ -105,7 +105,7 @@ describe("PHASE 55 VK video comment threads", () => {
       older.map((item) => `video:10:20:${item.id}`),
     );
     expect(second.cursor).toBe(
-      `mentionpages:done|photocomments:done|video:1710000200|videocomments:done|videos:done|videothreads:${encodeVkThreadMap({ "10_20_80": "2" })}|wall:done|wallcomments:done|wallthreads:done`,
+      `mentionpages:done|photocomments:done|userphotos:done|video:1710000200|videocomments:done|videos:done|videothreads:${encodeVkThreadMap({ "10_20_80": "2" })}|wall:done|wallcomments:done|wallthreads:done`,
     );
   });
 
@@ -116,8 +116,8 @@ describe("PHASE 55 VK video comment threads", () => {
       if (
         target === vkMethodUrl("wall.get") ||
         target === vkMethodUrl("wall.getComments") ||
-        target === vkMethodUrl("newsfeed.getMentions") ||
-        target === vkMethodUrl("photos.getAllComments")
+        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") ||
+        target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }

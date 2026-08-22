@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 60: Official Graph nested replies on Facebook rating-story comments (seeds existing `creplies`). No new SQL.
+PHASE 61: Official VK `photos.getUserPhotos` tagged-photo mentions for user OAuth (`userphotos` offset, `phototags` watermark). No new SQL.

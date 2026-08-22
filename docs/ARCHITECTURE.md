@@ -351,6 +351,10 @@ Facebook ratings request nested `open_graph_story{id,comments.limit(50){…}}` o
 
 Facebook rating-story comments request nested `comments.limit(25)`, the same edge as feed and tagged comments in PHASE 49 and PHASE 57. Extra PHASE 59 rating-comment pages already request that nested edge so newly discovered rating comments can seed `creplies` while that cursor is still open. Later polls still request `GET /{comment-id}/comments?after=` (`limit=25`). Extra nested-reply pages are not dropped by the `comments` timestamp watermark. This reuses the existing `creplies` map rather than a second cursor. A stored `creplies:done` stays done. Instagram has no ratings edge. Collectors still do not fetch `paging.next` URLs.
 
+## VK tagged photo mentions (PHASE 61)
+
+User OAuth inbox calls official `photos.getUserPhotos` (count 20, the documented default). `user_id` is omitted so VK uses the current user. Offset is omitted when `0`. After `userphotos:1`, each later poll requests `offset = page * 20`. A full 20-item page advances `userphotos:2`. A short page stores `userphotos:done`. Extra tagged-photo pages are not dropped by the independent unix `phototags` watermark. Events store `phototag:{ownerId}:{photoId}` ids, `replyKind=mention`, and `https://vk.com/photo{owner}_{id}` URLs. Photo-only tags without text are skipped (no invented mention body). Replies use official `photos.createComment` with `owner_id` and `photo_id` and without `reply_to_comment`. Community tokens skip this method. No new VK OAuth scope (`photos` is already granted).
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

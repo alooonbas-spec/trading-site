@@ -154,10 +154,10 @@ describe("PHASE 26 VK community history collection", () => {
           status: 200,
         });
       }
-        if (target === vkMethodUrl("newsfeed.getMentions")) {
+        if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
         }
-        if (target === vkMethodUrl("photos.getAllComments")) {
+        if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
         }
         if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {

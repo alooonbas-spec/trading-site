@@ -56,8 +56,8 @@ describe("PHASE 53 VK video.getComments", () => {
       if (
         target === vkMethodUrl("wall.get") ||
         target === vkMethodUrl("wall.getComments") ||
-        target === vkMethodUrl("newsfeed.getMentions") ||
-        target === vkMethodUrl("photos.getAllComments")
+        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") ||
+        target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
@@ -123,7 +123,7 @@ describe("PHASE 53 VK video.getComments", () => {
       })),
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|photocomments:1|video:1710000200|videocomments:2|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|userphotos:1|video:1710000200|videocomments:2|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getComments")),
@@ -137,8 +137,8 @@ describe("PHASE 53 VK video.getComments", () => {
       if (
         target === vkMethodUrl("wall.get") ||
         target === vkMethodUrl("wall.getComments") ||
-        target === vkMethodUrl("newsfeed.getMentions") ||
-        target === vkMethodUrl("photos.getAllComments")
+        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") ||
+        target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
@@ -185,7 +185,7 @@ describe("PHASE 53 VK video.getComments", () => {
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["video:10:10:1", "video:10:20:3"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|video:1710000200|videocomments:1|videos:2|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|userphotos:1|video:1710000200|videocomments:1|videos:2|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.get"))).toHaveLength(2);
   });
@@ -197,8 +197,8 @@ describe("PHASE 53 VK video.getComments", () => {
       if (
         target === vkMethodUrl("wall.get") ||
         target === vkMethodUrl("wall.getComments") ||
-        target === vkMethodUrl("newsfeed.getMentions") ||
-        target === vkMethodUrl("photos.getAllComments")
+        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") ||
+        target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
@@ -235,7 +235,7 @@ describe("PHASE 53 VK video.getComments", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["video:10:20:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|video:1710000081|videocomments:done|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|userphotos:1|video:1710000081|videocomments:done|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.get"))).toHaveLength(1);
     expect(
