@@ -555,6 +555,10 @@ Replaced the `PHOTO_EXTENSIONS` set and its inline ternary with a `PHOTO_EXTENSI
 
 `social/x/media-upload.ts`'s `uploadXMediaFromUrls` (its item-count/mixed-kind/document validation) and `uploadXMedia`'s chunked-append loop had zero direct test coverage — only a single-image, single-chunk path was exercised end-to-end through `XAdapter.publish` in the existing "X media publishing" test. New cases cover: a video larger than `X_APPEND_CHUNK_BYTES` (4 MiB) splits into the correct number of `append` calls with the correct `segment_index` and byte length per chunk (verified against a 5 MiB buffer: a 4 MiB chunk followed by a 1 MiB remainder); more than 4 media items, mixed image+video, two videos, two GIFs, and any PDF/ZIP document are all rejected with `ValidationError`. All cases passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
 
+## VK wall video upload and owner-id test coverage (PHASE 108)
+
+`social/vk/publish.ts`'s `uploadWallVideo` (the `video.save` upload flow) had zero test coverage — only the wall-photo upload path (`photos.getWallUploadServer`/`photos.saveWallPhoto`) was exercised through `VkAdapter.publish`. `vkWallTarget` was also only tested for the negative (community) owner-id case; the explicit `"0"`/`"-0"` rejection, a positive (personal wall) owner id, and the no-metadata default were untested. New cases cover the full `video.save` → upload → `wall.post` flow (asserting the `video<ownerId>_<videoId>_<accessKey>` attachment string reaches `wall.post`) and the four `vkWallTarget` branches above. All passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

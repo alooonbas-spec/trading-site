@@ -257,6 +257,62 @@ describe("VK wall publishing", () => {
     });
     expect(published.externalPostId).toBe("50");
   });
+
+  it("uploads a wall video through video.save then posts the attachment", async () => {
+    const mp4 = Buffer.from([0, 1, 2, 3]);
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const target = String(url);
+      if (target === "https://example.com/clip.mp4") {
+        return new Response(mp4, { status: 200, headers: { "content-type": "video/mp4" } });
+      }
+      if (target === vkMethodUrl("video.save")) {
+        return new Response(
+          JSON.stringify({
+            response: {
+              upload_url: "https://example.com/vk-video-upload",
+              video_id: 12,
+              owner_id: 7,
+              access_key: "secret",
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (target === "https://example.com/vk-video-upload") {
+        expect(init?.body).toBeInstanceOf(FormData);
+        return new Response(JSON.stringify({ size: mp4.length }), { status: 200 });
+      }
+      if (target === vkMethodUrl("wall.post")) {
+        expect(String(init?.body)).toContain("attachments=video7_12_secret");
+        expect(String(init?.body)).toContain("message=Clip");
+        return new Response(JSON.stringify({ response: { post_id: 60 } }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch ${target}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const published = await new VkAdapter({ accessToken: "vk-token" }).publish({
+      workspaceId: "w",
+      socialAccountId: "a",
+      body: "Clip",
+      media: ["https://example.com/clip.mp4"],
+    });
+    expect(published.externalPostId).toBe("60");
+  });
+
+  it("rejects a zero owner id in either sign, and resolves a positive owner id to a personal wall", () => {
+    // "0"/"-0" are not valid VK user or community ids -- posting there would
+    // silently target the wrong wall (or VK's own error), so this must fail
+    // fast in vkWallTarget rather than reach wall.post at all.
+    expect(() => vkWallTarget({ publishOwnerId: "0" })).toThrow(ValidationError);
+    expect(() => vkWallTarget({ publishOwnerId: "-0" })).toThrow(ValidationError);
+    expect(vkWallTarget({ publishOwnerId: "555" })).toEqual({
+      ownerId: "555",
+      groupId: null,
+      fromGroup: false,
+    });
+    expect(vkWallTarget(undefined)).toEqual({ ownerId: null, groupId: null, fromGroup: false });
+  });
 });
 
 describe("PHASE 12 capabilities and source boundaries", () => {

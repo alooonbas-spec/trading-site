@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 107: `uploadXMediaFromUrls` test coverage. The X media-upload chunked-append loop and its item-count/mixed-kind/document validation had zero direct tests, only a single-image happy path through `XAdapter.publish`. New cases verify chunk splitting against a 5 MiB buffer (4 MiB chunk + 1 MiB remainder) and every rejection branch. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.
+PHASE 108: VK wall video upload and owner-id test coverage. `uploadWallVideo` (the `video.save` flow) had zero test coverage, and `vkWallTarget` was only tested for the negative-owner-id case. New cases cover the full video upload flow and the `"0"`/`"-0"`/positive-id/no-metadata branches of `vkWallTarget`. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.
