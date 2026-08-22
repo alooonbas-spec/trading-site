@@ -367,6 +367,10 @@ Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSEN
 
 Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSENGER&folder=page_done` for threads marked Done in Page Inbox. Each poll still reads the latest Done-folder page (`limit=15`, `messages.limit(20)`). If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `donethreads`, independently of inbox `threads` and Other-folder `otherthreads`. Extra Done-folder pages are not dropped by the `messages` timestamp watermark. A short page stores `donethreads:done`. Nested first message pages still seed the existing `threadmsgs` walker. Instagram has no Done folder. Collectors still do not fetch `paging.next` URLs. No new OAuth scope.
 
+## Graph Facebook Pending-folder conversations (PHASE 65)
+
+Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSENGER&folder=pending` for threads in the Page Inbox pending folder. Each poll still reads the latest Pending-folder page (`limit=15`, `messages.limit(20)`). If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `pendingthreads`, independently of inbox `threads`, Other-folder `otherthreads`, and Done-folder `donethreads`. Extra Pending-folder pages are not dropped by the `messages` timestamp watermark. A short page stores `pendingthreads:done`. Nested first message pages still seed the existing `threadmsgs` walker. Instagram has no Pending folder. The default inbox request still omits `folder=`. Collectors still do not fetch `paging.next` URLs. No new OAuth scope (`pages_messaging` is already granted).
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

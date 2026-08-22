@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 64: Official Graph Facebook Page conversations `folder=page_done` (`donethreads` after cursor). No new SQL.
+PHASE 65: Official Graph Facebook Page conversations `folder=pending` (`pendingthreads` after cursor). No new SQL.

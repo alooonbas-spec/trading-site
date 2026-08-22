@@ -88,7 +88,7 @@ describe("PHASE 59 Graph comments on Facebook rating stories", () => {
       replyKind: "comment",
     });
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|posts:done|ratingreplies:${encodeGraphReplies({ st9001: "rate-cmt-2" })}|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:${encodeGraphReplies({ st9001: "rate-cmt-2" })}|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/st9001/comments"))).toHaveLength(0);
 
@@ -99,7 +99,7 @@ describe("PHASE 59 Graph comments on Facebook rating stories", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-rate-c"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/st9001/comments"))).toHaveLength(1);
   });
@@ -160,7 +160,7 @@ describe("PHASE 59 Graph comments on Facebook rating stories", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-rate-c", "st9001"]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T10:00:00+0000|creplies:done|donethreads:done|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T09:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T10:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T09:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/st9001/comments"))).toHaveLength(0);
   });
@@ -225,7 +225,7 @@ describe("PHASE 59 Graph comments on Facebook rating stories", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
   });
 
