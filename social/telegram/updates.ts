@@ -28,6 +28,12 @@ const telegramChatSchema = z
   })
   .optional();
 
+const telegramReplyToMessageSchema = z
+  .object({
+    is_automatic_forward: z.boolean().optional(),
+  })
+  .optional();
+
 const telegramPayloadSchema = z
   .object({
     message_id: z.number(),
@@ -35,6 +41,7 @@ const telegramPayloadSchema = z
     caption: z.string().optional(),
     from: telegramFromSchema,
     chat: telegramChatSchema,
+    reply_to_message: telegramReplyToMessageSchema,
   })
   .optional();
 
@@ -67,6 +74,17 @@ export type TelegramUpdateBatch = {
 
 export function isTelegramPrivateInboxChat(chatType: string | undefined): boolean {
   return chatType === undefined || chatType === "private";
+}
+
+// A comment on a channel post lands in the linked discussion supergroup as a
+// reply to the automatically-forwarded copy of that post (reply_to_message
+// .is_automatic_forward === true). A reply to another comment in the same
+// thread does not carry that link and is not collected here (PHASE 80).
+export function isTelegramDiscussionComment(
+  chatType: string | undefined,
+  replyToMessage: { is_automatic_forward?: boolean } | undefined,
+): boolean {
+  return chatType === "supergroup" && replyToMessage?.is_automatic_forward === true;
 }
 
 export function parseTelegramUpdates(payload: unknown, cursor?: string | null): TelegramUpdateBatch {
@@ -109,14 +127,13 @@ export function parseTelegramUpdates(payload: unknown, cursor?: string | null): 
 
     const inboxText = message?.text ?? message?.caption;
     const from = message?.from;
-    if (
-      !message ||
-      !inboxText ||
-      !from ||
-      from.is_bot ||
-      from.id === undefined ||
-      !isTelegramPrivateInboxChat(message.chat?.type)
-    ) {
+    if (!message || !inboxText || !from || from.is_bot || from.id === undefined) {
+      continue;
+    }
+
+    const chatType = message.chat?.type;
+    const isDiscussionComment = isTelegramDiscussionComment(chatType, message.reply_to_message);
+    if (!isTelegramPrivateInboxChat(chatType) && !isDiscussionComment) {
       continue;
     }
 
@@ -128,7 +145,7 @@ export function parseTelegramUpdates(payload: unknown, cursor?: string | null): 
       body: inboxText,
       url: message.chat?.username ? `https://t.me/${message.chat.username}/${message.message_id}` : null,
       receivedAt: new Date().toISOString(),
-      replyKind: "direct_message",
+      replyKind: isDiscussionComment ? "comment" : "direct_message",
     });
   }
 
