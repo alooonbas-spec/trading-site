@@ -515,6 +515,10 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 `preferredContactStatus` (the lead-merge conflict resolver in `mergeLeads`'s `reassignRelationships`) was only tested with `BLOCKED` on the right side and never with equal ranks; `BLOCKED` as the left argument and the `left === right` boundary had no test. Tests only, no production code changed.
 
+## VK thread-paging test coverage (PHASE 100)
+
+`social/vk/thread-paging.ts` is the merge/watermark logic behind PHASE 54/55's VK wall and video nested-comment-thread walkers, structurally the VK counterpart to Facebook's `graph-paging.ts` (already covered directly since early phases) — but it had never been tested directly, only indirectly through the two adapter end-to-end tests. New `tests/vk-thread-paging.test.ts` covers `encodeVkThreadMap`/`decodeVkThreadMap` round-tripping and its filtering (malformed thread id, non-numeric or zero page, the `VK_THREAD_FETCH_LIMIT` cap), `parseVkThreadId`, and every branch of `nextVkThreadCursor`'s merge (a stored-but-unfetched thread survives untouched, a fetched thread's page updates to its new next-after, an exhausted fetched thread is dropped, a newly discovered thread is added, and stale `nestedAfters` cannot resurrect an already-stored thread). All 15 cases passed on the first run — this is coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

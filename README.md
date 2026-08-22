@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 99: preferredContactStatus symmetry test. The lead-merge conflict resolver was only tested with `BLOCKED` on the right side and never with equal ranks. Tests only, no production code changed.
+PHASE 100: VK thread-paging test coverage. `social/vk/thread-paging.ts` (the VK counterpart to Facebook's `graph-paging.ts`) had never been tested directly, only through the PHASE 54/55 adapter end-to-end tests. All 15 new cases passed on the first run. Tests only, no production code changed.
