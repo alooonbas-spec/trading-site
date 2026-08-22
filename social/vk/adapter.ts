@@ -340,6 +340,9 @@ export class VkAdapter extends BaseSocialAdapter {
       const sent = await replyToVkPhotoComment(token, {
         externalId: input.externalEventId,
         text: input.body,
+        ownerId: isVkCommunityAccount(this.context.metadata)
+          ? `-${vkCommunityGroupId(this.context.metadata)}`
+          : undefined,
       });
       return { externalMessageId: sent.externalMessageId };
     }

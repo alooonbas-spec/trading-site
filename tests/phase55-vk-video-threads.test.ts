@@ -33,8 +33,7 @@ describe("PHASE 55 VK video comment threads", () => {
       if (
         target === vkMethodUrl("wall.get") ||
         target === vkMethodUrl("wall.getComments") ||
-        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments") ||
-        target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")
+        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
@@ -116,8 +115,7 @@ describe("PHASE 55 VK video comment threads", () => {
       if (
         target === vkMethodUrl("wall.get") ||
         target === vkMethodUrl("wall.getComments") ||
-        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments") ||
-        target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")
+        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
@@ -163,6 +161,14 @@ describe("PHASE 55 VK video comment threads", () => {
       }
       if (target === vkMethodUrl("messages.getConversations")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+      }
+      if (target === vkMethodUrl("photos.getAllComments")) {
+        return new Response(
+          JSON.stringify({
+            error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
+          }),
+          { status: 200 },
+        );
       }
       throw new Error(`unexpected ${target}`);
     });

@@ -143,7 +143,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
   it("does not call newsfeed.getMentions for community inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments") || target === vkMethodUrl("photos.getAllComments")) {
+      if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
         throw new Error("community inbox must not call user newsfeed or photos.getAllComments");
       }
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
@@ -151,6 +151,14 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
       }
       if (target === vkMethodUrl("messages.getConversations")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+      }
+      if (target === vkMethodUrl("photos.getAllComments")) {
+        return new Response(
+          JSON.stringify({
+            error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
+          }),
+          { status: 200 },
+        );
       }
       throw new Error(`unexpected ${target}`);
     });

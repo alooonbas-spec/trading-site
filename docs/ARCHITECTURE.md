@@ -375,6 +375,10 @@ Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSEN
 
 Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSENGER&folder=spam` for threads in the Page Inbox spam folder. Each poll still reads the latest Spam-folder page (`limit=15`, `messages.limit(20)`). If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `spamthreads`, independently of inbox `threads`, Other-folder `otherthreads`, Done-folder `donethreads`, and Pending-folder `pendingthreads`. Extra Spam-folder pages are not dropped by the `messages` timestamp watermark. A short page stores `spamthreads:done`. Nested first message pages still seed the existing `threadmsgs` walker. Instagram has no Spam folder. The default inbox request still omits `folder=`. Collectors still do not fetch `paging.next` URLs. No new OAuth scope (`pages_messaging` is already granted).
 
+## Isolated VK community photo comments (PHASE 67)
+
+Community inbox calls official `photos.getAllComments` (count 50) with `owner_id=-groupId`. Offset is omitted when `0`. After `photocomments:1`, later polls request `offset = page * 50`. Extra photo-comment pages are not dropped by the independent unix `photos` watermark. Events store `photo:{pid}:{commentId}` and `replyKind=comment`. Community replies use `photos.createComment` with `owner_id`, `photo_id`, and `reply_to_comment`. User OAuth still omits `owner_id`. If VK returns error **7** (permission) or **27** (method unavailable with group auth), that photo collector is skipped and wall comments plus community Direct Messages still collect; `photocomments` / `photos` keys are omitted so a later token with photos permission can retry. Errors **5**, **15**, and **17** still fail the collect as authentication. No new SQL.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

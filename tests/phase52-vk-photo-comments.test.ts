@@ -146,11 +146,11 @@ describe("PHASE 52 VK photos.getAllComments", () => {
     ).toHaveLength(1);
   });
 
-  it("does not call photos.getAllComments for community inbox", async () => {
+  it("isolates unavailable photos.getAllComments for community inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
-        throw new Error("community inbox must not call photos.getAllComments");
+      if (target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
+        throw new Error("community inbox must not call tagged-photo user methods");
       }
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
@@ -158,11 +158,19 @@ describe("PHASE 52 VK photos.getAllComments", () => {
       if (target === vkMethodUrl("messages.getConversations")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
+      if (target === vkMethodUrl("photos.getAllComments")) {
+        return new Response(
+          JSON.stringify({
+            error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
+          }),
+          { status: 200 },
+        );
+      }
       throw new Error(`unexpected ${target}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await new VkAdapter({
+    const result = await new VkAdapter({
       accessToken: "community-token",
       metadata: { vkAccountKind: "community", vkGroupId: "10", publishOwnerId: "-10" },
     }).collectInbox({
@@ -171,7 +179,10 @@ describe("PHASE 52 VK photos.getAllComments", () => {
     });
     expect(
       fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
-    ).toBe(false);
+    ).toBe(true);
+    expect(result.cursor).toBe("conversations:1|history:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).not.toContain("photocomments");
+    expect(result.cursor).not.toContain("photos:");
   });
 
   it("replies to VK photo comments through photos.createComment", async () => {

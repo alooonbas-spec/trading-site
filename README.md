@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 66: Official Graph Facebook Page conversations `folder=spam` (`spamthreads` after cursor). No new SQL.
+PHASE 67: Isolated official VK community `photos.getAllComments` (`owner_id=-groupId`). VK 7/27 skip that method without failing wall or DMs. No new SQL.

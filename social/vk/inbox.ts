@@ -9,7 +9,7 @@ import {
   serializeNamedInboxCursor,
 } from "@/lib/inbox/cursor";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
-import { vkCall } from "@/social/vk/api";
+import { vkCall, vkCallIfAvailable } from "@/social/vk/api";
 import { isVkCommunityAccount, vkCommunityGroupId } from "@/social/vk/community";
 import { vkWallTarget } from "@/social/vk/publish";
 import {
@@ -330,13 +330,24 @@ async function collectVkCommunityInbox(
     cursor.conversationsPage !== 0 && cursor.conversationsPage !== "done"
       ? cursor.conversationsPage * Number(VK_COMMUNITY_CONVERSATION_COUNT)
       : null;
-  const [wallComments, latestPeers, olderPeers] = await Promise.all([
+  const photoPage = vkOffsetCursor(named.photocomments);
+  const photoOffset =
+    photoPage.page !== 0 && photoPage.page !== "done"
+      ? photoPage.page * Number(VK_PHOTO_COMMENT_COUNT)
+      : null;
+  const photoOwnerId = `-${groupId}`;
+  const [wallComments, latestPeers, olderPeers, latestPhotos, olderPhotos] = await Promise.all([
     collectVkWallComments(accessToken, metadata, cursor.wallPage, cursor.wallcommentsPage, named.wallthreads),
     listVkCommunityUserPeers(accessToken, groupId, 0),
     conversationOffset === null
       ? Promise.resolve(emptyVkCommunityPeers(true))
       : listVkCommunityUserPeers(accessToken, groupId, conversationOffset),
+    collectVkPhotoComments(accessToken, 0, photoOwnerId),
+    photoOffset === null
+      ? Promise.resolve(emptyVkPhotoCommentPage(true))
+      : collectVkPhotoComments(accessToken, photoOffset, photoOwnerId),
   ]);
+  const photosUnavailable = latestPhotos.unavailable || olderPhotos.unavailable;
   const peers = mergeVkCommunityPeers(latestPeers, olderPeers);
   const latestPage = await collectVkCommunityHistoryForPeers(accessToken, groupId, peers, 0);
   const newestMessageId = latestPage.messages.reduce<string | null>(
@@ -367,6 +378,8 @@ async function collectVkCommunityInbox(
     messages: [
       ...filterMessagesAfterCursor(wallComments.latest, cursor.comments),
       ...wallComments.older,
+      ...filterMessagesAfterCursor(latestPhotos.messages, named.photos ?? null),
+      ...olderPhotos.messages,
       ...uniqueInboxMessages([...inboundLatest, ...olderMessages]),
     ],
     cursor: serializeNamedInboxCursor({
@@ -374,6 +387,11 @@ async function collectVkCommunityInbox(
       conversations: nextVkOffsetCursor(cursor.conversationsPage, olderPeers.reachedEnd),
       history: nextVkOffsetCursor(cursor.historyPage, reachedEnd),
       messages: laterDigitId(cursor.messages, newestMessageId) ?? "",
+      photocomments: photosUnavailable ? "" : nextVkOffsetCursor(photoPage.page, olderPhotos.reachedEnd),
+      photos: photosUnavailable
+        ? ""
+        : laterDigitId(named.photos, newestVkCommentUnix([...latestPhotos.messages, ...olderPhotos.messages])) ??
+          "",
       wall: nextVkOffsetCursor(cursor.wallPage, wallComments.reachedEnd),
       wallcomments: nextVkOffsetCursor(cursor.wallcommentsPage, wallComments.commentsReachedEnd),
       wallthreads: wallComments.wallthreads,
@@ -517,6 +535,14 @@ async function collectVkMentions(
 
 function emptyVkMentionPage(reachedEnd: boolean): { messages: InboxMessage[]; reachedEnd: boolean } {
   return { messages: [], reachedEnd };
+}
+
+function emptyVkPhotoCommentPage(reachedEnd: boolean): {
+  messages: InboxMessage[];
+  reachedEnd: boolean;
+  unavailable: boolean;
+} {
+  return { messages: [], reachedEnd, unavailable: false };
 }
 
 type VkUserPhoto = {
@@ -671,16 +697,25 @@ async function collectVkCommentsForUserPhotos(
 async function collectVkPhotoComments(
   accessToken: string,
   offset: number,
-): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+  ownerId?: string,
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean; unavailable: boolean }> {
   const pageSize = Number(VK_PHOTO_COMMENT_COUNT);
   const params: Record<string, string> = {
     access_token: accessToken,
     count: VK_PHOTO_COMMENT_COUNT,
   };
+  if (ownerId) {
+    params.owner_id = ownerId;
+  }
   if (offset > 0) {
     params.offset = String(offset);
   }
-  const payload = await vkCall("photos.getAllComments", params);
+  const payload = ownerId
+    ? await vkCallIfAvailable("photos.getAllComments", params)
+    : await vkCall("photos.getAllComments", params);
+  if (payload === null) {
+    return { messages: [], reachedEnd: true, unavailable: true };
+  }
   const parsed = photoCommentsSchema.safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("VK photos.getAllComments returned an unexpected payload");
@@ -696,7 +731,7 @@ async function collectVkPhotoComments(
       externalProfileId: String(comment.from_id),
       username: null,
       body: text,
-      url: null,
+      url: ownerId ? `https://vk.com/photo${ownerId}_${comment.pid}?reply=${comment.id}` : null,
       receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
       replyKind: "comment",
     });
@@ -704,6 +739,7 @@ async function collectVkPhotoComments(
   return {
     messages,
     reachedEnd: (parsed.data.items ?? []).length < pageSize,
+    unavailable: false,
   };
 }
 
@@ -1568,7 +1604,7 @@ export async function replyToVkUserPhotoComment(
 
 export async function replyToVkPhotoComment(
   accessToken: string,
-  input: { externalId: string; text: string },
+  input: { externalId: string; text: string; ownerId?: string },
 ): Promise<{ externalMessageId: string }> {
   const text = input.text.trim();
   if (!text) {
@@ -1576,12 +1612,16 @@ export async function replyToVkPhotoComment(
   }
 
   const ref = parseVkInboxPhotoCommentRef(input.externalId);
-  const payload = await vkCall("photos.createComment", {
+  const params: Record<string, string> = {
     access_token: accessToken,
     photo_id: ref.photoId,
     reply_to_comment: ref.commentId,
     message: text,
-  });
+  };
+  if (input.ownerId) {
+    params.owner_id = input.ownerId;
+  }
+  const payload = await vkCall("photos.createComment", params);
   const parsed = z.number().safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("VK photos.createComment returned an unexpected payload");

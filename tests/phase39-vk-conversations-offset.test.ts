@@ -101,6 +101,14 @@ describe("PHASE 39 VK community conversation offset", () => {
           { status: 200 },
         );
       }
+      if (target === vkMethodUrl("photos.getAllComments")) {
+        return new Response(
+          JSON.stringify({
+            error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
+          }),
+          { status: 200 },
+        );
+      }
       expect(target).toBe(vkMethodUrl("messages.getHistory"));
       expect(body).not.toContain("offset=");
       if (body.includes("peer_id=99")) {
@@ -173,6 +181,14 @@ describe("PHASE 39 VK community conversation offset", () => {
           { status: 200 },
         );
       }
+      if (target === vkMethodUrl("photos.getAllComments")) {
+        return new Response(
+          JSON.stringify({
+            error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
+          }),
+          { status: 200 },
+        );
+      }
       expect(target).toBe(vkMethodUrl("messages.getHistory"));
       if (body.includes("peer_id=99")) {
         return new Response(
@@ -224,6 +240,14 @@ describe("PHASE 39 VK community conversation offset", () => {
             response: {
               items: [conversationItem(42, "user", 80)],
             },
+          }),
+          { status: 200 },
+        );
+      }
+      if (target === vkMethodUrl("photos.getAllComments")) {
+        return new Response(
+          JSON.stringify({
+            error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
           }),
           { status: 200 },
         );

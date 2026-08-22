@@ -163,6 +163,14 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
       if (target === vkMethodUrl("messages.getConversations")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
+      if (target === vkMethodUrl("photos.getAllComments")) {
+        return new Response(
+          JSON.stringify({
+            error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
+          }),
+          { status: 200 },
+        );
+      }
       throw new Error(`unexpected ${target}`);
     });
     vi.stubGlobal("fetch", fetchMock);

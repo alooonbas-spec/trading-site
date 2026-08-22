@@ -16,6 +16,16 @@ export function vkMethodUrl(method: string): string {
   return `https://api.vk.com/method/${method}`;
 }
 
+export function vkErrorCode(payload: unknown): number | null {
+  const parsed = vkErrorSchema.safeParse(payload);
+  return parsed.success ? parsed.data.error.error_code : null;
+}
+
+export function isVkMethodUnavailableError(payload: unknown): boolean {
+  const code = vkErrorCode(payload);
+  return code === 7 || code === 27;
+}
+
 export function throwIfVkError(payload: unknown): void {
   const parsed = vkErrorSchema.safeParse(payload);
   if (!parsed.success) {
@@ -33,17 +43,37 @@ export function throwIfVkError(payload: unknown): void {
   throw new SocialError(message);
 }
 
-export async function vkCall(method: string, params: Record<string, string>): Promise<unknown> {
+async function vkRequest(method: string, params: Record<string, string>): Promise<unknown> {
   const response = await socialFetch(vkMethodUrl(method), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ ...params, v: VK_API_VERSION }),
   });
-  const payload = await readJson<unknown>(response);
-  throwIfVkError(payload);
+  return readJson<unknown>(response);
+}
+
+function vkResponseBody(method: string, payload: unknown): unknown {
   const parsed = z.object({ response: z.unknown() }).safeParse(payload);
   if (!parsed.success) {
     throw new SocialError(`VK ${method} returned an unexpected payload`);
   }
   return parsed.data.response;
+}
+
+export async function vkCall(method: string, params: Record<string, string>): Promise<unknown> {
+  const payload = await vkRequest(method, params);
+  throwIfVkError(payload);
+  return vkResponseBody(method, payload);
+}
+
+export async function vkCallIfAvailable(
+  method: string,
+  params: Record<string, string>,
+): Promise<unknown | null> {
+  const payload = await vkRequest(method, params);
+  if (isVkMethodUnavailableError(payload)) {
+    return null;
+  }
+  throwIfVkError(payload);
+  return vkResponseBody(method, payload);
 }
