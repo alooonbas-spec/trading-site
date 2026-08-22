@@ -74,7 +74,7 @@ describe("PHASE 45 Graph conversation message after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|messages:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|threadmsgs:${encodeGraphReplies({ t_900: "msg-2" })}|threads:done`,
+      `creplies:done|messages:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:${encodeGraphReplies({ t_900: "msg-2" })}|threads:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/t_900/messages"))).toHaveLength(0);
 
@@ -85,7 +85,7 @@ describe("PHASE 45 Graph conversation message after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-m"]);
     expect(second.cursor).toBe(
-      "creplies:done|messages:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done",
+      "creplies:done|messages:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/t_900/messages"))).toHaveLength(1);
   });
@@ -133,11 +133,11 @@ describe("PHASE 45 Graph conversation message after paging", () => {
     }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "creplies:done|messages:2026-08-21T08:00:00+0000|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done",
+      cursor: "creplies:done|messages:2026-08-21T08:00:00+0000|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-m"]);
     expect(result.cursor).toBe(
-      "creplies:done|messages:2026-08-21T09:00:00+0000|posts:done|replies:done|tagged:done|threadmsgs:done|threads:done",
+      "creplies:done|messages:2026-08-21T09:00:00+0000|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/t_700/messages"))).toHaveLength(0);
   });

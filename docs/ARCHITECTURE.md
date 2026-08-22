@@ -309,7 +309,7 @@ Facebook `/{comment-id}/comments` and Instagram `/{comment-id}/replies` follow o
 
 ## Graph tagged mentions (PHASE 50)
 
-Facebook `GET /{page-id}/tagged` and Instagram `GET /{ig-user-id}/tags` collect posts/media where the connected Page or professional account was tagged. Each poll still reads the latest 10 tagged items. If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `tagged`. A short page stores `tagged:done`. Extra tagged pages are not dropped by the independent `mentions` timestamp watermark. Photo-only tagged posts without text are skipped. This is photo/Page tagging, not Instagram @mention webhooks. Outbound mention replies use official `POST /{post-id}/comments` (Facebook) and `POST /{ig-media-id}/comments` (Instagram). Existing Facebook accounts must reconnect to grant `pages_read_user_content`. Collectors still do not fetch `paging.next` URLs.
+Facebook `GET /{page-id}/tagged` and Instagram `GET /{ig-user-id}/tags` collect posts/media where the connected Page or professional account was tagged. Each poll still reads the latest 10 tagged items. If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `tagged`. A short page stores `tagged:done`. Extra tagged pages are not dropped by the independent `mentions` timestamp watermark. Photo-only tagged posts without text are skipped as mentions; comments on those posts are still collected in PHASE 56. This is photo/Page tagging, not Instagram @mention webhooks. Outbound mention replies use official `POST /{post-id}/comments` (Facebook) and `POST /{ig-media-id}/comments` (Instagram). Existing Facebook accounts must reconnect to grant `pages_read_user_content`. Collectors still do not fetch `paging.next` URLs.
 
 ## VK wall mentions (PHASE 51)
 
@@ -330,6 +330,10 @@ User OAuth inbox calls official `video.get` (count 10, Added album) then `video.
 ## VK video comment threads (PHASE 55)
 
 `video.getComments` requests official `thread_items_count=10` so each top-level video comment includes its first nested replies. Nested replies use the same `video:{owner}:{videoId}:{comment}` ids and `video.createComment` reply path. If `thread.count` is greater than the nested items returned, the next poll requests `video.getComments` with `comment_id` of that parent (`count=10`, `sort=desc`, `offset = page * 10`). Parent keys are stored base64url-encoded in `videothreads` (at most 20). An empty map stores `videothreads:done` and later polls stay done. Extra video thread pages are not dropped by the unix `video` watermark. Community tokens skip these methods. No new VK OAuth scope.
+
+## Graph comments on tagged posts (PHASE 56)
+
+Facebook `/tagged` and Instagram `/tags` request nested `comments.limit(50)` on the current tagged page. Comments use `replyKind=comment` and the existing Facebook `POST /{comment-id}/comments` / Instagram `POST /{comment-id}/replies` paths. The named `taggedreplies` cursor stores `{ taggedObjectId: after }` (base64url JSON, at most 20 ids) independently of feed/media `replies`. Later polls request `GET /{tagged-id}/comments?after=` (`limit=50`) with official fields. Extra tagged-comment pages are not dropped by the `comments` timestamp watermark. Photo-only tagged posts without caption text still contribute their comments. An empty map stores `taggedreplies:done` and later polls stay done. Collectors still do not fetch `paging.next` URLs.
 
 ## Social adapters (PHASE 2)
 
