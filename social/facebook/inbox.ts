@@ -349,12 +349,14 @@ const facebookMessageEdgeSchema = z.object({
   paging: graphPagingSchema,
 });
 
-const FACEBOOK_OTHER_CONVERSATION_FOLDER = "other";
+type FacebookConversationFolder = "other" | "page_done";
+const FACEBOOK_OTHER_CONVERSATION_FOLDER: FacebookConversationFolder = "other";
+const FACEBOOK_DONE_CONVERSATION_FOLDER: FacebookConversationFolder = "page_done";
 
 async function collectFacebookMessenger(
   page: FacebookPageAuth,
   after?: string | null,
-  folder?: typeof FACEBOOK_OTHER_CONVERSATION_FOLDER,
+  folder?: FacebookConversationFolder,
 ): Promise<{ messages: InboxMessage[]; nextAfter: string | null; threadAfters: GraphRepliesMap }> {
   const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/conversations`);
   url.searchParams.set("platform", "MESSENGER");
@@ -699,6 +701,7 @@ export async function collectFacebookInbox(
   const cursor = parseNamedInboxCursor(input.cursor);
   const olderThreadAfter = decodeGraphAfter(cursor.threads);
   const olderOtherAfter = decodeGraphAfter(cursor.otherthreads);
+  const olderDoneAfter = decodeGraphAfter(cursor.donethreads);
   const olderPostsAfter = decodeGraphAfter(cursor.posts);
   const storedReplies = decodeGraphReplies(cursor.replies);
   const storedCreplies = decodeGraphReplies(cursor.creplies);
@@ -749,6 +752,8 @@ export async function collectFacebookInbox(
     extraThreadMsgs,
     latestOther,
     olderOther,
+    latestDone,
+    olderDone,
     latestTagged,
     olderTagged,
     extraTaggedReplies,
@@ -768,6 +773,10 @@ export async function collectFacebookInbox(
       collectFacebookMessenger(page, null, FACEBOOK_OTHER_CONVERSATION_FOLDER),
       olderOtherAfter
         ? collectFacebookMessenger(page, olderOtherAfter, FACEBOOK_OTHER_CONVERSATION_FOLDER)
+        : Promise.resolve(emptyDirect),
+      collectFacebookMessenger(page, null, FACEBOOK_DONE_CONVERSATION_FOLDER),
+      olderDoneAfter
+        ? collectFacebookMessenger(page, olderDoneAfter, FACEBOOK_DONE_CONVERSATION_FOLDER)
         : Promise.resolve(emptyDirect),
       collectFacebookTagged(page),
       olderTaggedAfter ? collectFacebookTagged(page, olderTaggedAfter) : Promise.resolve(emptyTagged),
@@ -810,6 +819,8 @@ export async function collectFacebookInbox(
         ...olderMessages,
         ...filterMessagesAfterCursor(latestOther.messages, cursor.messages),
         ...olderOther.messages,
+        ...filterMessagesAfterCursor(latestDone.messages, cursor.messages),
+        ...olderDone.messages,
         ...extraThreadMsgs.messages,
       ]),
     ],
@@ -838,9 +849,17 @@ export async function collectFacebookInbox(
             ...olderMessages,
             ...latestOther.messages,
             ...olderOther.messages,
+            ...latestDone.messages,
+            ...olderDone.messages,
             ...extraThreadMsgs.messages,
           ]),
         ) ?? "",
+      donethreads: nextGraphAfterCursor({
+        stored: cursor.donethreads,
+        firstPageAfter: latestDone.nextAfter,
+        olderPageAfter: olderDone.nextAfter,
+        fetchedOlder: Boolean(olderDoneAfter),
+      }),
       otherthreads: nextGraphAfterCursor({
         stored: cursor.otherthreads,
         firstPageAfter: latestOther.nextAfter,
@@ -916,6 +935,8 @@ export async function collectFacebookInbox(
           ...olderDirect.threadAfters,
           ...latestOther.threadAfters,
           ...olderOther.threadAfters,
+          ...latestDone.threadAfters,
+          ...olderDone.threadAfters,
         },
         fetchedNextAfters: extraThreadMsgs.nextAfters,
         fetchedIds: extraThreadMsgs.fetchedIds,

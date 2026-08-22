@@ -91,7 +91,7 @@ describe("PHASE 18 Facebook Messenger", () => {
           { status: 200 },
         );
       }
-      if (target.includes("folder=other")) {
+      if (target.includes("folder=")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain("/555/conversations");

@@ -5,12 +5,12 @@ import { FacebookAdapter } from "@/social/facebook/adapter";
 import { InstagramAdapter } from "@/social/instagram/adapter";
 import { INSTAGRAM_GRAPH_ORIGIN } from "@/social/instagram/publish";
 
-describe("PHASE 63 Graph Facebook conversations folder=other", () => {
+describe("PHASE 64 Graph Facebook conversations folder=page_done", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("walks the next official Other-folder after cursor and keeps older DMs", async () => {
+  it("walks the next official Done-folder after cursor and keeps older DMs", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -28,14 +28,14 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/conversations`);
       expect(target).toContain("platform=MESSENGER");
-      if (target.includes("folder=page_done")) {
+      if (target.includes("folder=other")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (!target.includes("folder=other")) {
+      if (!target.includes("folder=page_done")) {
         expect(target).not.toContain("folder=");
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("after=other-2")) {
+      if (target.includes("after=done-2")) {
         return new Response(
           JSON.stringify({
             data: [
@@ -43,8 +43,8 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
                 messages: {
                   data: [
                     {
-                      id: "old-other-m",
-                      message: "older other folder",
+                      id: "old-done-m",
+                      message: "older done folder",
                       from: { id: "900", name: "Lead" },
                       created_time: "2026-08-20T09:00:00+0000",
                     },
@@ -64,8 +64,8 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
               messages: {
                 data: [
                   {
-                    id: "new-other-m",
-                    message: "newer other folder",
+                    id: "new-done-m",
+                    message: "newer done folder",
                     from: { id: "900", name: "Lead" },
                     created_time: "2026-08-21T12:00:00+0000",
                   },
@@ -73,7 +73,7 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
               },
             },
           ],
-          paging: { cursors: { after: "other-2" } },
+          paging: { cursors: { after: "done-2" } },
         }),
         { status: 200 },
       );
@@ -84,9 +84,9 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(first.messages.map((item) => item.externalId)).toEqual(["new-other-m"]);
+    expect(first.messages.map((item) => item.externalId)).toEqual(["new-done-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:${encodeGraphAfter("other-2")}|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
+      `creplies:done|donethreads:${encodeGraphAfter("done-2")}|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -94,18 +94,18 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
       socialAccountId: "a",
       cursor: first.cursor,
     });
-    expect(second.messages.map((item) => item.externalId)).toEqual(["old-other-m"]);
+    expect(second.messages.map((item) => item.externalId)).toEqual(["old-done-m"]);
     expect(second.cursor).toBe(
       "creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(
       fetchMock.mock.calls.filter(
-        ([url]) => String(url).includes("/555/conversations") && String(url).includes("folder=other"),
+        ([url]) => String(url).includes("/555/conversations") && String(url).includes("folder=page_done"),
       ),
     ).toHaveLength(3);
   });
 
-  it("skips Other-folder after paging once otherthreads:done is stored", async () => {
+  it("skips Done-folder after paging once donethreads:done is stored", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -122,14 +122,14 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/conversations`);
-      if (target.includes("folder=page_done")) {
+      if (target.includes("folder=other")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (!target.includes("folder=other")) {
+      if (!target.includes("folder=page_done")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("after=")) {
-        throw new Error(`unexpected Other-folder after ${target}`);
+        throw new Error(`unexpected Done-folder after ${target}`);
       }
       return new Response(
         JSON.stringify({
@@ -138,8 +138,8 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
               messages: {
                 data: [
                   {
-                    id: "new-other-m",
-                    message: "newer other folder",
+                    id: "new-done-m",
+                    message: "newer done folder",
                     from: { id: "900", name: "Lead" },
                     created_time: "2026-08-21T09:00:00+0000",
                   },
@@ -156,24 +156,24 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
     const result = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "messages:2026-08-21T08:00:00+0000|otherthreads:done|threads:done",
+      cursor: "donethreads:done|messages:2026-08-21T08:00:00+0000|threads:done",
     });
-    expect(result.messages.map((item) => item.externalId)).toEqual(["new-other-m"]);
+    expect(result.messages.map((item) => item.externalId)).toEqual(["new-done-m"]);
     expect(result.cursor).toBe(
       "creplies:done|donethreads:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(
       fetchMock.mock.calls.filter(
-        ([url]) => String(url).includes("/555/conversations") && String(url).includes("folder=other"),
+        ([url]) => String(url).includes("/555/conversations") && String(url).includes("folder=page_done"),
       ),
     ).toHaveLength(1);
   });
 
-  it("does not request folder=other for Instagram inbox", async () => {
+  it("does not request folder=page_done for Instagram inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target.includes("folder=other")) {
-        throw new Error("Instagram inbox must not request folder=other");
+      if (target.includes("folder=page_done") || target.includes("folder=other")) {
+        throw new Error("Instagram inbox must not request conversation folders");
       }
       if (target.includes("/ig-1/media") || target.includes("/ig-1/tags")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
@@ -193,6 +193,6 @@ describe("PHASE 63 Graph Facebook conversations folder=other", () => {
     expect(result.cursor).toBe(
       "creplies:done|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("folder=other"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("folder="))).toBe(false);
   });
 });

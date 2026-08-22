@@ -52,7 +52,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
       if (target.includes("/555/tagged") || target.includes("/555/ratings")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("folder=other")) {
+      if (target.includes("folder=")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/conversations`);
@@ -108,7 +108,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:${encodeGraphAfter("page-2")}`,
+      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:${encodeGraphAfter("page-2")}`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -117,7 +117,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-thread-m"]);
-    expect(second.cursor).toBe("creplies:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done");
+    expect(second.cursor).toBe("creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/conversations") && !String(url).includes("folder=")),
     ).toHaveLength(3);

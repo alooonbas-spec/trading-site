@@ -42,7 +42,7 @@ describe("PHASE 45 Graph conversation message after paging", () => {
           { status: 200 },
         );
       }
-      if (target.includes("folder=other")) {
+      if (target.includes("folder=")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/conversations`);
@@ -77,7 +77,7 @@ describe("PHASE 45 Graph conversation message after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:${encodeGraphReplies({ t_900: "msg-2" })}|threads:done`,
+      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:${encodeGraphReplies({ t_900: "msg-2" })}|threads:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/t_900/messages"))).toHaveLength(0);
 
@@ -88,7 +88,7 @@ describe("PHASE 45 Graph conversation message after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-m"]);
     expect(second.cursor).toBe(
-      "creplies:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/t_900/messages"))).toHaveLength(1);
   });
