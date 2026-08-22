@@ -359,6 +359,10 @@ User OAuth inbox calls official `photos.getUserPhotos` (count 20, the documented
 
 User OAuth inbox calls official `photos.getComments` (count 50, `sort=desc`) for the current `photos.getUserPhotos` page. Offset is omitted when `0`. After `userphotocomments:1`, each later poll requests `offset = page * 50` for those tagged photos. Extra comment pages are not dropped by the independent unix `userphoto` watermark. Events store `phototag:{ownerId}:{photoId}:{commentId}` and `replyKind=comment`. Photo-only tags without caption text still contribute their comments. Replies use official `photos.createComment` with `owner_id`, `photo_id`, and `reply_to_comment`. `photos.getComments` has no documented `comment_id` / `thread_items_count` nested-thread fields, so nested photo-comment threads are not walked. Community tokens skip this method. No new VK OAuth scope.
 
+## Graph Facebook Other-folder conversations (PHASE 63)
+
+Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSENGER&folder=other` in addition to the default inbox folder (which still omits `folder=`). Each poll still reads the latest Other-folder page (`limit=15`, `messages.limit(20)`). If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `otherthreads`, independently of inbox `threads`. Extra Other-folder pages are not dropped by the `messages` timestamp watermark. A short page stores `otherthreads:done`. Nested first message pages still seed the existing `threadmsgs` walker. Instagram has no Other folder. Collectors still do not fetch `paging.next` URLs. No new OAuth scope (`pages_messaging` is already granted).
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

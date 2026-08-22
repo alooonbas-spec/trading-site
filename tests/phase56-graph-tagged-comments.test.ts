@@ -90,7 +90,7 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
       replyKind: "comment",
     });
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:${encodeGraphReplies({ tag1: "tag-cmt-2" })}|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:${encodeGraphReplies({ tag1: "tag-cmt-2" })}|threadmsgs:done|threads:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/tag1/comments"))).toHaveLength(0);
 
@@ -101,7 +101,7 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-tag-c"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/tag1/comments"))).toHaveLength(1);
   });
@@ -218,7 +218,7 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|otherthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
   });
 

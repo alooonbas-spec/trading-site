@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 62: Official VK `photos.getComments` on tagged photos from `photos.getUserPhotos` (`userphotocomments` offset, `userphoto` watermark). No new SQL.
+PHASE 63: Official Graph Facebook Page conversations `folder=other` (`otherthreads` after cursor). No new SQL.
