@@ -405,6 +405,10 @@ Facebook Page inbox calls official `GET /{page-id}/photos?type=uploaded` (`limit
 
 Both claim functions now also reclaim a `RUNNING` job once its lock is older than 15 minutes, as long as `attempts < max_attempts` — the same budget `jobStatusAfterError` already enforces for a normal retry. Reclaiming a stale job increments `attempts` and re-locks it exactly like a fresh claim; the platform action then runs again from `processClaimedJob`, so this reuses the existing retry path rather than adding a second one. A job that crashes on its very last allowed attempt is not reclaimed and stays `RUNNING` and stale; `locked_at` makes that state visible to an operator. `claim_jobs` keeps its workspace scope and `FOR UPDATE SKIP LOCKED`; `claim_due_jobs` stays `service_role`-only. No API or UI change; no do_not_contact touch.
 
+## Stale job visibility (PHASE 74)
+
+The Jobs page now shows a "Stale" badge next to a job's status when it is `RUNNING` and its lock (`locked_at`) is at least 15 minutes old, the same threshold PHASE 73 uses to reclaim it. `Job` now carries `lockedAt`; `isStaleRunningJob(status, lockedAt, now)` in `lib/jobs/status.ts` is the shared, unit-tested predicate (`STALE_RUNNING_JOB_MS` in `lib/jobs/queue-rules.ts` is the single source for the threshold both PHASE 73's SQL comment and this check reference). This is read-only: it does not add a cancel path for `RUNNING` jobs, so there is no new race with a worker that is still legitimately finishing. `locked_at` was added to `JOB_PUBLIC_COLUMNS`; every existing `toJob()` caller already selects that column set, so this needed no other query changes.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

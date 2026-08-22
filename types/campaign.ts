@@ -51,6 +51,7 @@ export type Job = {
   runAfter: string;
   lastError: string | null;
   result: Record<string, unknown>;
+  lockedAt: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -60,7 +61,7 @@ export const CAMPAIGN_PUBLIC_COLUMNS =
   "id, workspace_id, name, description, status, action, body, created_by, started_at, completed_at, created_at, updated_at" as const;
 
 export const JOB_PUBLIC_COLUMNS =
-  "id, workspace_id, campaign_id, social_account_id, lead_id, social_profile_id, relationship_id, post_id, post_target_id, monitoring_rule_id, type, action, body, status, attempts, max_attempts, run_after, last_error, result, created_at, updated_at, completed_at" as const;
+  "id, workspace_id, campaign_id, social_account_id, lead_id, social_profile_id, relationship_id, post_id, post_target_id, monitoring_rule_id, type, action, body, status, attempts, max_attempts, run_after, last_error, result, locked_at, created_at, updated_at, completed_at" as const;
 
 export type JobListItem = Job & {
   platform: SocialPlatform | null;
@@ -72,4 +73,5 @@ export type JobListItem = Job & {
   monitoringRuleName: string | null;
   canRetry: boolean;
   canCancel: boolean;
+  isStale: boolean;
 };

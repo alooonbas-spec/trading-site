@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 73: Stale job recovery. `claim_jobs` and `claim_due_jobs` now also reclaim `RUNNING` jobs whose lock is older than 15 minutes and still have attempts left, so a worker crash or timeout mid-job no longer strands it forever. Same claim budget as a normal retry; no API or UI change.
+PHASE 74: Stale job visibility. The Jobs page shows a "Stale" badge on a `RUNNING` job whose lock is at least 15 minutes old (the same threshold PHASE 73 uses to reclaim it). Read-only: no new cancel path, no new SQL.

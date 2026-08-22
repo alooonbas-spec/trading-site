@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
 import { ValidationError } from "@/lib/errors";
-import { canCancelJob, canRetryFailedJob } from "@/lib/jobs/status";
+import { canCancelJob, canRetryFailedJob, isStaleRunningJob } from "@/lib/jobs/status";
 import {
   DEFAULT_PAGE_SIZE,
   keysetOrFilter,
@@ -253,6 +253,7 @@ export async function listWorkspaceJobs(input: {
         monitoringRuleStatus: rule?.status ?? null,
       }),
       canCancel: canCancelJob(job.status),
+      isStale: isStaleRunningJob(job.status, job.lockedAt),
     };
   });
   return {

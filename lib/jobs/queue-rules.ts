@@ -60,6 +60,9 @@ export function buildEnqueuePairs(input: {
 export const MONITOR_POLL_INTERVAL_MS = 5 * 60 * 1000;
 export const INBOX_POLL_INTERVAL_MS = 5 * 60 * 1000;
 
+// Matches the reclaim window in claim_jobs / claim_due_jobs (PHASE 73).
+export const STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
+
 export function retryDelayMs(attempts: number): number {
   const capped = Math.min(Math.max(attempts, 1), 8);
   return Math.min(60 * 60 * 1000, 30_000 * 2 ** (capped - 1));

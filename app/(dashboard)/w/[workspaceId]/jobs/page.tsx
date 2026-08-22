@@ -172,6 +172,11 @@ export default async function JobsPage({
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{job.status}</Badge>
+                      {job.isStale ? (
+                        <Badge variant="destructive" className="ml-1">
+                          Stale
+                        </Badge>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       {job.attempts}/{job.maxAttempts}

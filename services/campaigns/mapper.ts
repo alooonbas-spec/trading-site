@@ -36,6 +36,7 @@ type JobRow = {
   run_after: string;
   last_error: string | null;
   result: Record<string, unknown>;
+  locked_at: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -87,6 +88,7 @@ export function toJob(row: JobRow): Job {
     runAfter: row.run_after,
     lastError: row.last_error,
     result: row.result,
+    lockedAt: row.locked_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at,
