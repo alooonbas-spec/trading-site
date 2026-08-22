@@ -341,7 +341,11 @@ Tagged Facebook comments request nested `comments.limit(25)` and tagged Instagra
 
 ## Graph Page ratings (PHASE 58)
 
-Facebook `GET /{page-id}/ratings` collects Page recommendations. Each poll still reads the latest 10 ratings. Reviews without `open_graph_story.id`, a reviewer id, or `review_text` are skipped (no invented ids). Extra rating pages follow official Graph `after`, stored base64url-encoded in `ratings`, independently of the `reviews` timestamp watermark. A short page stores `ratings:done`. Replies use official `POST /{open_graph_story.id}/comments`, the same path as other Facebook comment replies. `pages_read_user_content` is already granted. Instagram has no ratings edge. Collectors still do not fetch `paging.next` URLs.
+Facebook `GET /{page-id}/ratings` collects Page recommendations. Each poll still reads the latest 10 ratings. Reviews without `open_graph_story.id`, a reviewer id, or `review_text` are skipped (no invented ids). Extra rating pages follow official Graph `after`, stored base64url-encoded in `ratings`, independently of the `reviews` timestamp watermark. A short page stores `ratings:done`. Replies use official `POST /{open_graph_story.id}/comments`, the same path as other Facebook comment replies. `pages_read_user_content` is already granted. Instagram has no ratings edge. Comments on those rating stories are collected in PHASE 59. Collectors still do not fetch `paging.next` URLs.
+
+## Graph comments on rating stories (PHASE 59)
+
+Facebook ratings request nested `open_graph_story{id,comments.limit(50){…}}` on the current ratings page. Comments on rating stories use `replyKind=comment` and the existing `POST /{comment-id}/comments` path. The named `ratingreplies` cursor stores `{ storyId: after }` independently of feed `replies` and tagged `taggedreplies`. Later polls request `GET /{story-id}/comments?after=` (`limit=50`). Extra rating-comment pages are not dropped by the `comments` timestamp watermark. Ratings without review text still contribute comments when a story id is present. An empty map stores `ratingreplies:done`. Collectors still do not fetch `paging.next` URLs.
 
 ## Social adapters (PHASE 2)
 

@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 58: Official Graph Facebook Page ratings (`/{page-id}/ratings` after paging). No new SQL.
+PHASE 59: Official Graph comments on Facebook Page rating stories (`ratingreplies` after paging). No new SQL.

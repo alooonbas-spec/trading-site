@@ -569,6 +569,26 @@ const facebookRatingsSchema = z.object({
         open_graph_story: z
           .object({
             id: z.string().min(1).optional(),
+            comments: z
+              .object({
+                data: z
+                  .array(
+                    z.object({
+                      id: z.string().min(1),
+                      message: z.string().optional(),
+                      created_time: z.string().optional(),
+                      from: z
+                        .object({
+                          id: z.string().optional(),
+                          name: z.string().optional(),
+                        })
+                        .optional(),
+                    }),
+                  )
+                  .optional(),
+                paging: graphPagingSchema,
+              })
+              .optional(),
           })
           .optional(),
       }),
@@ -580,9 +600,17 @@ const facebookRatingsSchema = z.object({
 async function collectFacebookRatings(
   page: FacebookPageAuth,
   after?: string | null,
-): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
+): Promise<{
+  messages: InboxMessage[];
+  commentMessages: InboxMessage[];
+  nextAfter: string | null;
+  repliesAfter: GraphRepliesMap;
+}> {
   const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/ratings`);
-  url.searchParams.set("fields", "created_time,review_text,reviewer,open_graph_story");
+  url.searchParams.set(
+    "fields",
+    "created_time,review_text,reviewer,open_graph_story{id,comments.limit(50){id,from,message,created_time}}",
+  );
   url.searchParams.set("limit", "10");
   url.searchParams.set("access_token", page.accessToken);
   if (after) {
@@ -596,8 +624,19 @@ async function collectFacebookRatings(
     throw new SocialError("Facebook Page ratings returned an unexpected payload");
   }
   const messages: InboxMessage[] = [];
+  const commentMessages: InboxMessage[] = [];
+  const repliesAfter: GraphRepliesMap = {};
   for (const rating of parsed.data.data ?? []) {
     const storyId = rating.open_graph_story?.id?.trim();
+    if (storyId && GRAPH_OBJECT_ID.test(storyId)) {
+      const nestedAfter = graphPagingAfter(rating.open_graph_story?.comments);
+      if (nestedAfter) {
+        repliesAfter[storyId] = nestedAfter;
+      }
+      for (const comment of rating.open_graph_story?.comments?.data ?? []) {
+        pushFacebookComment(commentMessages, comment, page.id);
+      }
+    }
     const fromId = rating.reviewer?.id !== undefined ? String(rating.reviewer.id) : "";
     const text = rating.review_text?.trim();
     if (!storyId || !fromId || !text) {
@@ -613,7 +652,7 @@ async function collectFacebookRatings(
       replyKind: "comment",
     });
   }
-  return { messages, nextAfter: graphPagingAfter(payload) };
+  return { messages, commentMessages, nextAfter: graphPagingAfter(payload), repliesAfter };
 }
 
 export async function collectFacebookInbox(
@@ -631,6 +670,7 @@ export async function collectFacebookInbox(
   const olderTaggedAfter = decodeGraphAfter(cursor.tagged);
   const storedTaggedReplies = decodeGraphReplies(cursor.taggedreplies);
   const olderRatingsAfter = decodeGraphAfter(cursor.ratings);
+  const storedRatingReplies = decodeGraphReplies(cursor.ratingreplies);
   const emptyPage = {
     messages: [] as InboxMessage[],
     nextAfter: null,
@@ -656,7 +696,12 @@ export async function collectFacebookInbox(
     repliesAfter: {} as GraphRepliesMap,
     crepliesAfter: {} as GraphRepliesMap,
   };
-  const emptyRatings = { messages: [] as InboxMessage[], nextAfter: null };
+  const emptyRatings = {
+    messages: [] as InboxMessage[],
+    commentMessages: [] as InboxMessage[],
+    nextAfter: null,
+    repliesAfter: {} as GraphRepliesMap,
+  };
   const [
     latestComments,
     olderComments,
@@ -670,6 +715,7 @@ export async function collectFacebookInbox(
     extraTaggedReplies,
     latestRatings,
     olderRatings,
+    extraRatingReplies,
   ] = await Promise.all([
       collectFacebookComments(page),
       olderPostsAfter ? collectFacebookComments(page, olderPostsAfter) : Promise.resolve(emptyPage),
@@ -687,6 +733,9 @@ export async function collectFacebookInbox(
         : Promise.resolve(emptyReplies),
       collectFacebookRatings(page),
       olderRatingsAfter ? collectFacebookRatings(page, olderRatingsAfter) : Promise.resolve(emptyRatings),
+      storedRatingReplies
+        ? collectFacebookCommentReplies(page, storedRatingReplies)
+        : Promise.resolve(emptyReplies),
     ]);
   const comments = uniqueInboxMessages([
     ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
@@ -696,6 +745,9 @@ export async function collectFacebookInbox(
     ...filterMessagesAfterCursor(latestTagged.commentMessages, cursor.comments),
     ...olderTagged.commentMessages,
     ...extraTaggedReplies.messages,
+    ...filterMessagesAfterCursor(latestRatings.commentMessages, cursor.comments),
+    ...olderRatings.commentMessages,
+    ...extraRatingReplies.messages,
   ]);
   const latestMessages = latestDirect.messages;
   const olderMessages = olderDirect.messages;
@@ -728,6 +780,9 @@ export async function collectFacebookInbox(
             ...latestTagged.commentMessages,
             ...olderTagged.commentMessages,
             ...extraTaggedReplies.messages,
+            ...latestRatings.commentMessages,
+            ...olderRatings.commentMessages,
+            ...extraRatingReplies.messages,
           ]),
         ) ?? "",
       messages:
@@ -746,6 +801,12 @@ export async function collectFacebookInbox(
         firstPageAfter: latestRatings.nextAfter,
         olderPageAfter: olderRatings.nextAfter,
         fetchedOlder: Boolean(olderRatingsAfter),
+      }),
+      ratingreplies: nextGraphRepliesCursor({
+        stored: cursor.ratingreplies,
+        nestedAfters: { ...latestRatings.repliesAfter, ...olderRatings.repliesAfter },
+        fetchedNextAfters: extraRatingReplies.nextAfters,
+        fetchedIds: extraRatingReplies.fetchedIds,
       }),
       replies: nextGraphRepliesCursor({
         stored: cursor.replies,
@@ -767,6 +828,7 @@ export async function collectFacebookInbox(
           ...latestTagged.crepliesAfter,
           ...olderTagged.crepliesAfter,
           ...extraTaggedReplies.crepliesAfter,
+          ...extraRatingReplies.crepliesAfter,
         },
         fetchedNextAfters: extraCreplies.nextAfters,
         fetchedIds: extraCreplies.fetchedIds,

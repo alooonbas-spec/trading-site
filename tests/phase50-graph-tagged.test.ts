@@ -84,7 +84,7 @@ describe("PHASE 50 Graph tagged mention after paging", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      `creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|ratings:done|replies:done|tagged:${encodeGraphAfter("tag-2")}|taggedreplies:done|threadmsgs:done|threads:done`,
+      `creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|ratings:done|ratingreplies:done|replies:done|tagged:${encodeGraphAfter("tag-2")}|taggedreplies:done|threadmsgs:done|threads:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -94,7 +94,7 @@ describe("PHASE 50 Graph tagged mention after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-tag"]);
     expect(second.cursor).toBe(
-      "creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|ratings:done|ratingreplies:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/tagged"))).toHaveLength(3);
   });
