@@ -467,6 +467,10 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `oauthCallbackPath` builds the redirect path that must exactly match what's registered with each OAuth provider (README's "Register these OAuth redirect URIs" list); had no direct test. Tests only, no production code changed.
 
+## withUpdateStreamCursor test (PHASE 89)
+
+`withUpdateStreamCursor` is what keeps `updateStreamCursor` and `inboxCursor` written in sync on a Telegram account's metadata (PHASE 15's "kept in sync" invariant, consumed by `worker-service.ts`), but had no direct test — only the two read-side helpers (`laterUpdateStreamCursor`, `updateStreamCursorFromMetadata`) did. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

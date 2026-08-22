@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 88: oauthCallbackPath test. Builds the redirect path that must exactly match what's registered with each OAuth provider; had no direct test. Tests only, no production code changed.
+PHASE 89: withUpdateStreamCursor test. Keeps `updateStreamCursor` and `inboxCursor` written in sync on a Telegram account's metadata (PHASE 15's invariant); had no direct test. Tests only, no production code changed.

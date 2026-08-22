@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { laterUpdateStreamCursor, updateStreamCursorFromMetadata } from "@/lib/social/update-stream";
+import {
+  laterUpdateStreamCursor,
+  updateStreamCursorFromMetadata,
+  withUpdateStreamCursor,
+} from "@/lib/social/update-stream";
 import { getSocialAdapter } from "@/social/core/registry";
 import { TelegramAdapter, telegramMethodUrl } from "@/social/telegram/adapter";
 import { parseTelegramInboxUpdates } from "@/social/telegram/inbox";
@@ -124,6 +128,15 @@ describe("PHASE 15 capabilities and worker boundaries", () => {
     expect(updateStreamCursorFromMetadata({ updateStreamCursor: "12", inboxCursor: "10" })).toBe("12");
     expect(laterUpdateStreamCursor("12", "10")).toBe("12");
     expect(laterUpdateStreamCursor("10", "12")).toBe("12");
+    expect(withUpdateStreamCursor({ deviceId: "d1" }, "24")).toEqual({
+      deviceId: "d1",
+      updateStreamCursor: "24",
+      inboxCursor: "24",
+    });
+    expect(withUpdateStreamCursor({ updateStreamCursor: "20", inboxCursor: "20" }, null)).toEqual({
+      updateStreamCursor: "20",
+      inboxCursor: "20",
+    });
 
     const worker = readFileSync("services/jobs/worker-service.ts", "utf8");
     expect(worker).not.toMatch(/if\s*\(\s*platform\s*===/);
