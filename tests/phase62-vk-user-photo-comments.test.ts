@@ -130,7 +130,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
   });
 
   it("collects comments on tagged photos that have no caption text", async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (
         target === vkMethodUrl("wall.get") ||
