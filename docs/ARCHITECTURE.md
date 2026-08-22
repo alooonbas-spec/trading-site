@@ -439,6 +439,10 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `errorMessage(error, fallback)` decides what text every server action shows an operator on failure and is called from nearly every service in the codebase, but had no direct test for any of its four branches (AppError, plain Error, message-bearing plain object, fallback). Half the `AppError` subclasses (`AuthenticationError`, `SocialError`, `UnsupportedActionError`, `NetworkError`, `ValidationError`) and the `AppError` base constructor itself (default status, `details`, `cause`) were untested too. Tests only, no production code changed.
 
+## Logger redaction test coverage (PHASE 82)
+
+`logger.redact` is what keeps tokens and secrets out of `activity_log` metadata and server logs (PHASE 25), but only its flat top-level case had a test. Nested objects, arrays of objects (an account list with a token per entry), case-insensitive matching (`PASSWORD`, `Authorization`, `Cookie`), and the `info`/`warn`/`error` level routing itself were all untested. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

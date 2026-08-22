@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 81: errorMessage and AppError test coverage. `errorMessage`, called from nearly every service to decide what an operator sees on failure, had no direct test; half the `AppError` subclasses and the base constructor were untested too. Tests only, no production code changed.
+PHASE 82: Logger redaction test coverage. `logger.redact` keeps tokens and secrets out of `activity_log` metadata and server logs; nested objects, arrays of objects, case-insensitive key matching, and the info/warn/error routing itself had no test. Tests only, no production code changed.
