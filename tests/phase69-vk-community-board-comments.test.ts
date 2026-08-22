@@ -47,7 +47,9 @@ function emptyWallAndConversations(target: string): Response | null {
   if (
     target === vkMethodUrl("photos.getAllComments") ||
     target === vkMethodUrl("video.get") ||
-    target === vkMethodUrl("video.getComments")
+    target === vkMethodUrl("video.getComments") ||
+    target === vkMethodUrl("market.get") ||
+    target === vkMethodUrl("market.getComments")
   ) {
     return photosAndVideoUnavailable();
   }

@@ -162,7 +162,9 @@ describe("PHASE 55 VK video comment threads", () => {
       if (
         target === vkMethodUrl("photos.getAllComments") ||
         target === vkMethodUrl("board.getTopics") ||
-        target === vkMethodUrl("board.getComments")
+        target === vkMethodUrl("board.getComments") ||
+        target === vkMethodUrl("market.get") ||
+        target === vkMethodUrl("market.getComments")
       ) {
         return new Response(
           JSON.stringify({

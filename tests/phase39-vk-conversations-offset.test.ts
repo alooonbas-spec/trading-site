@@ -106,7 +106,9 @@ describe("PHASE 39 VK community conversation offset", () => {
         target === vkMethodUrl("video.get") ||
         target === vkMethodUrl("video.getComments") ||
         target === vkMethodUrl("board.getTopics") ||
-        target === vkMethodUrl("board.getComments")
+        target === vkMethodUrl("board.getComments") ||
+        target === vkMethodUrl("market.get") ||
+        target === vkMethodUrl("market.getComments")
       ) {
         return new Response(
           JSON.stringify({
@@ -192,7 +194,9 @@ describe("PHASE 39 VK community conversation offset", () => {
         target === vkMethodUrl("video.get") ||
         target === vkMethodUrl("video.getComments") ||
         target === vkMethodUrl("board.getTopics") ||
-        target === vkMethodUrl("board.getComments")
+        target === vkMethodUrl("board.getComments") ||
+        target === vkMethodUrl("market.get") ||
+        target === vkMethodUrl("market.getComments")
       ) {
         return new Response(
           JSON.stringify({
@@ -261,7 +265,9 @@ describe("PHASE 39 VK community conversation offset", () => {
         target === vkMethodUrl("video.get") ||
         target === vkMethodUrl("video.getComments") ||
         target === vkMethodUrl("board.getTopics") ||
-        target === vkMethodUrl("board.getComments")
+        target === vkMethodUrl("board.getComments") ||
+        target === vkMethodUrl("market.get") ||
+        target === vkMethodUrl("market.getComments")
       ) {
         return new Response(
           JSON.stringify({

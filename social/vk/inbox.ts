@@ -167,6 +167,8 @@ const VK_VIDEO_COMMENT_COUNT = "50";
 const VK_VIDEO_THREAD_COUNT = "10";
 const VK_BOARD_TOPIC_COUNT = "10";
 const VK_BOARD_COMMENT_COUNT = "50";
+const VK_MARKET_ITEM_COUNT = "10";
+const VK_MARKET_COMMENT_COUNT = "50";
 const VK_CHAT_PEER_FLOOR = 2_000_000_000;
 
 type VkOffsetPage = number | "done";
@@ -181,6 +183,10 @@ type VkVideo = {
 };
 
 type VkBoardTopic = {
+  id: number;
+};
+
+type VkMarketItem = {
   id: number;
 };
 
@@ -345,30 +351,42 @@ async function collectVkCommunityInbox(
   const videocommentsPage = vkOffsetCursor(named.videocomments);
   const boardTopicsPage = vkOffsetCursor(named.boardtopics);
   const boardCommentsPage = vkOffsetCursor(named.boardcomments);
+  const marketItemsPage = vkOffsetCursor(named.marketitems);
+  const marketCommentsPage = vkOffsetCursor(named.marketcomments);
   const photoOwnerId = `-${groupId}`;
-  const [wallComments, latestPeers, olderPeers, latestPhotos, olderPhotos, videoComments, boardComments] =
-    await Promise.all([
-      collectVkWallComments(accessToken, metadata, cursor.wallPage, cursor.wallcommentsPage, named.wallthreads),
-      listVkCommunityUserPeers(accessToken, groupId, 0),
-      conversationOffset === null
-        ? Promise.resolve(emptyVkCommunityPeers(true))
-        : listVkCommunityUserPeers(accessToken, groupId, conversationOffset),
-      collectVkPhotoComments(accessToken, 0, photoOwnerId),
-      photoOffset === null
-        ? Promise.resolve(emptyVkPhotoCommentPage(true))
-        : collectVkPhotoComments(accessToken, photoOffset, photoOwnerId),
-      collectVkVideoComments(
-        accessToken,
-        videoPage.page,
-        videocommentsPage.page,
-        named.videothreads,
-        photoOwnerId,
-      ),
-      collectVkBoardComments(accessToken, boardTopicsPage.page, boardCommentsPage.page, groupId),
-    ]);
+  const [
+    wallComments,
+    latestPeers,
+    olderPeers,
+    latestPhotos,
+    olderPhotos,
+    videoComments,
+    boardComments,
+    marketComments,
+  ] = await Promise.all([
+    collectVkWallComments(accessToken, metadata, cursor.wallPage, cursor.wallcommentsPage, named.wallthreads),
+    listVkCommunityUserPeers(accessToken, groupId, 0),
+    conversationOffset === null
+      ? Promise.resolve(emptyVkCommunityPeers(true))
+      : listVkCommunityUserPeers(accessToken, groupId, conversationOffset),
+    collectVkPhotoComments(accessToken, 0, photoOwnerId),
+    photoOffset === null
+      ? Promise.resolve(emptyVkPhotoCommentPage(true))
+      : collectVkPhotoComments(accessToken, photoOffset, photoOwnerId),
+    collectVkVideoComments(
+      accessToken,
+      videoPage.page,
+      videocommentsPage.page,
+      named.videothreads,
+      photoOwnerId,
+    ),
+    collectVkBoardComments(accessToken, boardTopicsPage.page, boardCommentsPage.page, groupId),
+    collectVkMarketComments(accessToken, marketItemsPage.page, marketCommentsPage.page, photoOwnerId),
+  ]);
   const photosUnavailable = latestPhotos.unavailable || olderPhotos.unavailable;
   const videosUnavailable = videoComments.unavailable;
   const boardUnavailable = boardComments.unavailable;
+  const marketUnavailable = marketComments.unavailable;
   const peers = mergeVkCommunityPeers(latestPeers, olderPeers);
   const latestPage = await collectVkCommunityHistoryForPeers(accessToken, groupId, peers, 0);
   const newestMessageId = latestPage.messages.reduce<string | null>(
@@ -405,6 +423,8 @@ async function collectVkCommunityInbox(
       ...videoComments.older,
       ...filterMessagesAfterCursor(boardComments.latest, named.board ?? null),
       ...boardComments.older,
+      ...filterMessagesAfterCursor(marketComments.latest, named.market ?? null),
+      ...marketComments.older,
       ...uniqueInboxMessages([...inboundLatest, ...olderMessages]),
     ],
     cursor: serializeNamedInboxCursor({
@@ -418,6 +438,13 @@ async function collectVkCommunityInbox(
       comments: laterDigitId(cursor.comments, newestVkCommentUnix([...wallComments.latest, ...wallComments.older])) ?? "",
       conversations: nextVkOffsetCursor(cursor.conversationsPage, olderPeers.reachedEnd),
       history: nextVkOffsetCursor(cursor.historyPage, reachedEnd),
+      market: marketUnavailable
+        ? ""
+        : laterDigitId(named.market, newestVkCommentUnix([...marketComments.latest, ...marketComments.older])) ?? "",
+      marketcomments: marketUnavailable
+        ? ""
+        : nextVkOffsetCursor(marketCommentsPage.page, marketComments.commentsReachedEnd),
+      marketitems: marketUnavailable ? "" : nextVkOffsetCursor(marketItemsPage.page, marketComments.reachedEnd),
       messages: laterDigitId(cursor.messages, newestMessageId) ?? "",
       photocomments: photosUnavailable ? "" : nextVkOffsetCursor(photoPage.page, olderPhotos.reachedEnd),
       photos: photosUnavailable
@@ -919,6 +946,149 @@ function vkBoardCommentsToInbox(
       username: null,
       body: text,
       url: `https://vk.com/topic-${groupId}_${topicId}?post=${comment.id}`,
+      receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
+      replyKind: "comment",
+    });
+  }
+  return messages;
+}
+
+async function collectVkMarketComments(
+  accessToken: string,
+  itemsPage: VkOffsetPage,
+  commentsPage: VkOffsetPage,
+  ownerId: string,
+): Promise<{
+  latest: InboxMessage[];
+  older: InboxMessage[];
+  reachedEnd: boolean;
+  commentsReachedEnd: boolean;
+  unavailable: boolean;
+}> {
+  const itemsOffset =
+    itemsPage !== 0 && itemsPage !== "done" ? itemsPage * Number(VK_MARKET_ITEM_COUNT) : null;
+  const commentsOffset =
+    commentsPage !== 0 && commentsPage !== "done" ? commentsPage * Number(VK_MARKET_COMMENT_COUNT) : null;
+  const [latestItems, olderItems] = await Promise.all([
+    listVkMarketItems(accessToken, ownerId, 0),
+    itemsOffset === null
+      ? Promise.resolve(emptyVkMarketItems(true))
+      : listVkMarketItems(accessToken, ownerId, itemsOffset),
+  ]);
+  if (latestItems.unavailable || olderItems.unavailable) {
+    return {
+      latest: [],
+      older: [],
+      reachedEnd: true,
+      commentsReachedEnd: true,
+      unavailable: true,
+    };
+  }
+  const commentItems = [...latestItems.items, ...olderItems.items];
+  const [latest, olderItem, olderComments] = await Promise.all([
+    collectVkCommentsForMarketItems(accessToken, ownerId, latestItems.items, 0),
+    collectVkCommentsForMarketItems(accessToken, ownerId, olderItems.items, 0),
+    commentsOffset === null
+      ? Promise.resolve(emptyVkCommentPage(true))
+      : collectVkCommentsForMarketItems(accessToken, ownerId, commentItems, commentsOffset),
+  ]);
+  return {
+    latest: latest.messages,
+    older: uniqueInboxMessages([...olderItem.messages, ...olderComments.messages]),
+    reachedEnd: olderItems.reachedEnd,
+    commentsReachedEnd: olderComments.reachedEnd,
+    unavailable: false,
+  };
+}
+
+function emptyVkMarketItems(reachedEnd: boolean): {
+  items: VkMarketItem[];
+  reachedEnd: boolean;
+  unavailable: boolean;
+} {
+  return { items: [], reachedEnd, unavailable: false };
+}
+
+async function listVkMarketItems(
+  accessToken: string,
+  ownerId: string,
+  offset: number,
+): Promise<{ items: VkMarketItem[]; reachedEnd: boolean; unavailable: boolean }> {
+  const pageSize = Number(VK_MARKET_ITEM_COUNT);
+  const params: Record<string, string> = {
+    access_token: accessToken,
+    owner_id: ownerId,
+    count: VK_MARKET_ITEM_COUNT,
+  };
+  if (offset > 0) {
+    params.offset = String(offset);
+  }
+  const payload = await vkCallIfAvailable("market.get", params);
+  if (payload === null) {
+    return { items: [], reachedEnd: true, unavailable: true };
+  }
+  const parsed = wallGetSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK market.get returned an unexpected payload");
+  }
+  const items = parsed.data.items ?? [];
+  return { items, reachedEnd: items.length < pageSize, unavailable: false };
+}
+
+async function collectVkCommentsForMarketItems(
+  accessToken: string,
+  ownerId: string,
+  items: VkMarketItem[],
+  offset: number,
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean; nestedAfters: VkThreadMap }> {
+  const pageSize = Number(VK_MARKET_COMMENT_COUNT);
+  const messages: InboxMessage[] = [];
+  let reachedEnd = true;
+  for (const item of items) {
+    const params: Record<string, string> = {
+      access_token: accessToken,
+      owner_id: ownerId,
+      item_id: String(item.id),
+      count: VK_MARKET_COMMENT_COUNT,
+      sort: "desc",
+    };
+    if (offset > 0) {
+      params.offset = String(offset);
+    }
+    const commentsPayload = await vkCallIfAvailable("market.getComments", params);
+    if (commentsPayload === null) {
+      continue;
+    }
+    const comments = wallCommentsSchema.safeParse(commentsPayload);
+    if (!comments.success) {
+      throw new SocialError("VK market.getComments returned an unexpected payload");
+    }
+    if ((comments.data.items ?? []).length >= pageSize) {
+      reachedEnd = false;
+    }
+    messages.push(...vkMarketCommentsToInbox(comments.data.items ?? [], ownerId, item.id));
+  }
+  return { messages, reachedEnd: items.length === 0 ? true : reachedEnd, nestedAfters: {} };
+}
+
+function vkMarketCommentsToInbox(
+  comments: Array<{ id: number; from_id?: number; text?: string; date?: number }>,
+  ownerId: string,
+  itemId: number,
+): InboxMessage[] {
+  const messages: InboxMessage[] = [];
+  const communityFromId = Number(ownerId);
+  for (const comment of comments) {
+    const text = comment.text?.trim();
+    if (!text || comment.from_id === undefined || comment.from_id === communityFromId) {
+      continue;
+    }
+    messages.push({
+      externalId: `market:${ownerId}:${itemId}:${comment.id}`,
+      externalProfileId: String(comment.from_id),
+      username: null,
+      body: text,
+      url: `https://vk.com/market${ownerId}_${itemId}?reply=${comment.id}`,
       receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
       replyKind: "comment",
     });
@@ -1747,6 +1917,30 @@ export function parseVkInboxBoardCommentRef(externalId: string): {
   return { groupId, topicId, commentId };
 }
 
+export function parseVkInboxMarketCommentRef(externalId: string): {
+  ownerId: string;
+  itemId: string;
+  commentId: string;
+} {
+  const parts = externalId.split(":");
+  const ownerId = parts[1];
+  const itemId = parts[2];
+  const commentId = parts[3];
+  if (
+    parts[0] !== "market" ||
+    parts.length !== 4 ||
+    !ownerId ||
+    !itemId ||
+    !commentId ||
+    !/^-?\d+$/.test(ownerId) ||
+    !/^\d+$/.test(itemId) ||
+    !/^\d+$/.test(commentId)
+  ) {
+    throw new ValidationError("VK market comment replies require owner, item, and comment ids from market.getComments");
+  }
+  return { ownerId, itemId, commentId };
+}
+
 export async function replyToVkWallComment(
   accessToken: string,
   input: { externalId: string; text: string },
@@ -1918,6 +2112,34 @@ export async function replyToVkBoardComment(
   const parsed = z.number().safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("VK board.createComment returned an unexpected payload");
+  }
+  return { externalMessageId: String(parsed.data) };
+}
+
+export async function replyToVkMarketComment(
+  accessToken: string,
+  input: { externalId: string; text: string; fromGroup?: boolean },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("VK market comment replies require a body");
+  }
+
+  const ref = parseVkInboxMarketCommentRef(input.externalId);
+  const params: Record<string, string> = {
+    access_token: accessToken,
+    owner_id: ref.ownerId,
+    item_id: ref.itemId,
+    reply_to_comment: ref.commentId,
+    message: text,
+  };
+  if (input.fromGroup) {
+    params.from_group = "1";
+  }
+  const payload = await vkCall("market.createComment", params);
+  const parsed = z.number().safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK market.createComment returned an unexpected payload");
   }
   return { externalMessageId: String(parsed.data) };
 }
