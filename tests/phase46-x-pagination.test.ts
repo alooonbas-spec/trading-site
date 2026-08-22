@@ -1,6 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { encodeXPageToken, nextXPageCursor } from "@/social/x/paging";
+import { decodeXPageToken, encodeXPageToken, nextXPageCursor } from "@/social/x/paging";
 import { XAdapter } from "@/social/x/adapter";
+
+describe("decodeXPageToken", () => {
+  it("round-trips an encoded token", () => {
+    expect(decodeXPageToken(encodeXPageToken("page-2"))).toBe("page-2");
+  });
+
+  it("treats undefined, done, and an empty/blank string as no cursor", () => {
+    expect(decodeXPageToken(undefined)).toBeNull();
+    expect(decodeXPageToken("done")).toBeNull();
+    expect(decodeXPageToken("")).toBeNull();
+    expect(decodeXPageToken("   ")).toBeNull();
+  });
+
+  it("treats input that decodes to nothing as null rather than throwing", () => {
+    // Buffer.from(..., "base64url") silently drops invalid characters rather
+    // than throwing, so a string made entirely of non-base64url characters
+    // decodes to an empty buffer.
+    expect(decodeXPageToken("!!!")).toBeNull();
+  });
+});
 
 describe("X pagination helpers", () => {
   it("encodes next_token values and stays done once stored", () => {

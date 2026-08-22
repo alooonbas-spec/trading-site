@@ -537,6 +537,10 @@ Same root cause as PHASE 102, different platform: `resolveVkPublicProfile` (`soc
 
 Added `VK_PERMALINK_PATTERN` (`/^(?:wall|photo|video|board|market|album|docs|audio|clip)-?\d+_\d+$/i`) and reject a segment matching it, alongside the existing bare-word check. A screen name that merely starts with one of those words but isn't the full `<word><id>_<id>` shape (e.g. `wallpaper_studio`) is unaffected. Real fix, not test-only — new cases in `tests/phase5-tinyfish.test.ts`.
 
+## decodeXPageToken test coverage (PHASE 104)
+
+`social/x/paging.ts`'s `decodeXPageToken` had no direct test, only indirect coverage through `nextXPageCursor` and the adapter pagination tests. Writing a boundary test first ("garbage input decodes to null") surfaced that `Buffer.from(value, "base64url")` never throws on invalid characters — it silently drops them and decodes whatever bytes remain, so the function's `try/catch` is effectively dead code and a string like `"not-valid-base64url!!!"` decodes to garbage bytes rather than `null`. This is not a bug to fix: `decodeXPageToken`'s output is X's own opaque `pagination_token`, which has no structure of ours to validate (unlike VK's `ownerId_postId_commentId` shape or the JSON thread map), so passing a corrupted stored cursor through to X's API and letting X's API reject it is the correct, existing behavior. New `tests/phase46-x-pagination.test.ts` cases cover the round-trip, the `undefined`/`"done"`/blank-string no-cursor cases, and the one input that genuinely decodes to nothing (a string made entirely of non-base64url characters). Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

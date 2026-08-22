@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 103: VK content-permalink fix. `resolveVkPublicProfile` only rejected bare reserved words (`feed`, `im`, `video`, ...), so VK's `<word><ownerId>_<itemId>` content permalinks (`wall123_456`, `photo-1_2`, ...) slipped past that check, matched the screen-name regex, and resolved to a nonexistent profile. A new `VK_PERMALINK_PATTERN` check rejects those shapes without affecting real screen names that merely start with the same word. Real production fix, with new coverage in `tests/phase5-tinyfish.test.ts`.
+PHASE 104: `decodeXPageToken` test coverage. Writing a boundary test first surfaced that `Buffer.from(..., "base64url")` never throws on invalid input, so garbage decodes to garbage bytes rather than `null` — confirmed this is correct existing behavior (X's `pagination_token` is opaque, nothing of ours to validate), not a bug. Tests only, no production code changed.
