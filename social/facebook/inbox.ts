@@ -583,6 +583,26 @@ const facebookRatingsSchema = z.object({
                           name: z.string().optional(),
                         })
                         .optional(),
+                      comments: z
+                        .object({
+                          data: z
+                            .array(
+                              z.object({
+                                id: z.string().min(1),
+                                message: z.string().optional(),
+                                created_time: z.string().optional(),
+                                from: z
+                                  .object({
+                                    id: z.string().optional(),
+                                    name: z.string().optional(),
+                                  })
+                                  .optional(),
+                              }),
+                            )
+                            .optional(),
+                          paging: graphPagingSchema,
+                        })
+                        .optional(),
                     }),
                   )
                   .optional(),
@@ -605,11 +625,12 @@ async function collectFacebookRatings(
   commentMessages: InboxMessage[];
   nextAfter: string | null;
   repliesAfter: GraphRepliesMap;
+  crepliesAfter: GraphRepliesMap;
 }> {
   const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/ratings`);
   url.searchParams.set(
     "fields",
-    "created_time,review_text,reviewer,open_graph_story{id,comments.limit(50){id,from,message,created_time}}",
+    "created_time,review_text,reviewer,open_graph_story{id,comments.limit(50){id,from,message,created_time,comments.limit(25){id,from,message,created_time}}}",
   );
   url.searchParams.set("limit", "10");
   url.searchParams.set("access_token", page.accessToken);
@@ -626,6 +647,7 @@ async function collectFacebookRatings(
   const messages: InboxMessage[] = [];
   const commentMessages: InboxMessage[] = [];
   const repliesAfter: GraphRepliesMap = {};
+  const crepliesAfter: GraphRepliesMap = {};
   for (const rating of parsed.data.data ?? []) {
     const storyId = rating.open_graph_story?.id?.trim();
     if (storyId && GRAPH_OBJECT_ID.test(storyId)) {
@@ -635,6 +657,13 @@ async function collectFacebookRatings(
       }
       for (const comment of rating.open_graph_story?.comments?.data ?? []) {
         pushFacebookComment(commentMessages, comment, page.id);
+        const replyAfter = graphPagingAfter(comment.comments);
+        if (replyAfter && GRAPH_OBJECT_ID.test(comment.id)) {
+          crepliesAfter[comment.id] = replyAfter;
+        }
+        for (const reply of comment.comments?.data ?? []) {
+          pushFacebookComment(commentMessages, reply, page.id);
+        }
       }
     }
     const fromId = rating.reviewer?.id !== undefined ? String(rating.reviewer.id) : "";
@@ -652,7 +681,7 @@ async function collectFacebookRatings(
       replyKind: "comment",
     });
   }
-  return { messages, commentMessages, nextAfter: graphPagingAfter(payload), repliesAfter };
+  return { messages, commentMessages, nextAfter: graphPagingAfter(payload), repliesAfter, crepliesAfter };
 }
 
 export async function collectFacebookInbox(
@@ -701,6 +730,7 @@ export async function collectFacebookInbox(
     commentMessages: [] as InboxMessage[],
     nextAfter: null,
     repliesAfter: {} as GraphRepliesMap,
+    crepliesAfter: {} as GraphRepliesMap,
   };
   const [
     latestComments,
@@ -828,6 +858,8 @@ export async function collectFacebookInbox(
           ...latestTagged.crepliesAfter,
           ...olderTagged.crepliesAfter,
           ...extraTaggedReplies.crepliesAfter,
+          ...latestRatings.crepliesAfter,
+          ...olderRatings.crepliesAfter,
           ...extraRatingReplies.crepliesAfter,
         },
         fetchedNextAfters: extraCreplies.nextAfters,

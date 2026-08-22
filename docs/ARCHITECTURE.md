@@ -345,7 +345,11 @@ Facebook `GET /{page-id}/ratings` collects Page recommendations. Each poll still
 
 ## Graph comments on rating stories (PHASE 59)
 
-Facebook ratings request nested `open_graph_story{id,comments.limit(50){…}}` on the current ratings page. Comments on rating stories use `replyKind=comment` and the existing `POST /{comment-id}/comments` path. The named `ratingreplies` cursor stores `{ storyId: after }` independently of feed `replies` and tagged `taggedreplies`. Later polls request `GET /{story-id}/comments?after=` (`limit=50`). Extra rating-comment pages are not dropped by the `comments` timestamp watermark. Ratings without review text still contribute comments when a story id is present. An empty map stores `ratingreplies:done`. Collectors still do not fetch `paging.next` URLs.
+Facebook ratings request nested `open_graph_story{id,comments.limit(50){…}}` on the current ratings page. Comments on rating stories use `replyKind=comment` and the existing `POST /{comment-id}/comments` path. The named `ratingreplies` cursor stores `{ storyId: after }` independently of feed `replies` and tagged `taggedreplies`. Later polls request `GET /{story-id}/comments?after=` (`limit=50`). Extra rating-comment pages are not dropped by the `comments` timestamp watermark. Ratings without review text still contribute comments when a story id is present. An empty map stores `ratingreplies:done`. Nested replies on those rating comments seed `creplies` in PHASE 60. Collectors still do not fetch `paging.next` URLs.
+
+## Graph nested replies on rating-story comments (PHASE 60)
+
+Facebook rating-story comments request nested `comments.limit(25)`, the same edge as feed and tagged comments in PHASE 49 and PHASE 57. Extra PHASE 59 rating-comment pages already request that nested edge so newly discovered rating comments can seed `creplies` while that cursor is still open. Later polls still request `GET /{comment-id}/comments?after=` (`limit=25`). Extra nested-reply pages are not dropped by the `comments` timestamp watermark. This reuses the existing `creplies` map rather than a second cursor. A stored `creplies:done` stays done. Instagram has no ratings edge. Collectors still do not fetch `paging.next` URLs.
 
 ## Social adapters (PHASE 2)
 

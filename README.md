@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 59: Official Graph comments on Facebook Page rating stories (`ratingreplies` after paging). No new SQL.
+PHASE 60: Official Graph nested replies on Facebook rating-story comments (seeds existing `creplies`). No new SQL.
