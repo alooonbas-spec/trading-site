@@ -49,7 +49,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
       if (target.includes("/555/feed")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("/555/tagged") || target.includes("/555/ratings")) {
+      if (target.includes("/555/tagged") || target.includes("/555/ratings") || target.includes("/555/videos")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("folder=")) {
@@ -108,7 +108,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:${encodeGraphAfter("page-2")}`,
+      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:${encodeGraphAfter("page-2")}|videoreplies:done|videos:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -117,7 +117,7 @@ describe("PHASE 42 Graph conversation after paging", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-thread-m"]);
-    expect(second.cursor).toBe("creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done");
+    expect(second.cursor).toBe("creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/conversations") && !String(url).includes("folder=")),
     ).toHaveLength(3);

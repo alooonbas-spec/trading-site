@@ -179,6 +179,55 @@ async function collectFacebookComments(
   return { messages, nextAfter: graphPagingAfter(payload), repliesAfter, crepliesAfter };
 }
 
+async function collectFacebookVideos(
+  page: FacebookPageAuth,
+  after?: string | null,
+): Promise<{
+  messages: InboxMessage[];
+  nextAfter: string | null;
+  repliesAfter: GraphRepliesMap;
+  crepliesAfter: GraphRepliesMap;
+}> {
+  const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/videos`);
+  url.searchParams.set(
+    "fields",
+    "id,created_time,comments.limit(50){id,from,message,created_time,comments.limit(25){id,from,message,created_time}}",
+  );
+  url.searchParams.set("limit", "10");
+  url.searchParams.set("access_token", page.accessToken);
+  if (after) {
+    url.searchParams.set("after", after);
+  }
+  const response = await socialFetch(url.toString());
+  const payload = await readJson<unknown>(response);
+  throwIfGraphError(payload);
+  const parsed = commentsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("Facebook Page videos returned an unexpected payload");
+  }
+
+  const messages: InboxMessage[] = [];
+  const repliesAfter: GraphRepliesMap = {};
+  const crepliesAfter: GraphRepliesMap = {};
+  for (const video of parsed.data.data ?? []) {
+    const nestedAfter = graphPagingAfter(video.comments);
+    if (nestedAfter && GRAPH_OBJECT_ID.test(video.id)) {
+      repliesAfter[video.id] = nestedAfter;
+    }
+    for (const comment of video.comments?.data ?? []) {
+      pushFacebookComment(messages, comment, page.id);
+      const replyAfter = graphPagingAfter(comment.comments);
+      if (replyAfter && GRAPH_OBJECT_ID.test(comment.id)) {
+        crepliesAfter[comment.id] = replyAfter;
+      }
+      for (const reply of comment.comments?.data ?? []) {
+        pushFacebookComment(messages, reply, page.id);
+      }
+    }
+  }
+  return { messages, nextAfter: graphPagingAfter(payload), repliesAfter, crepliesAfter };
+}
+
 function pushFacebookComment(
   messages: InboxMessage[],
   comment: {
@@ -714,6 +763,8 @@ export async function collectFacebookInbox(
   const storedTaggedReplies = decodeGraphReplies(cursor.taggedreplies);
   const olderRatingsAfter = decodeGraphAfter(cursor.ratings);
   const storedRatingReplies = decodeGraphReplies(cursor.ratingreplies);
+  const olderVideosAfter = decodeGraphAfter(cursor.videos);
+  const storedVideoReplies = decodeGraphReplies(cursor.videoreplies);
   const emptyPage = {
     messages: [] as InboxMessage[],
     nextAfter: null,
@@ -768,6 +819,9 @@ export async function collectFacebookInbox(
     latestRatings,
     olderRatings,
     extraRatingReplies,
+    latestVideos,
+    olderVideos,
+    extraVideoReplies,
   ] = await Promise.all([
       collectFacebookComments(page),
       olderPostsAfter ? collectFacebookComments(page, olderPostsAfter) : Promise.resolve(emptyPage),
@@ -804,6 +858,11 @@ export async function collectFacebookInbox(
       storedRatingReplies
         ? collectFacebookCommentReplies(page, storedRatingReplies)
         : Promise.resolve(emptyReplies),
+      collectFacebookVideos(page),
+      olderVideosAfter ? collectFacebookVideos(page, olderVideosAfter) : Promise.resolve(emptyPage),
+      storedVideoReplies
+        ? collectFacebookCommentReplies(page, storedVideoReplies)
+        : Promise.resolve(emptyReplies),
     ]);
   const comments = uniqueInboxMessages([
     ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
@@ -816,6 +875,9 @@ export async function collectFacebookInbox(
     ...filterMessagesAfterCursor(latestRatings.commentMessages, cursor.comments),
     ...olderRatings.commentMessages,
     ...extraRatingReplies.messages,
+    ...filterMessagesAfterCursor(latestVideos.messages, cursor.comments),
+    ...olderVideos.messages,
+    ...extraVideoReplies.messages,
   ]);
   const latestMessages = latestDirect.messages;
   const olderMessages = olderDirect.messages;
@@ -859,6 +921,9 @@ export async function collectFacebookInbox(
             ...latestRatings.commentMessages,
             ...olderRatings.commentMessages,
             ...extraRatingReplies.messages,
+            ...latestVideos.messages,
+            ...olderVideos.messages,
+            ...extraVideoReplies.messages,
           ]),
         ) ?? "",
       messages:
@@ -943,6 +1008,9 @@ export async function collectFacebookInbox(
           ...latestRatings.crepliesAfter,
           ...olderRatings.crepliesAfter,
           ...extraRatingReplies.crepliesAfter,
+          ...latestVideos.crepliesAfter,
+          ...olderVideos.crepliesAfter,
+          ...extraVideoReplies.crepliesAfter,
         },
         fetchedNextAfters: extraCreplies.nextAfters,
         fetchedIds: extraCreplies.fetchedIds,
@@ -986,6 +1054,18 @@ export async function collectFacebookInbox(
         firstPageAfter: latestDirect.nextAfter,
         olderPageAfter: olderDirect.nextAfter,
         fetchedOlder: Boolean(olderThreadAfter),
+      }),
+      videoreplies: nextGraphRepliesCursor({
+        stored: cursor.videoreplies,
+        nestedAfters: { ...latestVideos.repliesAfter, ...olderVideos.repliesAfter },
+        fetchedNextAfters: extraVideoReplies.nextAfters,
+        fetchedIds: extraVideoReplies.fetchedIds,
+      }),
+      videos: nextGraphAfterCursor({
+        stored: cursor.videos,
+        firstPageAfter: latestVideos.nextAfter,
+        olderPageAfter: olderVideos.nextAfter,
+        fetchedOlder: Boolean(olderVideosAfter),
       }),
     }),
   };

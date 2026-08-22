@@ -22,7 +22,8 @@ describe("PHASE 66 Graph Facebook conversations folder=spam", () => {
       if (
         target.includes("/555/feed") ||
         target.includes("/555/tagged") ||
-        target.includes("/555/ratings")
+        target.includes("/555/ratings") ||
+        target.includes("/555/videos")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -86,7 +87,7 @@ describe("PHASE 66 Graph Facebook conversations folder=spam", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-spam-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:${encodeGraphAfter("spam-2")}|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
+      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:${encodeGraphAfter("spam-2")}|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -96,7 +97,7 @@ describe("PHASE 66 Graph Facebook conversations folder=spam", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-spam-m"]);
     expect(second.cursor).toBe(
-      "creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(
       fetchMock.mock.calls.filter(
@@ -117,7 +118,8 @@ describe("PHASE 66 Graph Facebook conversations folder=spam", () => {
       if (
         target.includes("/555/feed") ||
         target.includes("/555/tagged") ||
-        target.includes("/555/ratings")
+        target.includes("/555/ratings") ||
+        target.includes("/555/videos")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -160,7 +162,7 @@ describe("PHASE 66 Graph Facebook conversations folder=spam", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-spam-m"]);
     expect(result.cursor).toBe(
-      "creplies:done|donethreads:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "creplies:done|donethreads:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(
       fetchMock.mock.calls.filter(

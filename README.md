@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 70: Isolated official VK community `market.get` + `market.getComments` (`owner_id=-groupId`). VK 7/27 skip those methods without failing wall, DMs, photos, video, or board. No new SQL. No new `market` OAuth scope.
+PHASE 71: Isolated official Graph Facebook Page `/{page-id}/videos` comments. Extra video pages and extra video-comment pages are not dropped by the comments watermark. Instagram is unchanged. No new SQL.

@@ -53,7 +53,7 @@ describe("PHASE 44 Graph nested comment after paging", () => {
       if (target.includes("/555/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("/555/tagged") || target.includes("/555/ratings")) {
+      if (target.includes("/555/tagged") || target.includes("/555/ratings") || target.includes("/555/videos")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("/555_1/comments")) {
@@ -105,7 +105,7 @@ describe("PHASE 44 Graph nested comment after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-c"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:${encodeGraphReplies({ "555_1": "cmt-2" })}|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:${encodeGraphReplies({ "555_1": "cmt-2" })}|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(0);
 
@@ -116,7 +116,7 @@ describe("PHASE 44 Graph nested comment after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-c"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(1);
   });
