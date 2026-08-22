@@ -4,6 +4,7 @@ import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { filterSocialAccounts } from "@/lib/social/filter-accounts";
 import { createOAuthState, createPkcePair, isOAuthStateExpired } from "@/lib/social/pkce";
+import { oauthCallbackPath } from "@/lib/social/app-origin";
 import { isPublishDestinationKey, PUBLISH_DESTINATION_KEYS } from "@/lib/social/publish-destination";
 import {
   assertNoTokenLeak,
@@ -99,6 +100,15 @@ describe("PKCE", () => {
     expect(isOAuthStateExpired("2026-08-21T12:09:59.999Z", now)).toBe(true);
     expect(isOAuthStateExpired("2026-08-21T12:10:00.000Z", now)).toBe(true);
     expect(isOAuthStateExpired("2026-08-21T12:10:00.001Z", now)).toBe(false);
+  });
+});
+
+describe("oauthCallbackPath", () => {
+  it("builds the registered per-platform redirect path README documents", () => {
+    expect(oauthCallbackPath("vk")).toBe("/api/social/vk/callback");
+    expect(oauthCallbackPath("x")).toBe("/api/social/x/callback");
+    expect(oauthCallbackPath("facebook")).toBe("/api/social/facebook/callback");
+    expect(oauthCallbackPath("instagram")).toBe("/api/social/instagram/callback");
   });
 });
 

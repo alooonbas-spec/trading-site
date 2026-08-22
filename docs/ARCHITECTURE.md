@@ -463,6 +463,10 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `normalizeKeywords` underlies both `parseKeywordList` and `matchKeywords` — it dedupes case-insensitively while keeping the first-seen casing, a detail easy to break silently in a refactor — but had no direct test of its own. Tests only, no production code changed.
 
+## oauthCallbackPath test (PHASE 88)
+
+`oauthCallbackPath` builds the redirect path that must exactly match what's registered with each OAuth provider (README's "Register these OAuth redirect URIs" list); had no direct test. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

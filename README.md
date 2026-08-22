@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 87: normalizeKeywords test coverage. The case-insensitive dedup logic underlying both `parseKeywordList` and `matchKeywords` had no direct test. Tests only, no production code changed.
+PHASE 88: oauthCallbackPath test. Builds the redirect path that must exactly match what's registered with each OAuth provider; had no direct test. Tests only, no production code changed.
