@@ -27,7 +27,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
         target.includes("/555/feed") ||
         target.includes("/555/conversations") ||
         target.includes("/555/tagged") ||
-        target.includes("/555/videos")
+        target.includes("/555/videos") || target.includes("/555/photos")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -83,7 +83,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:${encodeGraphAfter("rate-2")}|replies:done|reviews:2026-08-21T12:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:${encodeGraphAfter("rate-2")}|replies:done|reviews:2026-08-21T12:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -93,7 +93,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-story"]);
     expect(second.cursor).toBe(
-      "creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/ratings"))).toHaveLength(3);
   });
@@ -111,7 +111,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
         target.includes("/555/feed") ||
         target.includes("/555/conversations") ||
         target.includes("/555/tagged") ||
-        target.includes("/555/videos")
+        target.includes("/555/videos") || target.includes("/555/photos")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -143,7 +143,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-story"]);
     expect(result.cursor).toBe(
-      "creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T09:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T09:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/ratings"))).toHaveLength(1);
   });
@@ -161,7 +161,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
         target.includes("/555/feed") ||
         target.includes("/555/conversations") ||
         target.includes("/555/tagged") ||
-        target.includes("/555/videos")
+        target.includes("/555/videos") || target.includes("/555/photos")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -197,7 +197,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
     });
     expect(result.messages).toEqual([]);
     expect(result.cursor).toBe(
-      "creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
   });
 

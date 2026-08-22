@@ -21,7 +21,7 @@ describe("PHASE 60 Graph nested replies on Facebook rating-story comments", () =
         target.includes("/555/feed") ||
         target.includes("/555/conversations") ||
         target.includes("/555/tagged") ||
-        target.includes("/555/videos")
+        target.includes("/555/videos") || target.includes("/555/photos")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -98,7 +98,7 @@ describe("PHASE 60 Graph nested replies on Facebook rating-story comments", () =
       replyKind: "comment",
     });
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:${encodeGraphReplies({ ratec1: "rate-reply-2" })}|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:${encodeGraphReplies({ ratec1: "rate-reply-2" })}|donethreads:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/ratec1/comments"))).toHaveLength(0);
 
@@ -109,7 +109,7 @@ describe("PHASE 60 Graph nested replies on Facebook rating-story comments", () =
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["rater-old"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/ratec1/comments"))).toHaveLength(1);
   });
@@ -127,7 +127,7 @@ describe("PHASE 60 Graph nested replies on Facebook rating-story comments", () =
         target.includes("/555/feed") ||
         target.includes("/555/conversations") ||
         target.includes("/555/tagged") ||
-        target.includes("/555/videos")
+        target.includes("/555/videos") || target.includes("/555/photos")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -181,7 +181,7 @@ describe("PHASE 60 Graph nested replies on Facebook rating-story comments", () =
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["ratec1", "rater-new", "st9001"]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T10:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T09:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "comments:2026-08-21T10:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T09:00:00+0000|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/ratec1/comments"))).toHaveLength(0);
   });

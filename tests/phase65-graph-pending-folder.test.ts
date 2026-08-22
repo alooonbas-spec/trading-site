@@ -23,7 +23,7 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
         target.includes("/555/feed") ||
         target.includes("/555/tagged") ||
         target.includes("/555/ratings") ||
-        target.includes("/555/videos")
+        target.includes("/555/videos") || target.includes("/555/photos")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -87,7 +87,7 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-pending-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:${encodeGraphAfter("pending-2")}|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:${encodeGraphAfter("pending-2")}|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -97,7 +97,7 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-pending-m"]);
     expect(second.cursor).toBe(
-      "creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(
       fetchMock.mock.calls.filter(
@@ -119,7 +119,7 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
         target.includes("/555/feed") ||
         target.includes("/555/tagged") ||
         target.includes("/555/ratings") ||
-        target.includes("/555/videos")
+        target.includes("/555/videos") || target.includes("/555/photos")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -162,7 +162,7 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-pending-m"]);
     expect(result.cursor).toBe(
-      "creplies:done|donethreads:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "creplies:done|donethreads:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(
       fetchMock.mock.calls.filter(
