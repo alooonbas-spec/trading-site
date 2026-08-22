@@ -22,6 +22,7 @@ Next.js App Router, TypeScript strict, Tailwind CSS, shadcn/ui, Supabase/Postgre
    - `supabase/migrations/20260821260000_phase13_inbox.sql`
    - `supabase/migrations/20260821280000_phase14_inbox_ui.sql`
    - `supabase/migrations/20260821300000_phase20_inbox_reply.sql`
+   - `supabase/migrations/20260822100000_phase73_stale_job_recovery.sql`
 4. Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```bash
@@ -58,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 72: Official Graph Facebook Page `/{page-id}/photos` (`type=uploaded`) comments. Extra photo pages and extra photo-comment pages are not dropped by the comments watermark. Instagram is unchanged. No new SQL.
+PHASE 73: Stale job recovery. `claim_jobs` and `claim_due_jobs` now also reclaim `RUNNING` jobs whose lock is older than 15 minutes and still have attempts left, so a worker crash or timeout mid-job no longer strands it forever. Same claim budget as a normal retry; no API or UI change.
