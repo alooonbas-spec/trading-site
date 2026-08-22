@@ -435,6 +435,10 @@ A comment on a channel post lands in the linked discussion supergroup as an ordi
 
 This is intentionally narrow: only a reply that points directly at the automatic forward is collected. A reply to another comment further down the same discussion thread does not carry that link (Telegram gives no other documented way to tell a discussion reply from an unrelated forum-topic reply, which shares the same `message_thread_id` mechanism) and is not walked in this phase — the same kind of stated limitation as VK's un-walked photo/board comment threads. Outbound replies stay `UnsupportedActionError`: `InboxReplyInput.target` carries a sender's profile id, not the discussion group's chat id, so Telegram cannot resolve where a comment reply belongs without a new reply-target field; only `direct_message` sends still work. Ordinary (non-reply, non-supergroup) group chatter and the automatic-forward message itself are still not collected. No new SQL.
 
+## errorMessage and AppError test coverage (PHASE 81)
+
+`errorMessage(error, fallback)` decides what text every server action shows an operator on failure and is called from nearly every service in the codebase, but had no direct test for any of its four branches (AppError, plain Error, message-bearing plain object, fallback). Half the `AppError` subclasses (`AuthenticationError`, `SocialError`, `UnsupportedActionError`, `NetworkError`, `ValidationError`) and the `AppError` base constructor itself (default status, `details`, `cause`) were untested too. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 80: Telegram discussion-group comments. A reply in the linked discussion supergroup whose `reply_to_message.is_automatic_forward` is `true` is collected as an inbox `comment`, on the same shared `update_id` cursor as private DMs. Only direct replies to the channel-post forward are collected; deeper thread replies are not walked. Outbound replies to comments stay `UnsupportedActionError` (no reply-target chat id in the shared contract). No new SQL.
+PHASE 81: errorMessage and AppError test coverage. `errorMessage`, called from nearly every service to decide what an operator sees on failure, had no direct test; half the `AppError` subclasses and the base constructor were untested too. Tests only, no production code changed.
