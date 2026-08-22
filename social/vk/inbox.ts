@@ -335,8 +335,10 @@ async function collectVkCommunityInbox(
     photoPage.page !== 0 && photoPage.page !== "done"
       ? photoPage.page * Number(VK_PHOTO_COMMENT_COUNT)
       : null;
+  const videoPage = vkOffsetCursor(named.videos);
+  const videocommentsPage = vkOffsetCursor(named.videocomments);
   const photoOwnerId = `-${groupId}`;
-  const [wallComments, latestPeers, olderPeers, latestPhotos, olderPhotos] = await Promise.all([
+  const [wallComments, latestPeers, olderPeers, latestPhotos, olderPhotos, videoComments] = await Promise.all([
     collectVkWallComments(accessToken, metadata, cursor.wallPage, cursor.wallcommentsPage, named.wallthreads),
     listVkCommunityUserPeers(accessToken, groupId, 0),
     conversationOffset === null
@@ -346,8 +348,16 @@ async function collectVkCommunityInbox(
     photoOffset === null
       ? Promise.resolve(emptyVkPhotoCommentPage(true))
       : collectVkPhotoComments(accessToken, photoOffset, photoOwnerId),
+    collectVkVideoComments(
+      accessToken,
+      videoPage.page,
+      videocommentsPage.page,
+      named.videothreads,
+      photoOwnerId,
+    ),
   ]);
   const photosUnavailable = latestPhotos.unavailable || olderPhotos.unavailable;
+  const videosUnavailable = videoComments.unavailable;
   const peers = mergeVkCommunityPeers(latestPeers, olderPeers);
   const latestPage = await collectVkCommunityHistoryForPeers(accessToken, groupId, peers, 0);
   const newestMessageId = latestPage.messages.reduce<string | null>(
@@ -380,6 +390,8 @@ async function collectVkCommunityInbox(
       ...wallComments.older,
       ...filterMessagesAfterCursor(latestPhotos.messages, named.photos ?? null),
       ...olderPhotos.messages,
+      ...filterMessagesAfterCursor(videoComments.latest, named.video ?? null),
+      ...videoComments.older,
       ...uniqueInboxMessages([...inboundLatest, ...olderMessages]),
     ],
     cursor: serializeNamedInboxCursor({
@@ -392,6 +404,14 @@ async function collectVkCommunityInbox(
         ? ""
         : laterDigitId(named.photos, newestVkCommentUnix([...latestPhotos.messages, ...olderPhotos.messages])) ??
           "",
+      video: videosUnavailable
+        ? ""
+        : laterDigitId(named.video, newestVkCommentUnix([...videoComments.latest, ...videoComments.older])) ?? "",
+      videocomments: videosUnavailable
+        ? ""
+        : nextVkOffsetCursor(videocommentsPage.page, videoComments.commentsReachedEnd),
+      videos: videosUnavailable ? "" : nextVkOffsetCursor(videoPage.page, videoComments.reachedEnd),
+      videothreads: videosUnavailable ? "" : videoComments.videothreads,
       wall: nextVkOffsetCursor(cursor.wallPage, wallComments.reachedEnd),
       wallcomments: nextVkOffsetCursor(cursor.wallcommentsPage, wallComments.commentsReachedEnd),
       wallthreads: wallComments.wallthreads,
@@ -748,13 +768,16 @@ async function collectVkVideoComments(
   videoPage: VkOffsetPage,
   videocommentsPage: VkOffsetPage,
   videothreadsStored?: string,
+  ownerId?: string,
 ): Promise<{
   latest: InboxMessage[];
   older: InboxMessage[];
   reachedEnd: boolean;
   commentsReachedEnd: boolean;
   videothreads: string;
+  unavailable: boolean;
 }> {
+  const isolate = Boolean(ownerId);
   const videoOffset =
     videoPage !== 0 && videoPage !== "done" ? videoPage * Number(VK_VIDEO_COUNT) : null;
   const commentOffset =
@@ -762,24 +785,34 @@ async function collectVkVideoComments(
       ? videocommentsPage * Number(VK_VIDEO_COMMENT_COUNT)
       : null;
   const [latestVideos, olderVideos] = await Promise.all([
-    listVkVideos(accessToken, 0),
+    listVkVideos(accessToken, 0, ownerId),
     videoOffset === null
       ? Promise.resolve(emptyVkVideos(true))
-      : listVkVideos(accessToken, videoOffset),
+      : listVkVideos(accessToken, videoOffset, ownerId),
   ]);
+  if (latestVideos.unavailable || olderVideos.unavailable) {
+    return {
+      latest: [],
+      older: [],
+      reachedEnd: true,
+      commentsReachedEnd: true,
+      videothreads: "",
+      unavailable: true,
+    };
+  }
   const commentVideos = [...latestVideos.videos, ...olderVideos.videos];
   const [latest, olderVideo, olderComments] = await Promise.all([
-    collectVkCommentsForVideos(accessToken, latestVideos.videos, 0),
-    collectVkCommentsForVideos(accessToken, olderVideos.videos, 0),
+    collectVkCommentsForVideos(accessToken, latestVideos.videos, 0, isolate),
+    collectVkCommentsForVideos(accessToken, olderVideos.videos, 0, isolate),
     commentOffset === null
       ? Promise.resolve(emptyVkCommentPage(true))
-      : collectVkCommentsForVideos(accessToken, commentVideos, commentOffset),
+      : collectVkCommentsForVideos(accessToken, commentVideos, commentOffset, isolate),
   ]);
   const storedThreads = decodeVkThreadMap(videothreadsStored);
   const extraThreads =
     storedThreads === null
       ? { messages: [] as InboxMessage[], nextAfters: {} as VkThreadMap, fetchedIds: [] as string[] }
-      : await collectVkVideoThreads(accessToken, storedThreads);
+      : await collectVkVideoThreads(accessToken, storedThreads, isolate);
   return {
     latest: latest.messages,
     older: uniqueInboxMessages([...olderVideo.messages, ...olderComments.messages, ...extraThreads.messages]),
@@ -795,38 +828,49 @@ async function collectVkVideoComments(
       fetchedNextAfters: extraThreads.nextAfters,
       fetchedIds: extraThreads.fetchedIds,
     }),
+    unavailable: false,
   };
 }
 
-function emptyVkVideos(reachedEnd: boolean): { videos: VkVideo[]; reachedEnd: boolean } {
-  return { videos: [], reachedEnd };
+function emptyVkVideos(reachedEnd: boolean): { videos: VkVideo[]; reachedEnd: boolean; unavailable: boolean } {
+  return { videos: [], reachedEnd, unavailable: false };
 }
 
 async function listVkVideos(
   accessToken: string,
   offset: number,
-): Promise<{ videos: VkVideo[]; reachedEnd: boolean }> {
+  ownerId?: string,
+): Promise<{ videos: VkVideo[]; reachedEnd: boolean; unavailable: boolean }> {
   const pageSize = Number(VK_VIDEO_COUNT);
   const params: Record<string, string> = {
     access_token: accessToken,
     count: VK_VIDEO_COUNT,
   };
+  if (ownerId) {
+    params.owner_id = ownerId;
+  }
   if (offset > 0) {
     params.offset = String(offset);
   }
-  const payload = await vkCall("video.get", params);
+  const payload = ownerId
+    ? await vkCallIfAvailable("video.get", params)
+    : await vkCall("video.get", params);
+  if (payload === null) {
+    return { videos: [], reachedEnd: true, unavailable: true };
+  }
   const parsed = wallGetSchema.safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("VK video.get returned an unexpected payload");
   }
   const videos = parsed.data.items ?? [];
-  return { videos, reachedEnd: videos.length < pageSize };
+  return { videos, reachedEnd: videos.length < pageSize, unavailable: false };
 }
 
 async function collectVkCommentsForVideos(
   accessToken: string,
   videos: VkVideo[],
   offset: number,
+  isolate = false,
 ): Promise<{ messages: InboxMessage[]; reachedEnd: boolean; nestedAfters: VkThreadMap }> {
   const pageSize = Number(VK_VIDEO_COMMENT_COUNT);
   const messages: InboxMessage[] = [];
@@ -848,7 +892,12 @@ async function collectVkCommentsForVideos(
     if (offset > 0) {
       params.offset = String(offset);
     }
-    const commentsPayload = await vkCall("video.getComments", params);
+    const commentsPayload = isolate
+      ? await vkCallIfAvailable("video.getComments", params)
+      : await vkCall("video.getComments", params);
+    if (commentsPayload === null) {
+      continue;
+    }
     const comments = wallCommentsSchema.safeParse(commentsPayload);
     if (!comments.success) {
       throw new SocialError("VK video.getComments returned an unexpected payload");
@@ -918,6 +967,7 @@ function vkVideoCommentMessage(
 async function collectVkVideoThreads(
   accessToken: string,
   stored: VkThreadMap,
+  isolate = false,
 ): Promise<{ messages: InboxMessage[]; nextAfters: VkThreadMap; fetchedIds: string[] }> {
   const pageSize = Number(VK_VIDEO_THREAD_COUNT);
   const messages: InboxMessage[] = [];
@@ -929,7 +979,6 @@ async function collectVkVideoThreads(
     if (!ref || !Number.isInteger(page) || page < 1) {
       continue;
     }
-    fetchedIds.push(id);
     const params: Record<string, string> = {
       access_token: accessToken,
       owner_id: ref.ownerId,
@@ -939,7 +988,13 @@ async function collectVkVideoThreads(
       sort: "desc",
       offset: String(page * pageSize),
     };
-    const commentsPayload = await vkCall("video.getComments", params);
+    const commentsPayload = isolate
+      ? await vkCallIfAvailable("video.getComments", params)
+      : await vkCall("video.getComments", params);
+    if (commentsPayload === null) {
+      continue;
+    }
+    fetchedIds.push(id);
     const comments = wallCommentsSchema.safeParse(commentsPayload);
     if (!comments.success) {
       throw new SocialError("VK video.getComments returned an unexpected payload");

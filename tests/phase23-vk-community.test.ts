@@ -184,7 +184,11 @@ describe("PHASE 23 VK community adapter", () => {
           { status: 200 },
         );
       }
-      if (target === vkMethodUrl("photos.getAllComments")) {
+      if (
+        target === vkMethodUrl("photos.getAllComments") ||
+        target === vkMethodUrl("video.get") ||
+        target === vkMethodUrl("video.getComments")
+      ) {
         return new Response(
           JSON.stringify({
             error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },

@@ -240,19 +240,20 @@ describe("PHASE 53 VK video.getComments", () => {
     ).toHaveLength(1);
   });
 
-  it("does not call video.get for community inbox", async () => {
+  it("isolates unavailable video.get for community inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
-        throw new Error("community inbox must not call video.get");
-      }
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("messages.getConversations")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("photos.getAllComments")) {
+      if (
+        target === vkMethodUrl("photos.getAllComments") ||
+        target === vkMethodUrl("video.get") ||
+        target === vkMethodUrl("video.getComments")
+      ) {
         return new Response(
           JSON.stringify({
             error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
@@ -264,14 +265,19 @@ describe("PHASE 53 VK video.getComments", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await new VkAdapter({
+    const result = await new VkAdapter({
       accessToken: "community-token",
       metadata: { vkAccountKind: "community", vkGroupId: "10", publishOwnerId: "-10" },
     }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("video.get"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("video.get"))).toBe(true);
+    expect(result.cursor).toBe("conversations:1|history:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).not.toContain("videos");
+    expect(result.cursor).not.toContain("videocomments");
+    expect(result.cursor).not.toContain("videothreads");
+    expect(result.cursor).not.toContain("video:");
   });
 
   it("replies to VK video comments through video.createComment", async () => {

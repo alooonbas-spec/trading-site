@@ -150,12 +150,9 @@ describe("PHASE 55 VK video comment threads", () => {
     expect(result.cursor).toContain("videothreads:done");
   });
 
-  it("does not call video.getComments threads for community inbox", async () => {
+  it("isolates unavailable video.getComments for community inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
-        throw new Error("community inbox must not call video.getComments threads");
-      }
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
@@ -170,11 +167,25 @@ describe("PHASE 55 VK video comment threads", () => {
           { status: 200 },
         );
       }
+      if (target === vkMethodUrl("video.get")) {
+        return new Response(
+          JSON.stringify({ response: { items: [{ id: 20, owner_id: -10 }] } }),
+          { status: 200 },
+        );
+      }
+      if (target === vkMethodUrl("video.getComments")) {
+        return new Response(
+          JSON.stringify({
+            error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
+          }),
+          { status: 200 },
+        );
+      }
       throw new Error(`unexpected ${target}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await new VkAdapter({
+    const result = await new VkAdapter({
       accessToken: "community-token",
       metadata: { vkAccountKind: "community", vkGroupId: "10", publishOwnerId: "-10" },
     }).collectInbox({
@@ -182,7 +193,12 @@ describe("PHASE 55 VK video comment threads", () => {
       socialAccountId: "a",
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("video.getComments"))).toBe(
-      false,
+      true,
     );
+    expect(result.messages).toEqual([]);
+    expect(result.cursor).toBe(
+      "conversations:1|history:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+    );
+    expect(result.cursor).not.toContain("video:");
   });
 });

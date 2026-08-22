@@ -245,7 +245,11 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       if (target === vkMethodUrl("messages.getConversations")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("photos.getAllComments")) {
+      if (
+        target === vkMethodUrl("photos.getAllComments") ||
+        target === vkMethodUrl("video.get") ||
+        target === vkMethodUrl("video.getComments")
+      ) {
         return new Response(
           JSON.stringify({
             error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },

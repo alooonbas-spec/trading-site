@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 67: Isolated official VK community `photos.getAllComments` (`owner_id=-groupId`). VK 7/27 skip that method without failing wall or DMs. No new SQL.
+PHASE 68: Isolated official VK community `video.get` + `video.getComments` (`owner_id=-groupId`). VK 7/27 skip those methods without failing wall, DMs, or photos. No new SQL.
