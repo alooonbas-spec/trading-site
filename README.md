@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 98: DNS-rebinding guard test coverage. `assertPublicMediaHost`'s actual DNS lookup branch (a hostname that resolves to a private/link-local address) had no direct test with `node:dns/promises` mocked; PHASE 90/91 only covered paths that never touch DNS. Tests only, no production code changed.
+PHASE 99: preferredContactStatus symmetry test. The lead-merge conflict resolver was only tested with `BLOCKED` on the right side and never with equal ranks. Tests only, no production code changed.

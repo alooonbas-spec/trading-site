@@ -40,10 +40,13 @@ describe("outbound contact guard", () => {
 });
 
 describe("merge helpers", () => {
-  it("keeps BLOCKED over a later successful contact status", () => {
+  it("keeps BLOCKED over a later successful contact status, from either side", () => {
     expect(preferredContactStatus("MESSAGE_SENT", "BLOCKED")).toBe("BLOCKED");
+    expect(preferredContactStatus("BLOCKED", "MESSAGE_SENT")).toBe("BLOCKED");
+    expect(preferredContactStatus("BLOCKED", "BLOCKED")).toBe("BLOCKED");
     expect(preferredContactStatus("REPLIED", "INVITE_SENT")).toBe("REPLIED");
     expect(preferredContactStatus("FAILED", "QUEUED")).toBe("FAILED");
+    expect(preferredContactStatus("QUEUED", "QUEUED")).toBe("QUEUED");
   });
 
   it("identifies duplicate social profiles by platform and external id", () => {

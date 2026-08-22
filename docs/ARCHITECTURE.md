@@ -511,6 +511,10 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 `assertPublicMediaHost` is what PHASE 90's `downloadPublicMedia` calls on every hop of a redirect chain to stop SSRF — but its actual DNS-rebinding branch (a hostname that passes the `parsePublicMediaUrl` name checks yet resolves to a private/link-local address) had no direct test; PHASE 90/91 only exercised the raw-IP and hostname-blocklist paths, which never call DNS at all. New `tests/media-public-url.test.ts` mocks `node:dns/promises` to test the real lookup branch in isolation: a hostname resolving only to public IPs is allowed, one resolving to a private IP (including the cloud metadata address) or to no records at all is rejected, and a mixed record set is rejected if even one address is private. The mock is scoped to this file only — confirmed the existing real-DNS tests in `media-download.test.ts` still pass unaffected. Tests only, no production code changed.
 
+## preferredContactStatus symmetry test (PHASE 99)
+
+`preferredContactStatus` (the lead-merge conflict resolver in `mergeLeads`'s `reassignRelationships`) was only tested with `BLOCKED` on the right side and never with equal ranks; `BLOCKED` as the left argument and the `left === right` boundary had no test. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
