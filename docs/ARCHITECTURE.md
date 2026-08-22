@@ -451,6 +451,10 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `lib/inbox/cursor.ts` is the shared watermark/dedup logic every platform's inbox collector builds on (Facebook, Instagram, VK, X, Telegram), but it was only exercised indirectly through those adapters' end-to-end tests — half its functions (`isNamedInboxCursor`, `isDigitIdAfter`, `parseInboxTimestampMs`, `laterTimestampString`, `laterNamedValue`, `isReceivedAfterCursor`, `newestReceivedAt`, `uniqueInboxMessages`) had no test that called them directly. New `tests/inbox-cursor.test.ts` covers each one's actual boundary cases (BigInt-precision id comparison, the 10-digit-unix-seconds vs. ISO timestamp split, a Graph-style `+0000` offset with no colon, permissive fallbacks when a side is missing or unparseable). Tests only, no production code changed.
 
+## Publish-destination key allowlist test (PHASE 85)
+
+`isPublishDestinationKey` is the allowlist `updateSocialAccountPublishDestination` checks every metadata key against before writing it (`pageId`, `publishOwnerId`, `publishChatId` — the Facebook Page, VK community wall, and Telegram chat targets), rejecting anything else, but had no direct test. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

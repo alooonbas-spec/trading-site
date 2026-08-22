@@ -4,6 +4,7 @@ import { AuthenticationError, ValidationError } from "@/lib/errors";
 import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
 import { filterSocialAccounts } from "@/lib/social/filter-accounts";
 import { createOAuthState, createPkcePair, isOAuthStateExpired } from "@/lib/social/pkce";
+import { isPublishDestinationKey, PUBLISH_DESTINATION_KEYS } from "@/lib/social/publish-destination";
 import {
   assertNoTokenLeak,
   encryptConnectResult,
@@ -98,6 +99,17 @@ describe("PKCE", () => {
     expect(isOAuthStateExpired("2026-08-21T12:09:59.999Z", now)).toBe(true);
     expect(isOAuthStateExpired("2026-08-21T12:10:00.000Z", now)).toBe(true);
     expect(isOAuthStateExpired("2026-08-21T12:10:00.001Z", now)).toBe(false);
+  });
+});
+
+describe("publish destination allowlist", () => {
+  it("only allows the documented metadata keys used to target a publish destination", () => {
+    for (const key of PUBLISH_DESTINATION_KEYS) {
+      expect(isPublishDestinationKey(key)).toBe(true);
+    }
+    expect(isPublishDestinationKey("accessToken")).toBe(false);
+    expect(isPublishDestinationKey("refreshToken")).toBe(false);
+    expect(isPublishDestinationKey("__proto__")).toBe(false);
   });
 });
 

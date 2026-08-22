@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 84: Inbox cursor helper test coverage. `lib/inbox/cursor.ts` is the shared watermark/dedup logic behind every platform's inbox collector; half its functions had no direct test, only indirect exercise through adapter end-to-end tests. Tests only, no production code changed.
+PHASE 85: Publish-destination key allowlist test. `isPublishDestinationKey` is the allowlist gate on what metadata keys `updateSocialAccountPublishDestination` will write; had no direct test. Tests only, no production code changed.
