@@ -443,6 +443,10 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `logger.redact` is what keeps tokens and secrets out of `activity_log` metadata and server logs (PHASE 25), but only its flat top-level case had a test. Nested objects, arrays of objects (an account list with a token per entry), case-insensitive matching (`PASSWORD`, `Authorization`, `Cookie`), and the `info`/`warn`/`error` level routing itself were all untested. Tests only, no production code changed.
 
+## Keyset cursor injection test (PHASE 83)
+
+`keysetOrFilter` interpolates `cursor.id` and `cursor.at` straight into a PostgREST `or=` filter string (`id.lt.<id>,created_at.eq."<at>"`) with no further escaping — every list page passes it whatever `parseKeysetCursor` returns from the fully attacker-controlled `after=` query parameter. `parseKeysetCursor`'s `z.uuid()` / strict ISO-instant schema is the only thing stopping a comma or quote in `id`/`at` from injecting extra PostgREST filter clauses (e.g. `id: "1,or(role.eq.OWNER)"`). This was previously tested only against obviously-malformed cursors, not against a cursor deliberately shaped to break out of the filter string. Tests only, no production code changed — the schema already rejected these; there was just no test pinning that down.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

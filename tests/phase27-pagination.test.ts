@@ -29,6 +29,37 @@ describe("keyset pagination", () => {
     ).toBeUndefined();
   });
 
+  it("rejects a cursor whose id or at could break out of the PostgREST or-filter, not just an invalid one", () => {
+    // keysetOrFilter interpolates cursor.id and cursor.at into a PostgREST
+    // `or=` filter string with no further escaping (id.lt.<id>,
+    // created_at.eq."<at>"), so parseKeysetCursor's schema is the only guard
+    // against an id/at that injects extra filter clauses via a comma or
+    // quote. This must stay z.uuid() / a strict ISO instant.
+    const injectedId = Buffer.from(
+      JSON.stringify({ at: "2026-08-21T22:00:00.000Z", id: "1,or(role.eq.OWNER)" }),
+      "utf8",
+    ).toString("base64url");
+    expect(parseKeysetCursor(injectedId)).toBeUndefined();
+
+    const injectedAt = Buffer.from(
+      JSON.stringify({
+        at: '2026-08-21T22:00:00.000Z",extra.eq.1,x."',
+        id: "11111111-1111-4111-8111-111111111111",
+      }),
+      "utf8",
+    ).toString("base64url");
+    expect(parseKeysetCursor(injectedAt)).toBeUndefined();
+
+    const missingId = Buffer.from(
+      JSON.stringify({ at: "2026-08-21T22:00:00.000Z" }),
+      "utf8",
+    ).toString("base64url");
+    expect(parseKeysetCursor(missingId)).toBeUndefined();
+
+    const notJson = Buffer.from("just some text, not json", "utf8").toString("base64url");
+    expect(parseKeysetCursor(notJson)).toBeUndefined();
+  });
+
   it("splits a fetched window and builds an Older cursor from the last visible row", () => {
     const rows = [
       { id: "a", created_at: "2026-08-21T22:00:00.000Z" },

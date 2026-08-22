@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 82: Logger redaction test coverage. `logger.redact` keeps tokens and secrets out of `activity_log` metadata and server logs; nested objects, arrays of objects, case-insensitive key matching, and the info/warn/error routing itself had no test. Tests only, no production code changed.
+PHASE 83: Keyset cursor injection test. `keysetOrFilter` interpolates the attacker-controlled `after=` cursor straight into a PostgREST `or=` filter string; `parseKeysetCursor`'s schema is the only guard against a comma/quote injecting extra filter clauses. Tests only — the schema already rejected these, now it's pinned down.
