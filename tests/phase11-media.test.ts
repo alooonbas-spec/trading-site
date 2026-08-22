@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ValidationError } from "@/lib/errors";
-import { classifyMediaUrl } from "@/lib/media/classify";
+import { classifyMediaUrl, fileExtension } from "@/lib/media/classify";
 import { isPrivateOrLocalIp, parsePublicMediaUrl } from "@/lib/media/public-url";
 import { TelegramAdapter, telegramMethodUrl } from "@/social/telegram/adapter";
 import { buildTelegramMediaPayload } from "@/social/telegram/media";
@@ -23,6 +23,38 @@ describe("public media URLs", () => {
     expect(() => parsePublicMediaUrl("https://user:pass@example.com/photo.jpg")).toThrow(ValidationError);
     expect(isPrivateOrLocalIp("10.1.2.3")).toBe(true);
     expect(isPrivateOrLocalIp("1.1.1.1")).toBe(false);
+  });
+
+  it("distinguishes mime type variants that share an extension bucket", () => {
+    expect(classifyMediaUrl("https://cdn.example/a.png").mimeType).toBe("image/png");
+    expect(classifyMediaUrl("https://cdn.example/a.webp").mimeType).toBe("image/webp");
+    expect(classifyMediaUrl("https://cdn.example/a.jpeg").mimeType).toBe("image/jpeg");
+    expect(classifyMediaUrl("https://cdn.example/a.webm").mimeType).toBe("video/webm");
+    expect(classifyMediaUrl("https://cdn.example/a.mov").mimeType).toBe("video/quicktime");
+    expect(classifyMediaUrl("https://cdn.example/a.zip").mimeType).toBe("application/zip");
+  });
+
+  it("prefers an explicit content-type over the URL extension when both are present", () => {
+    const classified = classifyMediaUrl("https://cdn.example/download?id=1", "image/png; charset=binary");
+    expect(classified.kind).toBe("photo");
+    expect(classified.mimeType).toBe("image/png");
+  });
+
+  it("falls back to the extension when content-type is missing or unrecognized", () => {
+    expect(classifyMediaUrl("https://cdn.example/a.mp4", null).kind).toBe("video");
+    expect(classifyMediaUrl("https://cdn.example/a.mp4", "application/octet-stream").kind).toBe("video");
+  });
+
+  it("rejects a URL with no classifiable extension or content-type", () => {
+    expect(() => classifyMediaUrl("https://cdn.example/a.exe")).toThrow(ValidationError);
+    expect(() => classifyMediaUrl("https://cdn.example/no-extension")).toThrow(ValidationError);
+  });
+
+  it("extracts a lowercased file extension, tolerating query strings and missing extensions", () => {
+    expect(fileExtension("https://cdn.example/a.JPG")).toBe("jpg");
+    expect(fileExtension("https://cdn.example/path/a.mp4?token=abc")).toBe("mp4");
+    expect(fileExtension("https://cdn.example/no-extension")).toBe("");
+    expect(fileExtension("not a url")).toBe("");
   });
 });
 

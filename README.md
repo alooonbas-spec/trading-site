@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 85: Publish-destination key allowlist test. `isPublishDestinationKey` is the allowlist gate on what metadata keys `updateSocialAccountPublishDestination` will write; had no direct test. Tests only, no production code changed.
+PHASE 86: Media classification test coverage. `classifyMediaUrl`'s content-type branch, its rejection path, and several extension-to-mime-type mappings had no test; `fileExtension` had none directly either. Tests only, no production code changed.

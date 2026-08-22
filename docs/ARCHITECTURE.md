@@ -455,6 +455,10 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `isPublishDestinationKey` is the allowlist `updateSocialAccountPublishDestination` checks every metadata key against before writing it (`pageId`, `publishOwnerId`, `publishChatId` — the Facebook Page, VK community wall, and Telegram chat targets), rejecting anything else, but had no direct test. Tests only, no production code changed.
 
+## Media classification test coverage (PHASE 86)
+
+`classifyMediaUrl` decides what a post/publish media URL is (photo/gif/video/document) and its outbound mime type before any adapter uploads it, but its content-type branch (`MIME_TO_KIND`), its rejection of an unclassifiable URL, and several extension-to-mime-type mappings (`.png` vs `.webp` vs `.jpeg`, `.webm` vs `.mov`, `.zip` vs `.pdf`) had no test — only one extension per kind was ever checked. `fileExtension` itself (query strings, missing extensions, an unparseable source, case-folding) also had no direct test. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
