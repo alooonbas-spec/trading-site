@@ -22,6 +22,11 @@ const REJECTED_VK_PATHS = new Set([
   "search",
   "mail",
 ]);
+// VK's own content permalinks are a reserved word directly followed by
+// <ownerId>_<itemId> (owner id negative for a community, e.g. wall-1_2),
+// not a screen name -- REJECTED_VK_PATHS above only matches the bare word,
+// so "wall123_456" slips past it as if it were a valid screen name.
+const VK_PERMALINK_PATTERN = /^(?:wall|photo|video|board|market|album|docs|audio|clip)-?\d+_\d+$/i;
 
 function canonicalizeVkId(handle: string): { externalProfileId: string; path: string } {
   const match = /^id(\d+)$/i.exec(handle);
@@ -52,7 +57,7 @@ export function resolveVkPublicProfile(source: string): PublicProfileRef {
     }
 
     const segment = firstPathSegment(url);
-    if (!segment || REJECTED_VK_PATHS.has(segment.toLowerCase())) {
+    if (!segment || REJECTED_VK_PATHS.has(segment.toLowerCase()) || VK_PERMALINK_PATTERN.test(segment)) {
       throw new ValidationError("Only public VK profile URLs are supported");
     }
     handle = segment;

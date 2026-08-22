@@ -188,6 +188,25 @@ describe("official public profile URLs", () => {
       ValidationError,
     );
   });
+
+  it("rejects VK wall/photo/video/etc. content permalinks instead of misreading them as a screen name", () => {
+    // vk.com/wall<ownerId>_<postId> (and the same pattern for photo, video,
+    // board, market, album, docs, audio, clip) is a content permalink, not a
+    // screen name -- REJECTED_VK_PATHS only matches the bare reserved word,
+    // so the combined "wall123_456" segment previously passed VK_SCREEN_NAME
+    // untouched and was treated as if it were a real screen name.
+    expect(() => resolveVkPublicProfile("https://vk.com/wall123_456")).toThrow(ValidationError);
+    expect(() => resolveVkPublicProfile("https://vk.com/wall-123_456")).toThrow(ValidationError);
+    expect(() => resolveVkPublicProfile("https://vk.com/photo123_456")).toThrow(ValidationError);
+    expect(() => resolveVkPublicProfile("https://vk.com/video123_456")).toThrow(ValidationError);
+    // A real screen name that merely starts with one of those words but
+    // isn't the full permalink shape must still resolve normally.
+    expect(resolveVkPublicProfile("https://vk.com/wallpaper_studio")).toEqual({
+      profileUrl: "https://vk.com/wallpaper_studio",
+      externalProfileId: "wallpaper_studio",
+      username: "wallpaper_studio",
+    });
+  });
 });
 
 describe("TinyFish Fetch client", () => {

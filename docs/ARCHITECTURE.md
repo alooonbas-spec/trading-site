@@ -531,6 +531,12 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 Added `"pages"` and `"people"` to `REJECTED_FACEBOOK_PATHS`. Real fix, not test-only — new cases in `tests/phase5-tinyfish.test.ts` assert both permalink shapes now throw `ValidationError` instead of resolving.
 
+## VK content-permalink fix (PHASE 103)
+
+Same root cause as PHASE 102, different platform: `resolveVkPublicProfile` (`social/vk/public-profile.ts`) rejects a fixed set of bare reserved words (`feed`, `im`, `video`, ...), but VK's own content permalinks combine a reserved word directly with an id, e.g. `wall<ownerId>_<postId>`, `photo<ownerId>_<itemId>`, `video<ownerId>_<itemId>` (owner id negative for a community, e.g. `wall-1_2`) — for `board`, `market`, `album`, `docs`, `audio`, and `clip` too. `REJECTED_VK_PATHS` only ever matched the bare word, so the combined segment (`"wall123_456"`) sailed past it, then satisfied `VK_SCREEN_NAME`'s regex (alnum + underscore, 3-32 chars) and was treated as a real screen name — resolving a wall-post/photo/video permalink to a nonexistent profile.
+
+Added `VK_PERMALINK_PATTERN` (`/^(?:wall|photo|video|board|market|album|docs|audio|clip)-?\d+_\d+$/i`) and reject a segment matching it, alongside the existing bare-word check. A screen name that merely starts with one of those words but isn't the full `<word><id>_<id>` shape (e.g. `wallpaper_studio`) is unaffected. Real fix, not test-only — new cases in `tests/phase5-tinyfish.test.ts`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
