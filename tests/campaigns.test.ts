@@ -10,6 +10,7 @@ import {
 } from "@/lib/jobs/queue-rules";
 import { getSocialAdapter } from "@/social/core/registry";
 import { DEFAULT_ACCOUNT_RATE_LIMIT } from "@/social/core/base-adapter";
+import { createCampaignSchema } from "@/lib/validation/campaign";
 
 describe("campaign queue rules", () => {
   it("starts only from DRAFT or PAUSED", () => {
@@ -47,6 +48,52 @@ describe("campaign queue rules", () => {
   it("sends only invite/message through adapters", () => {
     expect(isAdapterContactAction("MESSAGE")).toBe(true);
     expect(isAdapterContactAction("MANUAL_ACTION_REQUIRED")).toBe(false);
+  });
+});
+
+describe("campaign validation", () => {
+  it("requires a name, an action, at least one lead, and at least one account", () => {
+    const validId = "11111111-1111-4111-8111-111111111111";
+    expect(
+      createCampaignSchema.safeParse({
+        name: "Q3 outreach",
+        action: "MESSAGE",
+        leadIds: [validId],
+        accountIds: [validId],
+      }).success,
+    ).toBe(true);
+    expect(
+      createCampaignSchema.safeParse({
+        name: "Q",
+        action: "MESSAGE",
+        leadIds: [validId],
+        accountIds: [validId],
+      }).success,
+    ).toBe(false);
+    expect(
+      createCampaignSchema.safeParse({
+        name: "Q3 outreach",
+        action: "MESSAGE",
+        leadIds: [],
+        accountIds: [validId],
+      }).success,
+    ).toBe(false);
+    expect(
+      createCampaignSchema.safeParse({
+        name: "Q3 outreach",
+        action: "MESSAGE",
+        leadIds: [validId],
+        accountIds: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      createCampaignSchema.safeParse({
+        name: "Q3 outreach",
+        action: "SEND_GIFT",
+        leadIds: [validId],
+        accountIds: [validId],
+      }).success,
+    ).toBe(false);
   });
 });
 

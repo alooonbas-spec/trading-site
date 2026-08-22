@@ -14,7 +14,7 @@ import {
 } from "@/lib/monitoring/status";
 import { searchPublicContents } from "@/lib/tinyfish/client";
 import { TINYFISH_ENDPOINTS } from "@/lib/tinyfish/endpoints";
-import { createMonitoringRuleSchema } from "@/lib/validation/monitoring";
+import { createMonitoringRuleSchema, parseSourceList } from "@/lib/validation/monitoring";
 import { assertMonitorSourcesAllowed } from "@/social/core/monitor-sources";
 import { getSocialAdapter } from "@/social/core/registry";
 import { TelegramAdapter } from "@/social/telegram/adapter";
@@ -53,6 +53,15 @@ describe("keyword matching and validation", () => {
       platform: "x",
       socialAccountId: null,
     }).success).toBe(false);
+  });
+
+  it("splits sources on newlines and commas and drops blanks", () => {
+    expect(parseSourceList("https://x.com/jack, https://t.me/durov\n  \nhttps://vk.com/durov")).toEqual([
+      "https://x.com/jack",
+      "https://t.me/durov",
+      "https://vk.com/durov",
+    ]);
+    expect(parseSourceList("")).toEqual([]);
   });
 });
 

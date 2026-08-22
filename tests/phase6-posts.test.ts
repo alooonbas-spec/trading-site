@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { canCancelPost, canDeletePost, canPublishPost, rollupPostStatus } from "@/lib/posts/status";
-import { createPostSchema, parseMediaList } from "@/lib/validation/post";
+import { createPostSchema, parseMediaList, parseScheduledAt } from "@/lib/validation/post";
 import { getSocialAdapter } from "@/social/core/registry";
 import { XAdapter } from "@/social/x/adapter";
 import { POST_STATUSES, POST_TARGET_STATUSES } from "@/types/status";
@@ -48,6 +48,13 @@ describe("post validation", () => {
       "https://example.com/a.jpg",
       "https://example.com/b.jpg",
     ]);
+  });
+
+  it("parses a scheduled time or returns null for blank input, and rejects garbage", () => {
+    expect(parseScheduledAt("")).toBeNull();
+    expect(parseScheduledAt("   ")).toBeNull();
+    expect(parseScheduledAt("2026-08-21T18:00:00.000Z")).toBe("2026-08-21T18:00:00.000Z");
+    expect(() => parseScheduledAt("not-a-date")).toThrow("Scheduled time is invalid");
   });
 });
 

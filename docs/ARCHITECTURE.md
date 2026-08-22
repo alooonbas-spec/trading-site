@@ -413,6 +413,10 @@ The Jobs page now shows a "Stale" badge next to a job's status when it is `RUNNI
 
 `cancelQueuedJob` now also accepts a stale `RUNNING` job (PHASE 74's same `isStaleRunningJob` predicate), not only `PENDING`/`RETRY`. The `UPDATE` re-checks `status = 'RUNNING' and locked_at < <threshold computed at call time>` instead of trusting the value already read into `job`, so a worker that finishes between the read and the cancel simply leaves the row no longer matching — the cancel becomes a no-op rather than clobbering a real result, the same silent-no-op behavior the existing PENDING/RETRY path already has for a job someone else already touched. `JobListItem.canCancel` is `canCancelJob(status) || isStale`, so the Jobs page "Cancel" button now also appears next to the PHASE 74 "Stale" badge. Cancel activity records `stale: true|false` in its metadata; no new SQL, no new activity action.
 
+## Validation schema test coverage (PHASE 76)
+
+An audit of every `lib/validation/*.ts` schema against `tests/*.ts` found several boundary schemas with no direct unit test: `createCampaignSchema`, and from `lib/validation/lead.ts` — `createSocialProfileSchema`, `createRelationshipSchema`, `createNoteSchema`, `mergeLeadsSchema`, `collectPublicProfileSchema`, `updateLeadSchema` — plus `parseScheduledAt` (post) and `parseSourceList` (monitoring) and `emptyToNull` (lead mapper). They were exercised only indirectly through whatever service called them, never asserted on directly. Tests only, no production code changed: each schema now has its own accept/reject cases in the existing `tests/campaigns.test.ts`, `tests/crm.test.ts`, `tests/phase6-posts.test.ts`, and `tests/phase7-monitoring.test.ts`.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

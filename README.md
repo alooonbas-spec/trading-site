@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 75: Stale job cancel. An operator can now cancel a Stale `RUNNING` job (PHASE 74's badge) directly from the Jobs page instead of waiting for `claim_jobs` to reclaim it. The cancel re-checks `locked_at` at update time so a worker that finishes in the meantime is not clobbered. No new SQL.
+PHASE 76: Validation schema test coverage. Several `lib/validation/*.ts` boundary schemas (`createCampaignSchema`, most of `lib/validation/lead.ts`, `parseScheduledAt`, `parseSourceList`, `emptyToNull`) had no direct unit test. Tests only, no production code changed.
