@@ -4,9 +4,12 @@ import { RateLimitError } from "@/lib/errors";
 import { AccountRateLimiter, windowStart } from "@/lib/jobs/account-rate-limiter";
 import {
   buildEnqueuePairs,
+  canCancelCampaign,
+  canPauseCampaign,
   canStartCampaign,
   isAdapterContactAction,
   jobStatusAfterError,
+  retryDelayMs,
 } from "@/lib/jobs/queue-rules";
 import { getSocialAdapter } from "@/social/core/registry";
 import { DEFAULT_ACCOUNT_RATE_LIMIT } from "@/social/core/base-adapter";
@@ -18,6 +21,31 @@ describe("campaign queue rules", () => {
     expect(canStartCampaign("PAUSED")).toBe(true);
     expect(canStartCampaign("RUNNING")).toBe(false);
     expect(canStartCampaign("COMPLETED")).toBe(false);
+  });
+
+  it("pauses only a RUNNING campaign", () => {
+    expect(canPauseCampaign("RUNNING")).toBe(true);
+    expect(canPauseCampaign("DRAFT")).toBe(false);
+    expect(canPauseCampaign("PAUSED")).toBe(false);
+    expect(canPauseCampaign("COMPLETED")).toBe(false);
+    expect(canPauseCampaign("CANCELLED")).toBe(false);
+  });
+
+  it("cancels a campaign that has not finished, not one already COMPLETED or CANCELLED", () => {
+    expect(canCancelCampaign("DRAFT")).toBe(true);
+    expect(canCancelCampaign("RUNNING")).toBe(true);
+    expect(canCancelCampaign("PAUSED")).toBe(true);
+    expect(canCancelCampaign("COMPLETED")).toBe(false);
+    expect(canCancelCampaign("CANCELLED")).toBe(false);
+  });
+
+  it("caps the exponential retry backoff at one hour", () => {
+    expect(retryDelayMs(1)).toBe(30_000);
+    expect(retryDelayMs(2)).toBe(60_000);
+    expect(retryDelayMs(3)).toBe(120_000);
+    expect(retryDelayMs(8)).toBe(60 * 60 * 1000);
+    expect(retryDelayMs(20)).toBe(60 * 60 * 1000);
+    expect(retryDelayMs(0)).toBe(30_000);
   });
 
   it("enqueues one job per lead/account pair on the same platform and skips DNC leads", () => {

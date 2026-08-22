@@ -499,6 +499,10 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 `isTinyFishConfigured` / `readTinyFishApiKey` had no direct test. Also added a regression guard: `SAFE_FETCH_PURPOSE` and `SAFE_SEARCH_PURPOSE` (the default purposes every TinyFish call sends) must never trip `isTinyFishGoalAllowed` themselves — nothing enforced that invariant before, so a future policy-pattern edit widened without care could have silently broken every TinyFish call by blocking the system's own default purpose text. Tests only, no production code changed.
 
+## Campaign status machine and retry backoff test coverage (PHASE 96)
+
+`canPauseCampaign`, `canCancelCampaign`, and `retryDelayMs` had no direct test — only `canStartCampaign` did, even though all four sit right next to each other in `lib/jobs/queue-rules.ts` and the pause/cancel machine gates the same Campaigns UI actions. `getTokenEncryptionKey` (the env-backed counterpart to PHASE 78's `encryptConnectResult`) also had none. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
