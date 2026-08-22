@@ -547,6 +547,10 @@ Added `VK_PERMALINK_PATTERN` (`/^(?:wall|photo|video|board|market|album|docs|aud
 
 Replaced the `PHOTO_EXTENSIONS` set and its inline ternary with a `PHOTO_EXTENSION_MIME` lookup table giving every photo extension its own correct mimeType. Real fix, not test-only — new cases in `tests/phase11-media.test.ts` assert `.bmp`/`.tif`/`.tiff` now classify as `image/bmp`/`image/tiff` rather than `image/jpeg`.
 
+## deriveTokenStatus boundary test coverage (PHASE 106)
+
+`deriveTokenStatus` (`lib/social/account-health.ts`) gates whether `prepareAccountAdapter` treats a social account's stored access token as usable or forces a refresh first — but only 3 of its 6 branches had a direct test (`CONNECTED` with no expiry, an already-past `tokenExpiresAt`, and `DISCONNECTED`). `REAUTH_REQUIRED`, `ERROR`, and the `EXPIRED` status itself had no test confirming they pass straight through regardless of `tokenExpiresAt`, nor did the exact `tokenExpiresAt === now` boundary (must already read as `EXPIRED`, not `CONNECTED`) or `isAccountOperable("ERROR")`. All new cases passed on the first run — this is coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

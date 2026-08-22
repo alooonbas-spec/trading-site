@@ -138,6 +138,34 @@ describe("account health", () => {
     ).toBe("EXPIRED");
     expect(deriveTokenStatus({ status: "DISCONNECTED", tokenExpiresAt: null })).toBe("MISSING");
   });
+
+  it("passes REAUTH_REQUIRED, ERROR, and EXPIRED statuses straight through regardless of tokenExpiresAt", () => {
+    // These three DB statuses short-circuit before the expiry check, so a
+    // stale tokenExpiresAt (or none at all) must not change the result.
+    expect(deriveTokenStatus({ status: "REAUTH_REQUIRED", tokenExpiresAt: null })).toBe("REAUTH_REQUIRED");
+    expect(
+      deriveTokenStatus({ status: "REAUTH_REQUIRED", tokenExpiresAt: "2099-01-01T00:00:00.000Z" }),
+    ).toBe("REAUTH_REQUIRED");
+    expect(deriveTokenStatus({ status: "ERROR", tokenExpiresAt: null })).toBe("ERROR");
+    expect(deriveTokenStatus({ status: "ERROR", tokenExpiresAt: "2099-01-01T00:00:00.000Z" })).toBe("ERROR");
+    expect(deriveTokenStatus({ status: "EXPIRED", tokenExpiresAt: null })).toBe("EXPIRED");
+    expect(deriveTokenStatus({ status: "EXPIRED", tokenExpiresAt: "2099-01-01T00:00:00.000Z" })).toBe("EXPIRED");
+  });
+
+  it("treats a token expiring at exactly `now` as already expired, and a not-yet-expired token as CONNECTED", () => {
+    const now = new Date("2026-08-22T00:00:00.000Z");
+    expect(
+      deriveTokenStatus({ status: "CONNECTED", tokenExpiresAt: "2026-08-22T00:00:00.000Z", now }),
+    ).toBe("EXPIRED");
+    expect(
+      deriveTokenStatus({ status: "CONNECTED", tokenExpiresAt: "2026-08-22T00:00:00.001Z", now }),
+    ).toBe("CONNECTED");
+  });
+
+  it("treats ERROR accounts as inoperable, matching DISCONNECTED and REAUTH_REQUIRED", () => {
+    expect(isAccountOperable("ERROR")).toBe(false);
+    expect(isAccountOperable("EXPIRED")).toBe(false);
+  });
 });
 
 describe("account selector filters", () => {

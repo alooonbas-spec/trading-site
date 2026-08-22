@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 105: `classifyMediaUrl` bmp/tiff mimeType fix. The extension-based mimeType fallback (used when no `Content-Type` header is available) mislabeled `.bmp`/`.tif`/`.tiff` URLs as `image/jpeg`, letting them slip past Instagram's jpeg/png-only publish validation instead of being rejected up front. Replaced the inline ternary with a full `PHOTO_EXTENSION_MIME` lookup table. Real production fix, with new coverage in `tests/phase11-media.test.ts`.
+PHASE 106: `deriveTokenStatus` boundary test coverage. This function gates whether a stored access token is usable or a refresh is forced first, but half its branches (`REAUTH_REQUIRED`, `ERROR`, `EXPIRED` passthrough, and the exact `tokenExpiresAt === now` boundary) had no direct test. All new cases passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.
