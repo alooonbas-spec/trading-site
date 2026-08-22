@@ -73,6 +73,17 @@ describe("public media URLs", () => {
     expect(classifyMediaUrl("https://cdn.example/a.zip").mimeType).toBe("application/zip");
   });
 
+  it("maps bmp and tif/tiff extensions to their own mime types, not a jpeg fallback", () => {
+    // The extension-based mimeType inference used to default anything that
+    // wasn't png/webp to "image/jpeg" -- including bmp and tif/tiff, which
+    // are real, distinct PHOTO_EXTENSION_MIME entries. That silently mislabeled
+    // bmp/tiff media as jpeg, letting it pass a platform's jpeg/png-only mime
+    // check (e.g. Instagram's) even though the actual bytes are not a jpeg.
+    expect(classifyMediaUrl("https://cdn.example/a.bmp").mimeType).toBe("image/bmp");
+    expect(classifyMediaUrl("https://cdn.example/a.tif").mimeType).toBe("image/tiff");
+    expect(classifyMediaUrl("https://cdn.example/a.tiff").mimeType).toBe("image/tiff");
+  });
+
   it("prefers an explicit content-type over the URL extension when both are present", () => {
     const classified = classifyMediaUrl("https://cdn.example/download?id=1", "image/png; charset=binary");
     expect(classified.kind).toBe("photo");

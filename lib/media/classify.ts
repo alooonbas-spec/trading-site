@@ -9,7 +9,15 @@ export type ClassifiedMedia = {
   mimeType: string;
 };
 
-const PHOTO_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff"]);
+const PHOTO_EXTENSION_MIME: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+};
 const GIF_EXTENSIONS = new Set(["gif"]);
 const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "m4v"]);
 const DOCUMENT_EXTENSIONS = new Set(["pdf", "zip"]);
@@ -50,12 +58,9 @@ export function classifyMediaUrl(source: string, contentType?: string | null): C
   }
 
   const extension = fileExtension(source);
-  if (PHOTO_EXTENSIONS.has(extension)) {
-    return {
-      url: source,
-      kind: "photo",
-      mimeType: extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg",
-    };
+  const photoMimeType = PHOTO_EXTENSION_MIME[extension];
+  if (photoMimeType) {
+    return { url: source, kind: "photo", mimeType: photoMimeType };
   }
   if (GIF_EXTENSIONS.has(extension)) {
     return { url: source, kind: "gif", mimeType: "image/gif" };

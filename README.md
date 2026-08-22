@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 104: `decodeXPageToken` test coverage. Writing a boundary test first surfaced that `Buffer.from(..., "base64url")` never throws on invalid input, so garbage decodes to garbage bytes rather than `null` — confirmed this is correct existing behavior (X's `pagination_token` is opaque, nothing of ours to validate), not a bug. Tests only, no production code changed.
+PHASE 105: `classifyMediaUrl` bmp/tiff mimeType fix. The extension-based mimeType fallback (used when no `Content-Type` header is available) mislabeled `.bmp`/`.tif`/`.tiff` URLs as `image/jpeg`, letting them slip past Instagram's jpeg/png-only publish validation instead of being rejected up front. Replaced the inline ternary with a full `PHOTO_EXTENSION_MIME` lookup table. Real production fix, with new coverage in `tests/phase11-media.test.ts`.
