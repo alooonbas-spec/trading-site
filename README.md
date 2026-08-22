@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 89: withUpdateStreamCursor test. Keeps `updateStreamCursor` and `inboxCursor` written in sync on a Telegram account's metadata (PHASE 15's invariant); had no direct test. Tests only, no production code changed.
+PHASE 90: downloadPublicMedia SSRF and size-limit test coverage. The public-media download pipeline behind VK/X publish had no direct test. New tests pin down that the private-IP host check re-runs on every redirect hop (not just the first URL) and that the size limit is enforced both from a declared content-length and the actual downloaded size. Tests only, no production code changed.

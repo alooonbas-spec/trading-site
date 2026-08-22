@@ -471,6 +471,10 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `withUpdateStreamCursor` is what keeps `updateStreamCursor` and `inboxCursor` written in sync on a Telegram account's metadata (PHASE 15's "kept in sync" invariant, consumed by `worker-service.ts`), but had no direct test — only the two read-side helpers (`laterUpdateStreamCursor`, `updateStreamCursorFromMetadata`) did. Tests only, no production code changed.
 
+## downloadPublicMedia SSRF and size-limit test coverage (PHASE 90)
+
+`downloadPublicMedia` is the media pipeline every VK/X publish call feeds a public URL through before uploading it to the platform — it had no direct test at all, only indirect coverage through publish end-to-end tests that never exercised its redirect or size-limit branches. New `tests/media-download.test.ts` pins down the parts that matter most: `assertPublicMediaHost` runs again on every redirect hop, not just the first URL, so a public URL that redirects to `169.254.169.254` (the cloud-provider instance-metadata endpoint) is refused mid-chain; `MAX_REDIRECTS` bounds the chain; and the size limit is enforced twice — once from a declared `content-length` before the body is read, and again from the actual downloaded size, so a response that under-declares its `content-length` still gets rejected. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
