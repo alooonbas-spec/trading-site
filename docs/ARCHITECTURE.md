@@ -447,6 +447,10 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `keysetOrFilter` interpolates `cursor.id` and `cursor.at` straight into a PostgREST `or=` filter string (`id.lt.<id>,created_at.eq."<at>"`) with no further escaping — every list page passes it whatever `parseKeysetCursor` returns from the fully attacker-controlled `after=` query parameter. `parseKeysetCursor`'s `z.uuid()` / strict ISO-instant schema is the only thing stopping a comma or quote in `id`/`at` from injecting extra PostgREST filter clauses (e.g. `id: "1,or(role.eq.OWNER)"`). This was previously tested only against obviously-malformed cursors, not against a cursor deliberately shaped to break out of the filter string. Tests only, no production code changed — the schema already rejected these; there was just no test pinning that down.
 
+## Inbox cursor helper test coverage (PHASE 84)
+
+`lib/inbox/cursor.ts` is the shared watermark/dedup logic every platform's inbox collector builds on (Facebook, Instagram, VK, X, Telegram), but it was only exercised indirectly through those adapters' end-to-end tests — half its functions (`isNamedInboxCursor`, `isDigitIdAfter`, `parseInboxTimestampMs`, `laterTimestampString`, `laterNamedValue`, `isReceivedAfterCursor`, `newestReceivedAt`, `uniqueInboxMessages`) had no test that called them directly. New `tests/inbox-cursor.test.ts` covers each one's actual boundary cases (BigInt-precision id comparison, the 10-digit-unix-seconds vs. ISO timestamp split, a Graph-style `+0000` offset with no colon, permissive fallbacks when a side is missing or unparseable). Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
