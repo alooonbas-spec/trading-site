@@ -6,7 +6,7 @@ import { isPrivateOrLocalIp, parsePublicMediaUrl } from "@/lib/media/public-url"
 import { TelegramAdapter, telegramMethodUrl } from "@/social/telegram/adapter";
 import { buildTelegramMediaPayload } from "@/social/telegram/media";
 import { XAdapter } from "@/social/x/adapter";
-import { X_MEDIA_INITIALIZE_URL } from "@/social/x/media-upload";
+import { uploadXMediaFromUrls, X_APPEND_CHUNK_BYTES, X_MEDIA_INITIALIZE_URL } from "@/social/x/media-upload";
 
 describe("public media URLs", () => {
   it("classifies common extensions", () => {
@@ -306,6 +306,75 @@ describe("X media publishing", () => {
     });
     expect(published.externalPostId).toBe("tweet-9");
     expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("splits an upload larger than X_APPEND_CHUNK_BYTES into multiple correctly-sized append calls", async () => {
+    const size = X_APPEND_CHUNK_BYTES + 1024 * 1024;
+    const video = Buffer.alloc(size, 7);
+    const appended: Array<{ segmentIndex: string; byteLength: number }> = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const target = String(url);
+      if (target === "https://example.com/big.mp4") {
+        return new Response(video, { status: 200, headers: { "content-type": "video/mp4" } });
+      }
+      if (target === X_MEDIA_INITIALIZE_URL) {
+        return new Response(JSON.stringify({ data: { id: "999" } }), { status: 200 });
+      }
+      if (target === "https://api.x.com/2/media/upload/999/append") {
+        const form = init?.body as FormData;
+        const segmentIndex = String(form.get("segment_index"));
+        const blob = form.get("media") as Blob;
+        appended.push({ segmentIndex, byteLength: blob.size });
+        return new Response(JSON.stringify({ data: {} }), { status: 200 });
+      }
+      if (target === "https://api.x.com/2/media/upload/999/finalize") {
+        return new Response(JSON.stringify({ data: { id: "999" } }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch ${target}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ids = await uploadXMediaFromUrls("x-token", ["https://example.com/big.mp4"]);
+    expect(ids).toEqual(["999"]);
+    expect(appended).toEqual([
+      { segmentIndex: "0", byteLength: X_APPEND_CHUNK_BYTES },
+      { segmentIndex: "1", byteLength: size - X_APPEND_CHUNK_BYTES },
+    ]);
+  });
+
+  it("rejects more than 4 media items, mixed kinds, more than one GIF or video, and any document", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const target = String(url);
+      const contentType = target.endsWith(".gif")
+        ? "image/gif"
+        : target.endsWith(".mp4")
+          ? "video/mp4"
+          : target.endsWith(".pdf")
+            ? "application/pdf"
+            : "image/jpeg";
+      return new Response(Buffer.from([1, 2, 3]), { status: 200, headers: { "content-type": contentType } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      uploadXMediaFromUrls("x-token", [
+        "https://example.com/a.jpg",
+        "https://example.com/b.jpg",
+        "https://example.com/c.jpg",
+        "https://example.com/d.jpg",
+        "https://example.com/e.jpg",
+      ]),
+    ).rejects.toThrow(ValidationError);
+    await expect(
+      uploadXMediaFromUrls("x-token", ["https://example.com/a.jpg", "https://example.com/b.mp4"]),
+    ).rejects.toThrow(ValidationError);
+    await expect(
+      uploadXMediaFromUrls("x-token", ["https://example.com/a.mp4", "https://example.com/b.mp4"]),
+    ).rejects.toThrow(ValidationError);
+    await expect(
+      uploadXMediaFromUrls("x-token", ["https://example.com/a.gif", "https://example.com/b.gif"]),
+    ).rejects.toThrow(ValidationError);
+    await expect(uploadXMediaFromUrls("x-token", ["https://example.com/a.pdf"])).rejects.toThrow(ValidationError);
   });
 });
 

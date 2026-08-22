@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 106: `deriveTokenStatus` boundary test coverage. This function gates whether a stored access token is usable or a refresh is forced first, but half its branches (`REAUTH_REQUIRED`, `ERROR`, `EXPIRED` passthrough, and the exact `tokenExpiresAt === now` boundary) had no direct test. All new cases passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.
+PHASE 107: `uploadXMediaFromUrls` test coverage. The X media-upload chunked-append loop and its item-count/mixed-kind/document validation had zero direct tests, only a single-image happy path through `XAdapter.publish`. New cases verify chunk splitting against a 5 MiB buffer (4 MiB chunk + 1 MiB remainder) and every rejection branch. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.
