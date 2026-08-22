@@ -495,6 +495,10 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 `assertMonitorSourcesAllowed` / `isOfficialMonitorHost` gate what hosts TinyFish is ever pointed at for a monitoring rule, but only checked the single primary domain per platform. New tests cover every documented mobile/regional alias (`fb.com`, `m.facebook.com`, `telegram.dog`, `vk.ru`, `mobile.twitter.com`, `m.instagram.com`, ...), that `www.` and case are normalized before matching, that a bare domain with no scheme still resolves, that a lookalike host (`t.me.evil.example`, `evil-t.me`) does not pass exact-match, and that a blank or unparseable source is rejected rather than silently skipped. Tests only, no production code changed — the allowlist already enforced all of this correctly.
 
+## TinyFish config and default-purpose test coverage (PHASE 95)
+
+`isTinyFishConfigured` / `readTinyFishApiKey` had no direct test. Also added a regression guard: `SAFE_FETCH_PURPOSE` and `SAFE_SEARCH_PURPOSE` (the default purposes every TinyFish call sends) must never trip `isTinyFishGoalAllowed` themselves — nothing enforced that invariant before, so a future policy-pattern edit widened without care could have silently broken every TinyFish call by blocking the system's own default purpose text. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

@@ -9,7 +9,8 @@ import {
   ValidationError,
 } from "@/lib/errors";
 import { fetchPublicContents } from "@/lib/tinyfish/client";
-import { TINYFISH_ENDPOINTS } from "@/lib/tinyfish/endpoints";
+import { isTinyFishConfigured, readTinyFishApiKey } from "@/lib/tinyfish/config";
+import { SAFE_FETCH_PURPOSE, SAFE_SEARCH_PURPOSE, TINYFISH_ENDPOINTS } from "@/lib/tinyfish/endpoints";
 import { assertAgentAutomationSafe, assertTinyFishGoalAllowed, isTinyFishGoalAllowed } from "@/lib/tinyfish/policy";
 import { getSocialAdapter } from "@/social/core/registry";
 import { resolveTelegramPublicProfile } from "@/social/telegram/public-profile";
@@ -97,6 +98,33 @@ describe("PHASE 5 TinyFish safety policy", () => {
 
   it("still blocks any mention of captcha at all, even without explicit solve/bypass language", () => {
     expect(isTinyFishGoalAllowed("List the captcha vendor named on the support page")).toBe(false);
+  });
+
+  it("never blocks its own default fetch/search purposes (a policy regression guard)", () => {
+    expect(isTinyFishGoalAllowed(SAFE_FETCH_PURPOSE)).toBe(true);
+    expect(isTinyFishGoalAllowed(SAFE_SEARCH_PURPOSE)).toBe(true);
+  });
+});
+
+describe("TinyFish API key configuration", () => {
+  afterEach(() => {
+    delete process.env.TINYFISH_API_KEY;
+  });
+
+  it("reports configured only when TINYFISH_API_KEY is set to something non-blank", () => {
+    delete process.env.TINYFISH_API_KEY;
+    expect(isTinyFishConfigured()).toBe(false);
+    process.env.TINYFISH_API_KEY = "   ";
+    expect(isTinyFishConfigured()).toBe(false);
+    process.env.TINYFISH_API_KEY = "tf-secret-key";
+    expect(isTinyFishConfigured()).toBe(true);
+  });
+
+  it("fails honestly instead of sending an empty X-API-Key when unconfigured", () => {
+    delete process.env.TINYFISH_API_KEY;
+    expect(() => readTinyFishApiKey()).toThrow(ValidationError);
+    process.env.TINYFISH_API_KEY = " tf-secret-key ";
+    expect(readTinyFishApiKey()).toBe("tf-secret-key");
   });
 });
 
