@@ -177,7 +177,7 @@ describe("PHASE 21 collector watermarks", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-c", "new-m"]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|messages:2026-08-21T11:00:00+0000|posts:done|ratings:done|ratingreplies:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|messages:2026-08-21T11:00:00+0000|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
   });
 

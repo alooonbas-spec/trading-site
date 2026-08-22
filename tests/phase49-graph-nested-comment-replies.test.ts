@@ -89,7 +89,7 @@ describe("PHASE 49 Graph comment-to-comment reply after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["c1", "r-new"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:${encodeGraphReplies({ c1: "reply-2" })}|posts:done|ratings:done|ratingreplies:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:${encodeGraphReplies({ c1: "reply-2" })}|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/c1/comments"))).toHaveLength(0);
 
@@ -100,7 +100,7 @@ describe("PHASE 49 Graph comment-to-comment reply after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["r-old"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|ratings:done|ratingreplies:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/c1/comments"))).toHaveLength(1);
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555_1/comments"))).toHaveLength(0);

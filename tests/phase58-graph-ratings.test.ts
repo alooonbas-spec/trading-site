@@ -82,7 +82,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      `creplies:done|posts:done|ratings:${encodeGraphAfter("rate-2")}|ratingreplies:done|replies:done|reviews:2026-08-21T12:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
+      `creplies:done|posts:done|ratingreplies:done|ratings:${encodeGraphAfter("rate-2")}|replies:done|reviews:2026-08-21T12:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -92,7 +92,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-story"]);
     expect(second.cursor).toBe(
-      "creplies:done|posts:done|ratings:done|ratingreplies:done|replies:done|reviews:2026-08-21T12:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "creplies:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T12:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/ratings"))).toHaveLength(3);
   });
@@ -141,7 +141,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-story"]);
     expect(result.cursor).toBe(
-      "creplies:done|posts:done|ratings:done|ratingreplies:done|replies:done|reviews:2026-08-21T09:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "creplies:done|posts:done|ratingreplies:done|ratings:done|replies:done|reviews:2026-08-21T09:00:00+0000|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/ratings"))).toHaveLength(1);
   });
@@ -194,7 +194,7 @@ describe("PHASE 58 Graph Page ratings after paging", () => {
     });
     expect(result.messages).toEqual([]);
     expect(result.cursor).toBe(
-      "creplies:done|posts:done|ratings:done|ratingreplies:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "creplies:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
   });
 
