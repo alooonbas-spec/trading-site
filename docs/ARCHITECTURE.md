@@ -559,6 +559,10 @@ Replaced the `PHOTO_EXTENSIONS` set and its inline ternary with a `PHOTO_EXTENSI
 
 `social/vk/publish.ts`'s `uploadWallVideo` (the `video.save` upload flow) had zero test coverage — only the wall-photo upload path (`photos.getWallUploadServer`/`photos.saveWallPhoto`) was exercised through `VkAdapter.publish`. `vkWallTarget` was also only tested for the negative (community) owner-id case; the explicit `"0"`/`"-0"` rejection, a positive (personal wall) owner id, and the no-metadata default were untested. New cases cover the full `video.save` → upload → `wall.post` flow (asserting the `video<ownerId>_<videoId>_<accessKey>` attachment string reaches `wall.post`) and the four `vkWallTarget` branches above. All passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
 
+## Facebook album/video and Instagram carousel/reel test coverage (PHASE 109)
+
+Four multi-step publish flows had zero end-to-end test coverage — only their single-item counterparts were tested: Facebook's photo-album path (`executeFacebookPublish`'s `photos` branch, which uploads each image unpublished then posts them together via `attached_media`) and its `/videos` endpoint; Instagram's carousel path (`executeInstagramPublish`'s per-image child-container creation followed by a `CAROUSEL` container referencing all children) and its `REELS` container path. New cases in `tests/phase12-meta-vk-publish.test.ts` drive each through the real adapter `.publish()` call with a mocked `fetch`, asserting the exact request bodies reaching Graph API at each step (`published=false` per photo, the `attached_media` JSON, `media_type=CAROUSEL` with a comma-joined `children` list, `media_type=REELS` with `video_url`) and the final external post id. All passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

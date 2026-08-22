@@ -119,6 +119,78 @@ describe("Facebook Page publishing", () => {
     });
     expect(published.externalPostId).toBe("555_12");
   });
+
+  it("uploads each photo unpublished, then posts them together as an album via attached_media", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const target = String(url);
+      if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
+        return new Response(
+          JSON.stringify({ data: [{ id: "555", name: "Hub Page", access_token: "page-token" }] }),
+          { status: 200 },
+        );
+      }
+      if (target === `${FACEBOOK_GRAPH_ORIGIN}/555/photos`) {
+        const body = String(init?.body);
+        expect(body).toContain("published=false");
+        if (body.includes("url=https%3A%2F%2Fcdn.example%2Fa.jpg")) {
+          return new Response(JSON.stringify({ id: "fbid-a" }), { status: 200 });
+        }
+        if (body.includes("url=https%3A%2F%2Fcdn.example%2Fb.png")) {
+          return new Response(JSON.stringify({ id: "fbid-b" }), { status: 200 });
+        }
+        throw new Error(`unexpected photos body ${body}`);
+      }
+      if (target === `${FACEBOOK_GRAPH_ORIGIN}/555/feed`) {
+        const body = String(init?.body);
+        expect(body).toContain("message=Album");
+        expect(decodeURIComponent(body)).toContain(
+          JSON.stringify([{ media_fbid: "fbid-a" }, { media_fbid: "fbid-b" }]),
+        );
+        return new Response(JSON.stringify({ id: "555_20" }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch ${target}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const published = await new FacebookAdapter({
+      accessToken: "user-token",
+      metadata: { pageId: "555" },
+    }).publish({
+      workspaceId: "w",
+      socialAccountId: "a",
+      body: "Album",
+      media: ["https://cdn.example/a.jpg", "https://cdn.example/b.png"],
+    });
+    expect(published.externalPostId).toBe("555_20");
+  });
+
+  it("publishes a video URL through the official Page videos endpoint", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const target = String(url);
+      if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
+        return new Response(
+          JSON.stringify({ data: [{ id: "555", name: "Hub Page", access_token: "page-token" }] }),
+          { status: 200 },
+        );
+      }
+      expect(target).toBe(`${FACEBOOK_GRAPH_ORIGIN}/555/videos`);
+      expect(String(init?.body)).toContain("file_url=https%3A%2F%2Fcdn.example%2Fclip.mp4");
+      expect(String(init?.body)).toContain("description=Watch+this");
+      return new Response(JSON.stringify({ id: "555_30" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const published = await new FacebookAdapter({
+      accessToken: "user-token",
+      metadata: { pageId: "555" },
+    }).publish({
+      workspaceId: "w",
+      socialAccountId: "a",
+      body: "Watch this",
+      media: ["https://cdn.example/clip.mp4"],
+    });
+    expect(published.externalPostId).toBe("555_30");
+  });
 });
 
 describe("Instagram content publishing", () => {
@@ -174,6 +246,80 @@ describe("Instagram content publishing", () => {
       media: ["https://cdn.example/photo.jpg"],
     });
     expect(published.externalPostId).toBe("media-9");
+  });
+
+  it("creates one child container per image, then a CAROUSEL container referencing all of them", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const target = String(url);
+      if (target === `${INSTAGRAM_GRAPH_ORIGIN}/1784/media` && init?.method === "POST") {
+        const body = String(init.body);
+        if (body.includes("is_carousel_item=true")) {
+          if (body.includes("image_url=https%3A%2F%2Fcdn.example%2Fa.jpg")) {
+            return new Response(JSON.stringify({ id: "child-a" }), { status: 200 });
+          }
+          if (body.includes("image_url=https%3A%2F%2Fcdn.example%2Fb.png")) {
+            return new Response(JSON.stringify({ id: "child-b" }), { status: 200 });
+          }
+          throw new Error(`unexpected carousel child body ${body}`);
+        }
+        expect(body).toContain("media_type=CAROUSEL");
+        expect(body).toContain("children=child-a%2Cchild-b");
+        expect(body).toContain("caption=Album");
+        return new Response(JSON.stringify({ id: "carousel-1" }), { status: 200 });
+      }
+      if (target.startsWith(`${INSTAGRAM_GRAPH_ORIGIN}/carousel-1?`)) {
+        return new Response(JSON.stringify({ status_code: "FINISHED" }), { status: 200 });
+      }
+      if (target === `${INSTAGRAM_GRAPH_ORIGIN}/1784/media_publish`) {
+        expect(String(init?.body)).toContain("creation_id=carousel-1");
+        return new Response(JSON.stringify({ id: "media-carousel" }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch ${target}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const published = await new InstagramAdapter({
+      accessToken: "ig-token",
+      metadata: { instagramUserId: "1784" },
+    }).publish({
+      workspaceId: "w",
+      socialAccountId: "a",
+      body: "Album",
+      media: ["https://cdn.example/a.jpg", "https://cdn.example/b.png"],
+    });
+    expect(published.externalPostId).toBe("media-carousel");
+  });
+
+  it("creates a REELS container with media_type and video_url, then publishes it", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const target = String(url);
+      if (target === `${INSTAGRAM_GRAPH_ORIGIN}/1784/media` && init?.method === "POST") {
+        const body = String(init.body);
+        expect(body).toContain("media_type=REELS");
+        expect(body).toContain("video_url=https%3A%2F%2Fcdn.example%2Fclip.mp4");
+        return new Response(JSON.stringify({ id: "reel-container" }), { status: 200 });
+      }
+      if (target.startsWith(`${INSTAGRAM_GRAPH_ORIGIN}/reel-container?`)) {
+        return new Response(JSON.stringify({ status_code: "FINISHED" }), { status: 200 });
+      }
+      if (target === `${INSTAGRAM_GRAPH_ORIGIN}/1784/media_publish`) {
+        expect(String(init?.body)).toContain("creation_id=reel-container");
+        return new Response(JSON.stringify({ id: "media-reel" }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch ${target}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const published = await new InstagramAdapter({
+      accessToken: "ig-token",
+      metadata: { instagramUserId: "1784" },
+    }).publish({
+      workspaceId: "w",
+      socialAccountId: "a",
+      body: "",
+      media: ["https://cdn.example/clip.mp4"],
+    });
+    expect(published.externalPostId).toBe("media-reel");
   });
 });
 
