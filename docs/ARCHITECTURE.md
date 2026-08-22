@@ -479,6 +479,12 @@ This is intentionally narrow: only a reply that points directly at the automatic
 
 `isPrivateOrLocalIp` and `parsePublicMediaUrl` (PHASE 90's underlying host guard) were checked on only a couple of obvious cases. New tests cover the ones most likely to matter in practice: the cloud instance-metadata IP `169.254.169.254`, the exact CIDR edges of the `172.16.0.0/12` private range (`172.15.255.255` public, `172.16.0.0` private, `172.31.255.255` private, `172.32.0.0` public), IPv6 loopback/link-local/unique-local addresses including an IPv4-mapped `::ffff:127.0.0.1`, the `metadata.google.internal` / `.internal` / `.local` hostname blocks, and rejection of non-http(s) schemes. Tests only, no production code changed.
 
+## TinyFish policy word-order fix (PHASE 92)
+
+Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) surfaced a real bypass: the rate-limit/evasion patterns only matched one word order (`rate limit ... bypass|circumvent|ignore|disable`, `evade ... rate limit|captcha|bot`), so a goal phrased the other way around — "circumvent the rate limit", "disable the rate limit" — slipped through untouched, even though the semantically identical "rate limit circumvent" was already blocked. Only the `bypass` pattern was already symmetric (matched both word orders).
+
+`CIRCUMVENTION_VERBS` and `PROTECTION_TARGETS` in `lib/tinyfish/policy.ts` now generate two symmetric patterns (verb-then-target, target-then-verb) covering `bypass|circumvent|evade|evasion|ignore|disable` against `bot|anti-bot|cloudflare|captcha|rate-limit|429`, replacing five ad-hoc, partly one-directional patterns. `circumvent` also gained its `-ing/-ed/-ion` inflections, matching the `evad(e|ing|es)` handling the code already had for evade. This is a real fix, not test-only — `assertTinyFishGoalAllowed("circumvent the rate limit")` now throws where it previously did not.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

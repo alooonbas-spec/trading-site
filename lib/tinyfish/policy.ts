@@ -1,5 +1,11 @@
 import { PolicyError } from "@/lib/errors";
 
+// Circumvention verbs and the protections they might target, matched in
+// either word order ("bypass the rate limit" and "rate limit bypass" alike)
+// so rephrasing alone cannot slip past the filter.
+const CIRCUMVENTION_VERBS = "bypass|circumvent(?:ing|ed|ion)?|evad(?:e|ing|es)|evasion|ignore|disable";
+const PROTECTION_TARGETS = "bot|anti[- ]?bot|cloudflare|captcha|rate[- ]?limit|429";
+
 const BLOCKED_GOAL_PATTERNS: readonly RegExp[] = [
   /\bcaptcha\b/i,
   /\brecaptcha\b/i,
@@ -7,13 +13,10 @@ const BLOCKED_GOAL_PATTERNS: readonly RegExp[] = [
   /\bturnstile\b/i,
   /\bstealth\b/i,
   /\banti[- ]?detect/i,
-  /\bbypass\b.{0,40}\b(bot|anti[- ]?bot|cloudflare|captcha|rate[- ]?limit)/i,
-  /\b(bot|anti[- ]?bot|cloudflare|captcha|rate[- ]?limit)\b.{0,40}\bbypass\b/i,
-  /\bevad(e|ing|es)\b.{0,40}\b(rate[- ]?limit|captcha|bot)/i,
-  /\bignore\b.{0,40}\b(429|rate[- ]?limit)/i,
+  new RegExp(`\\b(?:${CIRCUMVENTION_VERBS})\\b.{0,40}\\b(?:${PROTECTION_TARGETS})\\b`, "i"),
+  new RegExp(`\\b(?:${PROTECTION_TARGETS})\\b.{0,40}\\b(?:${CIRCUMVENTION_VERBS})\\b`, "i"),
   /\bsolve\b.{0,40}\bcaptcha\b/i,
   /\bcaptcha\b.{0,40}\bsolv/i,
-  /\brate[- ]?limit\b.{0,40}\b(bypass|circumvent|ignore|disable)/i,
 ];
 
 export function isTinyFishGoalAllowed(goal: string): boolean {

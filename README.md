@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 91: SSRF guard boundary test coverage. `isPrivateOrLocalIp` / `parsePublicMediaUrl` were checked on only a couple of obvious cases; new tests cover the cloud instance-metadata IP, exact 172.16.0.0/12 CIDR edges, IPv6 private ranges, and blocked hostname suffixes. Tests only, no production code changed.
+PHASE 92: TinyFish policy word-order fix. `isTinyFishGoalAllowed`'s rate-limit/evasion patterns only matched one word order, so "circumvent the rate limit" slipped through while "rate limit circumvent" was blocked. Real fix: `lib/tinyfish/policy.ts` now generates symmetric verb/target patterns covering both orders.

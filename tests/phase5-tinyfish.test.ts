@@ -57,6 +57,47 @@ describe("PHASE 5 TinyFish safety policy", () => {
     );
     expect(() => assertAgentAutomationSafe({ goal: "Extract title", browserProfile: "lite" })).not.toThrow();
   });
+
+  it("rejects the remaining blocked patterns not covered above", () => {
+    // recaptcha/hcaptcha/turnstile are separate patterns from \bcaptcha\b:
+    // \b requires a boundary before "captcha", and there is none between
+    // "re" and "captcha" in "recaptcha", so a shared word would miss it.
+    expect(() => assertTinyFishGoalAllowed("defeat the recaptcha widget")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("solve the hcaptcha challenge")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("get past the turnstile check")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("run in anti-detect mode")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("evade the rate limit entirely")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("captcha solving service")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("cloudflare bypass technique")).toThrow(PolicyError);
+  });
+
+  it("blocks a circumvention verb and its target in either word order, not just one", () => {
+    // A prior version of this policy only matched "rate limit ... circumvent"
+    // and "evade ... rate limit", so rephrasing to put the verb first ("evade")
+    // or the target first ("rate limit circumvent") could slip past. Both
+    // directions must be blocked for every verb/target pair, not just some.
+    expect(() => assertTinyFishGoalAllowed("circumvent the rate limit")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("rate limit circumvention")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("disable the rate limit")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("rate limit disable")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("rate limit evasion tactics")).toThrow(PolicyError);
+    expect(() => assertTinyFishGoalAllowed("429 ignore and retry immediately")).toThrow(PolicyError);
+  });
+
+  it("rejects a blank goal instead of treating it as harmless", () => {
+    expect(isTinyFishGoalAllowed("")).toBe(false);
+    expect(isTinyFishGoalAllowed("   ")).toBe(false);
+    expect(() => assertTinyFishGoalAllowed("")).toThrow(PolicyError);
+  });
+
+  it("does not over-block a legitimate goal that merely mentions rate limits with no bypass language", () => {
+    expect(isTinyFishGoalAllowed("Check the current rate limit status for this account")).toBe(true);
+    expect(isTinyFishGoalAllowed("Summarize the profile bio and pinned post")).toBe(true);
+  });
+
+  it("still blocks any mention of captcha at all, even without explicit solve/bypass language", () => {
+    expect(isTinyFishGoalAllowed("List the captcha vendor named on the support page")).toBe(false);
+  });
 });
 
 describe("official public profile URLs", () => {
