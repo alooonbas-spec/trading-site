@@ -86,7 +86,7 @@ describe("PHASE 64 Graph Facebook conversations folder=page_done", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-done-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:${encodeGraphAfter("done-2")}|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
+      `creplies:done|donethreads:${encodeGraphAfter("done-2")}|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -96,7 +96,7 @@ describe("PHASE 64 Graph Facebook conversations folder=page_done", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-done-m"]);
     expect(second.cursor).toBe(
-      "creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(
       fetchMock.mock.calls.filter(
@@ -160,7 +160,7 @@ describe("PHASE 64 Graph Facebook conversations folder=page_done", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-done-m"]);
     expect(result.cursor).toBe(
-      "creplies:done|donethreads:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "creplies:done|donethreads:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(
       fetchMock.mock.calls.filter(

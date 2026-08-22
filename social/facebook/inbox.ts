@@ -349,10 +349,11 @@ const facebookMessageEdgeSchema = z.object({
   paging: graphPagingSchema,
 });
 
-type FacebookConversationFolder = "other" | "page_done" | "pending";
+type FacebookConversationFolder = "other" | "page_done" | "pending" | "spam";
 const FACEBOOK_OTHER_CONVERSATION_FOLDER: FacebookConversationFolder = "other";
 const FACEBOOK_DONE_CONVERSATION_FOLDER: FacebookConversationFolder = "page_done";
 const FACEBOOK_PENDING_CONVERSATION_FOLDER: FacebookConversationFolder = "pending";
+const FACEBOOK_SPAM_CONVERSATION_FOLDER: FacebookConversationFolder = "spam";
 
 async function collectFacebookMessenger(
   page: FacebookPageAuth,
@@ -704,6 +705,7 @@ export async function collectFacebookInbox(
   const olderOtherAfter = decodeGraphAfter(cursor.otherthreads);
   const olderDoneAfter = decodeGraphAfter(cursor.donethreads);
   const olderPendingAfter = decodeGraphAfter(cursor.pendingthreads);
+  const olderSpamAfter = decodeGraphAfter(cursor.spamthreads);
   const olderPostsAfter = decodeGraphAfter(cursor.posts);
   const storedReplies = decodeGraphReplies(cursor.replies);
   const storedCreplies = decodeGraphReplies(cursor.creplies);
@@ -758,6 +760,8 @@ export async function collectFacebookInbox(
     olderDone,
     latestPending,
     olderPending,
+    latestSpam,
+    olderSpam,
     latestTagged,
     olderTagged,
     extraTaggedReplies,
@@ -785,6 +789,10 @@ export async function collectFacebookInbox(
       collectFacebookMessenger(page, null, FACEBOOK_PENDING_CONVERSATION_FOLDER),
       olderPendingAfter
         ? collectFacebookMessenger(page, olderPendingAfter, FACEBOOK_PENDING_CONVERSATION_FOLDER)
+        : Promise.resolve(emptyDirect),
+      collectFacebookMessenger(page, null, FACEBOOK_SPAM_CONVERSATION_FOLDER),
+      olderSpamAfter
+        ? collectFacebookMessenger(page, olderSpamAfter, FACEBOOK_SPAM_CONVERSATION_FOLDER)
         : Promise.resolve(emptyDirect),
       collectFacebookTagged(page),
       olderTaggedAfter ? collectFacebookTagged(page, olderTaggedAfter) : Promise.resolve(emptyTagged),
@@ -831,6 +839,8 @@ export async function collectFacebookInbox(
         ...olderDone.messages,
         ...filterMessagesAfterCursor(latestPending.messages, cursor.messages),
         ...olderPending.messages,
+        ...filterMessagesAfterCursor(latestSpam.messages, cursor.messages),
+        ...olderSpam.messages,
         ...extraThreadMsgs.messages,
       ]),
     ],
@@ -863,6 +873,8 @@ export async function collectFacebookInbox(
             ...olderDone.messages,
             ...latestPending.messages,
             ...olderPending.messages,
+            ...latestSpam.messages,
+            ...olderSpam.messages,
             ...extraThreadMsgs.messages,
           ]),
         ) ?? "",
@@ -883,6 +895,12 @@ export async function collectFacebookInbox(
         firstPageAfter: latestPending.nextAfter,
         olderPageAfter: olderPending.nextAfter,
         fetchedOlder: Boolean(olderPendingAfter),
+      }),
+      spamthreads: nextGraphAfterCursor({
+        stored: cursor.spamthreads,
+        firstPageAfter: latestSpam.nextAfter,
+        olderPageAfter: olderSpam.nextAfter,
+        fetchedOlder: Boolean(olderSpamAfter),
       }),
       posts: nextGraphAfterCursor({
         stored: cursor.posts,
@@ -957,6 +975,8 @@ export async function collectFacebookInbox(
           ...olderDone.threadAfters,
           ...latestPending.threadAfters,
           ...olderPending.threadAfters,
+          ...latestSpam.threadAfters,
+          ...olderSpam.threadAfters,
         },
         fetchedNextAfters: extraThreadMsgs.nextAfters,
         fetchedIds: extraThreadMsgs.fetchedIds,

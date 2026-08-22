@@ -5,12 +5,12 @@ import { FacebookAdapter } from "@/social/facebook/adapter";
 import { InstagramAdapter } from "@/social/instagram/adapter";
 import { INSTAGRAM_GRAPH_ORIGIN } from "@/social/instagram/publish";
 
-describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
+describe("PHASE 66 Graph Facebook conversations folder=spam", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("walks the next official Pending-folder after cursor and keeps older DMs", async () => {
+  it("walks the next official Spam-folder after cursor and keeps older DMs", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -28,14 +28,14 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/conversations`);
       expect(target).toContain("platform=MESSENGER");
-      if (target.includes("folder=") && !target.includes("folder=pending")) {
+      if (target.includes("folder=") && !target.includes("folder=spam")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (!target.includes("folder=pending")) {
+      if (!target.includes("folder=spam")) {
         expect(target).not.toContain("folder=");
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("after=pending-2")) {
+      if (target.includes("after=spam-2")) {
         return new Response(
           JSON.stringify({
             data: [
@@ -43,8 +43,8 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
                 messages: {
                   data: [
                     {
-                      id: "old-pending-m",
-                      message: "older pending folder",
+                      id: "old-spam-m",
+                      message: "older spam folder",
                       from: { id: "900", name: "Lead" },
                       created_time: "2026-08-20T09:00:00+0000",
                     },
@@ -64,8 +64,8 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
               messages: {
                 data: [
                   {
-                    id: "new-pending-m",
-                    message: "newer pending folder",
+                    id: "new-spam-m",
+                    message: "newer spam folder",
                     from: { id: "900", name: "Lead" },
                     created_time: "2026-08-21T12:00:00+0000",
                   },
@@ -73,7 +73,7 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
               },
             },
           ],
-          paging: { cursors: { after: "pending-2" } },
+          paging: { cursors: { after: "spam-2" } },
         }),
         { status: 200 },
       );
@@ -84,9 +84,9 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(first.messages.map((item) => item.externalId)).toEqual(["new-pending-m"]);
+    expect(first.messages.map((item) => item.externalId)).toEqual(["new-spam-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:${encodeGraphAfter("pending-2")}|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
+      `creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:${encodeGraphAfter("spam-2")}|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -94,18 +94,18 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
       socialAccountId: "a",
       cursor: first.cursor,
     });
-    expect(second.messages.map((item) => item.externalId)).toEqual(["old-pending-m"]);
+    expect(second.messages.map((item) => item.externalId)).toEqual(["old-spam-m"]);
     expect(second.cursor).toBe(
       "creplies:done|donethreads:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(
       fetchMock.mock.calls.filter(
-        ([url]) => String(url).includes("/555/conversations") && String(url).includes("folder=pending"),
+        ([url]) => String(url).includes("/555/conversations") && String(url).includes("folder=spam"),
       ),
     ).toHaveLength(3);
   });
 
-  it("skips Pending-folder after paging once pendingthreads:done is stored", async () => {
+  it("skips Spam-folder after paging once spamthreads:done is stored", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -122,14 +122,14 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/conversations`);
-      if (target.includes("folder=") && !target.includes("folder=pending")) {
+      if (target.includes("folder=") && !target.includes("folder=spam")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (!target.includes("folder=pending")) {
+      if (!target.includes("folder=spam")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("after=")) {
-        throw new Error(`unexpected Pending-folder after ${target}`);
+        throw new Error(`unexpected Spam-folder after ${target}`);
       }
       return new Response(
         JSON.stringify({
@@ -138,8 +138,8 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
               messages: {
                 data: [
                   {
-                    id: "new-pending-m",
-                    message: "newer pending folder",
+                    id: "new-spam-m",
+                    message: "newer spam folder",
                     from: { id: "900", name: "Lead" },
                     created_time: "2026-08-21T09:00:00+0000",
                   },
@@ -156,20 +156,20 @@ describe("PHASE 65 Graph Facebook conversations folder=pending", () => {
     const result = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "messages:2026-08-21T08:00:00+0000|pendingthreads:done|threads:done",
+      cursor: "messages:2026-08-21T08:00:00+0000|spamthreads:done|threads:done",
     });
-    expect(result.messages.map((item) => item.externalId)).toEqual(["new-pending-m"]);
+    expect(result.messages.map((item) => item.externalId)).toEqual(["new-spam-m"]);
     expect(result.cursor).toBe(
       "creplies:done|donethreads:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|pendingthreads:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(
       fetchMock.mock.calls.filter(
-        ([url]) => String(url).includes("/555/conversations") && String(url).includes("folder=pending"),
+        ([url]) => String(url).includes("/555/conversations") && String(url).includes("folder=spam"),
       ),
     ).toHaveLength(1);
   });
 
-  it("does not request folder=pending for Instagram inbox", async () => {
+  it("does not request folder=spam for Instagram inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.includes("folder=")) {
