@@ -5,7 +5,7 @@ import {
   UnsupportedActionError,
   ValidationError,
 } from "@/lib/errors";
-import { matchKeywords, parseKeywordList } from "@/lib/monitoring/keywords";
+import { matchKeywords, normalizeKeywords, parseKeywordList } from "@/lib/monitoring/keywords";
 import {
   canDisableMonitoringRule,
   canPauseMonitoringRule,
@@ -53,6 +53,11 @@ describe("keyword matching and validation", () => {
       platform: "x",
       socialAccountId: null,
     }).success).toBe(false);
+  });
+
+  it("dedupes keywords case-insensitively while keeping the first-seen casing", () => {
+    expect(normalizeKeywords(["Social", "social", " SOCIAL ", "hub", ""])).toEqual(["Social", "hub"]);
+    expect(normalizeKeywords([])).toEqual([]);
   });
 
   it("splits sources on newlines and commas and drops blanks", () => {

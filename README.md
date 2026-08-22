@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 86: Media classification test coverage. `classifyMediaUrl`'s content-type branch, its rejection path, and several extension-to-mime-type mappings had no test; `fileExtension` had none directly either. Tests only, no production code changed.
+PHASE 87: normalizeKeywords test coverage. The case-insensitive dedup logic underlying both `parseKeywordList` and `matchKeywords` had no direct test. Tests only, no production code changed.
