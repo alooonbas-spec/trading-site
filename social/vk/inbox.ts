@@ -80,6 +80,19 @@ const userPhotosSchema = z.object({
     .optional(),
 });
 
+const userPhotoCommentsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.number(),
+        from_id: z.number().optional(),
+        date: z.number().optional(),
+        text: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
 const photoCommentsSchema = z.object({
   items: z
     .array(
@@ -147,6 +160,7 @@ const VK_WALL_COMMENT_COUNT = "50";
 const VK_WALL_THREAD_COUNT = "10";
 const VK_MENTIONS_COUNT = "20";
 const VK_USER_PHOTOS_COUNT = "20";
+const VK_USER_PHOTO_COMMENT_COUNT = "50";
 const VK_PHOTO_COMMENT_COUNT = "50";
 const VK_VIDEO_COUNT = "10";
 const VK_VIDEO_COMMENT_COUNT = "50";
@@ -385,10 +399,7 @@ async function collectVkWallCommentInbox(
       ? photoPage.page * Number(VK_PHOTO_COMMENT_COUNT)
       : null;
   const userPhotoPage = vkOffsetCursor(named.userphotos);
-  const userPhotoOffset =
-    userPhotoPage.page !== 0 && userPhotoPage.page !== "done"
-      ? userPhotoPage.page * Number(VK_USER_PHOTOS_COUNT)
-      : null;
+  const userPhotoCommentsPage = vkOffsetCursor(named.userphotocomments);
   const videoPage = vkOffsetCursor(named.videos);
   const videocommentsPage = vkOffsetCursor(named.videocomments);
   const [
@@ -397,8 +408,7 @@ async function collectVkWallCommentInbox(
     olderMentions,
     latestPhotos,
     olderPhotos,
-    latestUserPhotos,
-    olderUserPhotos,
+    userPhotos,
     videoComments,
   ] = await Promise.all([
       collectVkWallComments(accessToken, metadata, parsed.wallPage, parsed.wallcommentsPage, named.wallthreads),
@@ -410,10 +420,7 @@ async function collectVkWallCommentInbox(
       photoOffset === null
         ? Promise.resolve(emptyVkMentionPage(true))
         : collectVkPhotoComments(accessToken, photoOffset),
-      collectVkUserPhotos(accessToken, 0),
-      userPhotoOffset === null
-        ? Promise.resolve(emptyVkMentionPage(true))
-        : collectVkUserPhotos(accessToken, userPhotoOffset),
+      collectVkUserPhotoInbox(accessToken, userPhotoPage.page, userPhotoCommentsPage.page),
       collectVkVideoComments(accessToken, videoPage.page, videocommentsPage.page, named.videothreads),
     ]);
   return {
@@ -422,8 +429,10 @@ async function collectVkWallCommentInbox(
       ...wallComments.older,
       ...filterMessagesAfterCursor(latestMentions.messages, named.mentions ?? null),
       ...olderMentions.messages,
-      ...filterMessagesAfterCursor(latestUserPhotos.messages, named.phototags ?? null),
-      ...olderUserPhotos.messages,
+      ...filterMessagesAfterCursor(userPhotos.latestMentions, named.phototags ?? null),
+      ...userPhotos.olderMentions,
+      ...filterMessagesAfterCursor(userPhotos.latestComments, named.userphoto ?? null),
+      ...userPhotos.olderComments,
       ...filterMessagesAfterCursor(latestPhotos.messages, named.photos ?? null),
       ...olderPhotos.messages,
       ...filterMessagesAfterCursor(videoComments.latest, named.video ?? null),
@@ -444,9 +453,15 @@ async function collectVkWallCommentInbox(
       phototags:
         laterDigitId(
           named.phototags,
-          newestVkCommentUnix([...latestUserPhotos.messages, ...olderUserPhotos.messages]),
+          newestVkCommentUnix([...userPhotos.latestMentions, ...userPhotos.olderMentions]),
         ) ?? "",
-      userphotos: nextVkOffsetCursor(userPhotoPage.page, olderUserPhotos.reachedEnd),
+      userphoto:
+        laterDigitId(
+          named.userphoto,
+          newestVkCommentUnix([...userPhotos.latestComments, ...userPhotos.olderComments]),
+        ) ?? "",
+      userphotocomments: nextVkOffsetCursor(userPhotoCommentsPage.page, userPhotos.commentsReachedEnd),
+      userphotos: nextVkOffsetCursor(userPhotoPage.page, userPhotos.reachedEnd),
       video:
         laterDigitId(named.video, newestVkCommentUnix([...videoComments.latest, ...videoComments.older])) ?? "",
       videocomments: nextVkOffsetCursor(videocommentsPage.page, videoComments.commentsReachedEnd),
@@ -504,10 +519,67 @@ function emptyVkMentionPage(reachedEnd: boolean): { messages: InboxMessage[]; re
   return { messages: [], reachedEnd };
 }
 
-async function collectVkUserPhotos(
+type VkUserPhoto = {
+  id: number;
+  owner_id?: number;
+  date?: number;
+  text?: string;
+};
+
+async function collectVkUserPhotoInbox(
+  accessToken: string,
+  userPhotoPage: VkOffsetPage,
+  commentsPage: VkOffsetPage,
+): Promise<{
+  latestMentions: InboxMessage[];
+  olderMentions: InboxMessage[];
+  latestComments: InboxMessage[];
+  olderComments: InboxMessage[];
+  reachedEnd: boolean;
+  commentsReachedEnd: boolean;
+}> {
+  const photoOffset =
+    userPhotoPage !== 0 && userPhotoPage !== "done" ? userPhotoPage * Number(VK_USER_PHOTOS_COUNT) : null;
+  const commentOffset =
+    commentsPage !== 0 && commentsPage !== "done"
+      ? commentsPage * Number(VK_USER_PHOTO_COMMENT_COUNT)
+      : null;
+  const [latestPhotos, olderPhotos] = await Promise.all([
+    listVkUserPhotos(accessToken, 0),
+    photoOffset === null
+      ? Promise.resolve(emptyVkUserPhotos(true))
+      : listVkUserPhotos(accessToken, photoOffset),
+  ]);
+  const commentPhotos = [...latestPhotos.photos, ...olderPhotos.photos];
+  const [latestComments, olderPhotoComments, extraComments] = await Promise.all([
+    collectVkCommentsForUserPhotos(accessToken, latestPhotos.photos, 0),
+    collectVkCommentsForUserPhotos(accessToken, olderPhotos.photos, 0),
+    commentOffset === null
+      ? Promise.resolve(emptyVkUserPhotoCommentPage(true))
+      : collectVkCommentsForUserPhotos(accessToken, commentPhotos, commentOffset),
+  ]);
+  return {
+    latestMentions: vkUserPhotosToMentions(latestPhotos.photos),
+    olderMentions: vkUserPhotosToMentions(olderPhotos.photos),
+    latestComments: latestComments.messages,
+    olderComments: uniqueInboxMessages([...olderPhotoComments.messages, ...extraComments.messages]),
+    reachedEnd: olderPhotos.reachedEnd,
+    commentsReachedEnd: extraComments.reachedEnd,
+  };
+}
+
+function emptyVkUserPhotos(reachedEnd: boolean): { photos: VkUserPhoto[]; reachedEnd: boolean } {
+  return { photos: [], reachedEnd };
+}
+
+function emptyVkUserPhotoCommentPage(reachedEnd: boolean): { messages: InboxMessage[]; reachedEnd: boolean } {
+  return { messages: [], reachedEnd };
+}
+
+async function listVkUserPhotos(
   accessToken: string,
   offset: number,
-): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+): Promise<{ photos: VkUserPhoto[]; reachedEnd: boolean }> {
   const pageSize = Number(VK_USER_PHOTOS_COUNT);
   const params: Record<string, string> = {
     access_token: accessToken,
@@ -521,8 +593,13 @@ async function collectVkUserPhotos(
   if (!parsed.success) {
     throw new SocialError("VK photos.getUserPhotos returned an unexpected payload");
   }
+  const photos = parsed.data.items ?? [];
+  return { photos, reachedEnd: photos.length < pageSize };
+}
+
+function vkUserPhotosToMentions(photos: VkUserPhoto[]): InboxMessage[] {
   const messages: InboxMessage[] = [];
-  for (const photo of parsed.data.items ?? []) {
+  for (const photo of photos) {
     const text = photo.text?.trim();
     const ownerId = photo.owner_id;
     if (!text || ownerId === undefined) {
@@ -538,10 +615,57 @@ async function collectVkUserPhotos(
       replyKind: "mention",
     });
   }
-  return {
-    messages,
-    reachedEnd: (parsed.data.items ?? []).length < pageSize,
-  };
+  return messages;
+}
+
+async function collectVkCommentsForUserPhotos(
+  accessToken: string,
+  photos: VkUserPhoto[],
+  offset: number,
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+  const pageSize = Number(VK_USER_PHOTO_COMMENT_COUNT);
+  const messages: InboxMessage[] = [];
+  let reachedEnd = true;
+  for (const photo of photos) {
+    const ownerId = photo.owner_id;
+    if (ownerId === undefined) {
+      continue;
+    }
+    const params: Record<string, string> = {
+      access_token: accessToken,
+      owner_id: String(ownerId),
+      photo_id: String(photo.id),
+      count: VK_USER_PHOTO_COMMENT_COUNT,
+      sort: "desc",
+    };
+    if (offset > 0) {
+      params.offset = String(offset);
+    }
+    const payload = await vkCall("photos.getComments", params);
+    const parsed = userPhotoCommentsSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new SocialError("VK photos.getComments returned an unexpected payload");
+    }
+    if ((parsed.data.items ?? []).length >= pageSize) {
+      reachedEnd = false;
+    }
+    for (const comment of parsed.data.items ?? []) {
+      const text = comment.text?.trim();
+      if (!text || comment.from_id === undefined) {
+        continue;
+      }
+      messages.push({
+        externalId: `phototag:${ownerId}:${photo.id}:${comment.id}`,
+        externalProfileId: String(comment.from_id),
+        username: null,
+        body: text,
+        url: `https://vk.com/photo${ownerId}_${photo.id}?reply=${comment.id}`,
+        receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
+        replyKind: "comment",
+      });
+    }
+  }
+  return { messages, reachedEnd: photos.length === 0 ? true : reachedEnd };
 }
 
 async function collectVkPhotoComments(
@@ -1275,6 +1399,32 @@ export function parseVkInboxPhotoTagRef(externalId: string): {
   return { ownerId, photoId };
 }
 
+export function parseVkInboxPhotoTagCommentRef(externalId: string): {
+  ownerId: string;
+  photoId: string;
+  commentId: string;
+} {
+  const parts = externalId.split(":");
+  const ownerId = parts[1];
+  const photoId = parts[2];
+  const commentId = parts[3];
+  if (
+    parts[0] !== "phototag" ||
+    parts.length !== 4 ||
+    !ownerId ||
+    !photoId ||
+    !commentId ||
+    !/^-?\d+$/.test(ownerId) ||
+    !/^\d+$/.test(photoId) ||
+    !/^\d+$/.test(commentId)
+  ) {
+    throw new ValidationError(
+      "VK tagged photo comment replies require owner, photo, and comment ids from photos.getComments",
+    );
+  }
+  return { ownerId, photoId, commentId };
+}
+
 export function parseVkInboxPhotoCommentRef(externalId: string): {
   photoId: string;
   commentId: string;
@@ -1383,6 +1533,30 @@ export async function replyToVkPhotoTag(
     access_token: accessToken,
     owner_id: ref.ownerId,
     photo_id: ref.photoId,
+    message: text,
+  });
+  const parsed = z.number().safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK photos.createComment returned an unexpected payload");
+  }
+  return { externalMessageId: String(parsed.data) };
+}
+
+export async function replyToVkUserPhotoComment(
+  accessToken: string,
+  input: { externalId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("VK tagged photo comment replies require a body");
+  }
+
+  const ref = parseVkInboxPhotoTagCommentRef(input.externalId);
+  const payload = await vkCall("photos.createComment", {
+    access_token: accessToken,
+    owner_id: ref.ownerId,
+    photo_id: ref.photoId,
+    reply_to_comment: ref.commentId,
     message: text,
   });
   const parsed = z.number().safeParse(payload);

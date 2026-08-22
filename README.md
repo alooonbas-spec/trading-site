@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 61: Official VK `photos.getUserPhotos` tagged-photo mentions for user OAuth (`userphotos` offset, `phototags` watermark). No new SQL.
+PHASE 62: Official VK `photos.getComments` on tagged photos from `photos.getUserPhotos` (`userphotocomments` offset, `userphoto` watermark). No new SQL.

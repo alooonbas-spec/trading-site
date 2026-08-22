@@ -43,7 +43,7 @@ describe("PHASE 52 VK photos.getAllComments", () => {
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos")) {
+      if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
@@ -88,7 +88,7 @@ describe("PHASE 52 VK photos.getAllComments", () => {
         replyKind: "comment",
       },
     ]);
-    expect(first.cursor).toBe("mentionpages:1|photocomments:1|photos:1710000200|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
+    expect(first.cursor).toBe("mentionpages:1|photocomments:1|photos:1710000200|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toHaveLength(1);
@@ -99,7 +99,7 @@ describe("PHASE 52 VK photos.getAllComments", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `photo:${item.pid}:${item.id}`));
-    expect(second.cursor).toBe("mentionpages:done|photocomments:2|photos:1710000200|userphotos:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done");
+    expect(second.cursor).toBe("mentionpages:done|photocomments:2|photos:1710000200|userphotocomments:done|userphotos:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toHaveLength(3);
@@ -112,7 +112,7 @@ describe("PHASE 52 VK photos.getAllComments", () => {
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos")) {
+      if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
@@ -140,7 +140,7 @@ describe("PHASE 52 VK photos.getAllComments", () => {
       cursor: "photocomments:done|photos:1710000000",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["photo:9:81"]);
-    expect(result.cursor).toBe("mentionpages:1|photocomments:done|photos:1710000081|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("mentionpages:1|photocomments:done|photos:1710000081|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
     ).toHaveLength(1);
@@ -149,7 +149,7 @@ describe("PHASE 52 VK photos.getAllComments", () => {
   it("does not call photos.getAllComments for community inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos")) {
+      if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
         throw new Error("community inbox must not call photos.getAllComments");
       }
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
