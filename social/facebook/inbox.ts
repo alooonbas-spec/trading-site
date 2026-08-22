@@ -554,6 +554,68 @@ async function collectFacebookTagged(
   return { messages, commentMessages, nextAfter: graphPagingAfter(payload), repliesAfter, crepliesAfter };
 }
 
+const facebookRatingsSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        created_time: z.string().optional(),
+        review_text: z.string().optional(),
+        reviewer: z
+          .object({
+            id: z.union([z.string(), z.number()]).optional(),
+            name: z.string().optional(),
+          })
+          .optional(),
+        open_graph_story: z
+          .object({
+            id: z.string().min(1).optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+  paging: graphPagingSchema,
+});
+
+async function collectFacebookRatings(
+  page: FacebookPageAuth,
+  after?: string | null,
+): Promise<{ messages: InboxMessage[]; nextAfter: string | null }> {
+  const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/ratings`);
+  url.searchParams.set("fields", "created_time,review_text,reviewer,open_graph_story");
+  url.searchParams.set("limit", "10");
+  url.searchParams.set("access_token", page.accessToken);
+  if (after) {
+    url.searchParams.set("after", after);
+  }
+  const response = await socialFetch(url.toString());
+  const payload = await readJson<unknown>(response);
+  throwIfGraphError(payload);
+  const parsed = facebookRatingsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("Facebook Page ratings returned an unexpected payload");
+  }
+  const messages: InboxMessage[] = [];
+  for (const rating of parsed.data.data ?? []) {
+    const storyId = rating.open_graph_story?.id?.trim();
+    const fromId = rating.reviewer?.id !== undefined ? String(rating.reviewer.id) : "";
+    const text = rating.review_text?.trim();
+    if (!storyId || !GRAPH_OBJECT_ID.test(storyId) || !fromId || !text) {
+      continue;
+    }
+    messages.push({
+      externalId: storyId,
+      externalProfileId: fromId,
+      username: rating.reviewer?.name ?? null,
+      body: text,
+      url: `https://www.facebook.com/${storyId}`,
+      receivedAt: rating.created_time ?? null,
+      replyKind: "comment",
+    });
+  }
+  return { messages, nextAfter: graphPagingAfter(payload) };
+}
+
 export async function collectFacebookInbox(
   userAccessToken: string,
   metadata: Record<string, unknown> | undefined,
@@ -568,6 +630,7 @@ export async function collectFacebookInbox(
   const storedThreadMsgs = decodeGraphReplies(cursor.threadmsgs);
   const olderTaggedAfter = decodeGraphAfter(cursor.tagged);
   const storedTaggedReplies = decodeGraphReplies(cursor.taggedreplies);
+  const olderRatingsAfter = decodeGraphAfter(cursor.ratings);
   const emptyPage = {
     messages: [] as InboxMessage[],
     nextAfter: null,
@@ -593,6 +656,7 @@ export async function collectFacebookInbox(
     repliesAfter: {} as GraphRepliesMap,
     crepliesAfter: {} as GraphRepliesMap,
   };
+  const emptyRatings = { messages: [] as InboxMessage[], nextAfter: null };
   const [
     latestComments,
     olderComments,
@@ -604,6 +668,8 @@ export async function collectFacebookInbox(
     latestTagged,
     olderTagged,
     extraTaggedReplies,
+    latestRatings,
+    olderRatings,
   ] = await Promise.all([
       collectFacebookComments(page),
       olderPostsAfter ? collectFacebookComments(page, olderPostsAfter) : Promise.resolve(emptyPage),
@@ -619,6 +685,8 @@ export async function collectFacebookInbox(
       storedTaggedReplies
         ? collectFacebookCommentReplies(page, storedTaggedReplies)
         : Promise.resolve(emptyReplies),
+      collectFacebookRatings(page),
+      olderRatingsAfter ? collectFacebookRatings(page, olderRatingsAfter) : Promise.resolve(emptyRatings),
     ]);
   const comments = uniqueInboxMessages([
     ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
@@ -637,6 +705,10 @@ export async function collectFacebookInbox(
       ...uniqueInboxMessages([
         ...filterMessagesAfterCursor(latestTagged.messages, cursor.mentions),
         ...olderTagged.messages,
+      ]),
+      ...uniqueInboxMessages([
+        ...filterMessagesAfterCursor(latestRatings.messages, cursor.reviews),
+        ...olderRatings.messages,
       ]),
       ...uniqueInboxMessages([
         ...filterMessagesAfterCursor(latestMessages, cursor.messages),
@@ -669,12 +741,23 @@ export async function collectFacebookInbox(
         olderPageAfter: olderComments.nextAfter,
         fetchedOlder: Boolean(olderPostsAfter),
       }),
+      ratings: nextGraphAfterCursor({
+        stored: cursor.ratings,
+        firstPageAfter: latestRatings.nextAfter,
+        olderPageAfter: olderRatings.nextAfter,
+        fetchedOlder: Boolean(olderRatingsAfter),
+      }),
       replies: nextGraphRepliesCursor({
         stored: cursor.replies,
         nestedAfters: { ...latestComments.repliesAfter, ...olderComments.repliesAfter },
         fetchedNextAfters: extraReplies.nextAfters,
         fetchedIds: extraReplies.fetchedIds,
       }),
+      reviews:
+        laterTimestampString(
+          cursor.reviews,
+          newestReceivedAt([...latestRatings.messages, ...olderRatings.messages]),
+        ) ?? "",
       creplies: nextGraphRepliesCursor({
         stored: cursor.creplies,
         nestedAfters: {

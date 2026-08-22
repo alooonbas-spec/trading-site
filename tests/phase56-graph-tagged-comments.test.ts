@@ -24,6 +24,9 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
       if (target.includes("/555/feed") || target.includes("/555/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
+      if (target.includes("/555/ratings")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       if (target.includes("/555_1/comments")) {
         throw new Error(`unexpected feed comments after ${target}`);
       }
@@ -87,7 +90,7 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
       replyKind: "comment",
     });
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|taggedreplies:${encodeGraphReplies({ tag1: "tag-cmt-2" })}|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|ratings:done|replies:done|tagged:done|taggedreplies:${encodeGraphReplies({ tag1: "tag-cmt-2" })}|threadmsgs:done|threads:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/tag1/comments"))).toHaveLength(0);
 
@@ -98,7 +101,7 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-tag-c"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/tag1/comments"))).toHaveLength(1);
   });
@@ -170,6 +173,9 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
       if (target.includes("/555/feed") || target.includes("/555/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
+      if (target.includes("/555/ratings")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/tagged`);
       return new Response(
         JSON.stringify({
@@ -212,7 +218,7 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|posts:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
   });
 

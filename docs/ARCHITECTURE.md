@@ -339,6 +339,10 @@ Facebook `/tagged` and Instagram `/tags` request nested `comments.limit(50)` on 
 
 Tagged Facebook comments request nested `comments.limit(25)` and tagged Instagram comments request nested `replies`, the same edges as feed/media in PHASE 49. Extra PHASE 56 tagged-comment pages also request those nested edges so newly discovered tagged comments can seed `creplies`. Later polls still request `GET /{comment-id}/comments?after=` (Facebook, `limit=25`) or `GET /{comment-id}/replies?after=` (Instagram, `limit=25`). Extra nested-reply pages are not dropped by the `comments` timestamp watermark. This reuses the existing `creplies` map rather than a second cursor. Collectors still do not fetch `paging.next` URLs.
 
+## Graph Page ratings (PHASE 58)
+
+Facebook `GET /{page-id}/ratings` collects Page recommendations. Each poll still reads the latest 10 ratings. Reviews without `open_graph_story.id`, a reviewer id, or `review_text` are skipped (no invented ids). Extra rating pages follow official Graph `after`, stored base64url-encoded in `ratings`, independently of the `reviews` timestamp watermark. A short page stores `ratings:done`. Replies use official `POST /{open_graph_story.id}/comments`, the same path as other Facebook comment replies. `pages_read_user_content` is already granted. Instagram has no ratings edge. Collectors still do not fetch `paging.next` URLs.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

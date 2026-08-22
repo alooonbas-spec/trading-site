@@ -22,6 +22,9 @@ describe("PHASE 57 Graph nested replies on tagged comments", () => {
       if (target.includes("/555/feed") || target.includes("/555/conversations")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
+      if (target.includes("/555/ratings")) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       if (target.includes("/555_1/comments") || target.includes("/tag1/comments")) {
         throw new Error(`unexpected post comments after ${target}`);
       }
@@ -90,7 +93,7 @@ describe("PHASE 57 Graph nested replies on tagged comments", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["tagc1", "tagr-new", "tag1"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:${encodeGraphReplies({ tagc1: "tag-reply-2" })}|mentions:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:${encodeGraphReplies({ tagc1: "tag-reply-2" })}|mentions:2026-08-21T12:00:00+0000|posts:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/tagc1/comments"))).toHaveLength(0);
 
@@ -101,7 +104,7 @@ describe("PHASE 57 Graph nested replies on tagged comments", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["tagr-old"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|mentions:2026-08-21T12:00:00+0000|posts:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/tagc1/comments"))).toHaveLength(1);
   });

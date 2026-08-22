@@ -111,7 +111,7 @@ describe("PHASE 21 collector watermarks", () => {
             { status: 200 },
           );
         }
-        if (target.includes("/555/tagged")) {
+        if (target.includes("/555/tagged") || target.includes("/555/ratings")) {
           return new Response(JSON.stringify({ data: [] }), { status: 200 });
         }
         if (target.includes("/555/feed")) {
@@ -177,7 +177,7 @@ describe("PHASE 21 collector watermarks", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-c", "new-m"]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|messages:2026-08-21T11:00:00+0000|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|messages:2026-08-21T11:00:00+0000|posts:done|ratings:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
   });
 

@@ -66,7 +66,7 @@ describe("PHASE 18 Facebook Messenger", () => {
           { status: 200 },
         );
       }
-      if (target.includes("/555/tagged")) {
+      if (target.includes("/555/tagged") || target.includes("/555/ratings")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("/555/feed")) {
