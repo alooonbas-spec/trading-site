@@ -64,6 +64,12 @@ export function buildTelegramMediaPayload(input: {
   });
   const caption = telegramCaption(input.body);
   const kinds = new Set(items.map(telegramKind));
+  // sendMediaGroup only accepts InputMediaAudio, InputMediaDocument,
+  // InputMediaPhoto, and InputMediaVideo -- animation (GIF) has no group
+  // form at all and must go through the single-item sendAnimation below.
+  if (kinds.has("gif") && items.length > 1) {
+    throw new ValidationError("Telegram GIFs cannot be sent as part of a media group");
+  }
   if (kinds.has("document") && kinds.size > 1) {
     throw new ValidationError("Telegram documents cannot be mixed with photos or videos");
   }

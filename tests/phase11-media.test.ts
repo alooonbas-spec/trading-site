@@ -119,6 +119,55 @@ describe("Telegram media publishing", () => {
     });
   });
 
+  it("groups photos and videos into a single sendMediaGroup, not documents or GIFs", () => {
+    expect(
+      buildTelegramMediaPayload({
+        chatId: "@hub_channel",
+        body: "Launch week",
+        media: ["https://cdn.example/a.jpg", "https://cdn.example/b.mp4"],
+      }),
+    ).toEqual({
+      method: "sendMediaGroup",
+      body: {
+        chat_id: "@hub_channel",
+        media: [
+          { type: "photo", media: "https://cdn.example/a.jpg", caption: "Launch week" },
+          { type: "video", media: "https://cdn.example/b.mp4" },
+        ],
+      },
+    });
+  });
+
+  it("rejects a GIF grouped with any other media, including another GIF", () => {
+    // sendMediaGroup only accepts InputMediaAudio/Document/Photo/Video --
+    // Telegram has no group form of animation at all, unlike documents,
+    // which are only barred from mixing with photos/videos.
+    expect(() =>
+      buildTelegramMediaPayload({
+        chatId: "@hub_channel",
+        body: "",
+        media: ["https://cdn.example/a.gif", "https://cdn.example/b.jpg"],
+      }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      buildTelegramMediaPayload({
+        chatId: "@hub_channel",
+        body: "",
+        media: ["https://cdn.example/a.gif", "https://cdn.example/b.gif"],
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it("rejects a document grouped with a photo or video", () => {
+    expect(() =>
+      buildTelegramMediaPayload({
+        chatId: "@hub_channel",
+        body: "",
+        media: ["https://cdn.example/a.pdf", "https://cdn.example/b.jpg"],
+      }),
+    ).toThrow(ValidationError);
+  });
+
   it("publishes a photo through official sendPhoto", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(url).toBe(telegramMethodUrl("123456:ABC-token_value", "sendPhoto"));

@@ -519,6 +519,12 @@ Writing boundary tests for `isTinyFishGoalAllowed` (PHASE 5's safety policy) sur
 
 `social/vk/thread-paging.ts` is the merge/watermark logic behind PHASE 54/55's VK wall and video nested-comment-thread walkers, structurally the VK counterpart to Facebook's `graph-paging.ts` (already covered directly since early phases) — but it had never been tested directly, only indirectly through the two adapter end-to-end tests. New `tests/vk-thread-paging.test.ts` covers `encodeVkThreadMap`/`decodeVkThreadMap` round-tripping and its filtering (malformed thread id, non-numeric or zero page, the `VK_THREAD_FETCH_LIMIT` cap), `parseVkThreadId`, and every branch of `nextVkThreadCursor`'s merge (a stored-but-unfetched thread survives untouched, a fetched thread's page updates to its new next-after, an exhausted fetched thread is dropped, a newly discovered thread is added, and stale `nestedAfters` cannot resurrect an already-stored thread). All 15 cases passed on the first run — this is coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
 
+## Telegram sendMediaGroup GIF fix (PHASE 101)
+
+`buildTelegramMediaPayload` in `social/telegram/media.ts` already blocked mixing documents with photos/videos in a `sendMediaGroup` call, but let GIFs through into a group untouched. Per the Telegram Bot API, `sendMediaGroup`'s `media` array only accepts `InputMediaAudio`, `InputMediaDocument`, `InputMediaPhoto`, and `InputMediaVideo` — `InputMediaAnimation` has no group form at all, unlike documents, which are merely barred from mixing with other kinds. A post with a GIF plus any other media (even a second GIF) would previously have built a `sendMediaGroup` payload containing an `animation`-typed entry that Telegram's API rejects outright.
+
+`buildTelegramMediaPayload` now throws `ValidationError` whenever a GIF is present and `items.length > 1`, before the existing document-mixing check runs. Real fix, not test-only — `tests/phase11-media.test.ts` gained cases for a valid photo+video group, a GIF grouped with any other media (including a second GIF), and a document grouped with a photo/video.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

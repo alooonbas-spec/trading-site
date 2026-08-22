@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 100: VK thread-paging test coverage. `social/vk/thread-paging.ts` (the VK counterpart to Facebook's `graph-paging.ts`) had never been tested directly, only through the PHASE 54/55 adapter end-to-end tests. All 15 new cases passed on the first run. Tests only, no production code changed.
+PHASE 101: Telegram `sendMediaGroup` GIF fix. `buildTelegramMediaPayload` blocked documents from mixing with photos/videos in a media group, but let GIFs through — Telegram's `sendMediaGroup` has no `InputMediaAnimation` form at all, so a GIF grouped with any other media would have been rejected by the Bot API. A GIF paired with other media now throws `ValidationError` before the payload is built. Real production fix, with new coverage in `tests/phase11-media.test.ts`.
