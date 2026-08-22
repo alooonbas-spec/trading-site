@@ -66,7 +66,9 @@ describe("PHASE 26 VK community history collection", () => {
       if (
         target === vkMethodUrl("photos.getAllComments") ||
         target === vkMethodUrl("video.get") ||
-        target === vkMethodUrl("video.getComments")
+        target === vkMethodUrl("video.getComments") ||
+        target === vkMethodUrl("board.getTopics") ||
+        target === vkMethodUrl("board.getComments")
       ) {
         return new Response(
           JSON.stringify({
@@ -128,7 +130,9 @@ describe("PHASE 26 VK community history collection", () => {
         if (
         target === vkMethodUrl("photos.getAllComments") ||
         target === vkMethodUrl("video.get") ||
-        target === vkMethodUrl("video.getComments")
+        target === vkMethodUrl("video.getComments") ||
+        target === vkMethodUrl("board.getTopics") ||
+        target === vkMethodUrl("board.getComments")
       ) {
         return new Response(
           JSON.stringify({

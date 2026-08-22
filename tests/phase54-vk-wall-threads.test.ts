@@ -160,7 +160,9 @@ describe("PHASE 54 VK wall comment threads", () => {
       if (
         target === vkMethodUrl("photos.getAllComments") ||
         target === vkMethodUrl("video.get") ||
-        target === vkMethodUrl("video.getComments")
+        target === vkMethodUrl("video.getComments") ||
+        target === vkMethodUrl("board.getTopics") ||
+        target === vkMethodUrl("board.getComments")
       ) {
         return new Response(
           JSON.stringify({

@@ -43,6 +43,14 @@ function emptyWallAndConversations(target: string): Response | null {
   ) {
     return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
   }
+  if (target === vkMethodUrl("board.getTopics") || target === vkMethodUrl("board.getComments")) {
+    return new Response(
+      JSON.stringify({
+        error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
+      }),
+      { status: 200 },
+    );
+  }
   return null;
 }
 

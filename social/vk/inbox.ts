@@ -165,6 +165,8 @@ const VK_PHOTO_COMMENT_COUNT = "50";
 const VK_VIDEO_COUNT = "10";
 const VK_VIDEO_COMMENT_COUNT = "50";
 const VK_VIDEO_THREAD_COUNT = "10";
+const VK_BOARD_TOPIC_COUNT = "10";
+const VK_BOARD_COMMENT_COUNT = "50";
 const VK_CHAT_PEER_FLOOR = 2_000_000_000;
 
 type VkOffsetPage = number | "done";
@@ -176,6 +178,10 @@ type VkWallPost = {
 type VkVideo = {
   id: number;
   owner_id?: number;
+};
+
+type VkBoardTopic = {
+  id: number;
 };
 
 export function parseVkInboxCursor(cursor?: string | null): {
@@ -337,27 +343,32 @@ async function collectVkCommunityInbox(
       : null;
   const videoPage = vkOffsetCursor(named.videos);
   const videocommentsPage = vkOffsetCursor(named.videocomments);
+  const boardTopicsPage = vkOffsetCursor(named.boardtopics);
+  const boardCommentsPage = vkOffsetCursor(named.boardcomments);
   const photoOwnerId = `-${groupId}`;
-  const [wallComments, latestPeers, olderPeers, latestPhotos, olderPhotos, videoComments] = await Promise.all([
-    collectVkWallComments(accessToken, metadata, cursor.wallPage, cursor.wallcommentsPage, named.wallthreads),
-    listVkCommunityUserPeers(accessToken, groupId, 0),
-    conversationOffset === null
-      ? Promise.resolve(emptyVkCommunityPeers(true))
-      : listVkCommunityUserPeers(accessToken, groupId, conversationOffset),
-    collectVkPhotoComments(accessToken, 0, photoOwnerId),
-    photoOffset === null
-      ? Promise.resolve(emptyVkPhotoCommentPage(true))
-      : collectVkPhotoComments(accessToken, photoOffset, photoOwnerId),
-    collectVkVideoComments(
-      accessToken,
-      videoPage.page,
-      videocommentsPage.page,
-      named.videothreads,
-      photoOwnerId,
-    ),
-  ]);
+  const [wallComments, latestPeers, olderPeers, latestPhotos, olderPhotos, videoComments, boardComments] =
+    await Promise.all([
+      collectVkWallComments(accessToken, metadata, cursor.wallPage, cursor.wallcommentsPage, named.wallthreads),
+      listVkCommunityUserPeers(accessToken, groupId, 0),
+      conversationOffset === null
+        ? Promise.resolve(emptyVkCommunityPeers(true))
+        : listVkCommunityUserPeers(accessToken, groupId, conversationOffset),
+      collectVkPhotoComments(accessToken, 0, photoOwnerId),
+      photoOffset === null
+        ? Promise.resolve(emptyVkPhotoCommentPage(true))
+        : collectVkPhotoComments(accessToken, photoOffset, photoOwnerId),
+      collectVkVideoComments(
+        accessToken,
+        videoPage.page,
+        videocommentsPage.page,
+        named.videothreads,
+        photoOwnerId,
+      ),
+      collectVkBoardComments(accessToken, boardTopicsPage.page, boardCommentsPage.page, groupId),
+    ]);
   const photosUnavailable = latestPhotos.unavailable || olderPhotos.unavailable;
   const videosUnavailable = videoComments.unavailable;
+  const boardUnavailable = boardComments.unavailable;
   const peers = mergeVkCommunityPeers(latestPeers, olderPeers);
   const latestPage = await collectVkCommunityHistoryForPeers(accessToken, groupId, peers, 0);
   const newestMessageId = latestPage.messages.reduce<string | null>(
@@ -392,9 +403,18 @@ async function collectVkCommunityInbox(
       ...olderPhotos.messages,
       ...filterMessagesAfterCursor(videoComments.latest, named.video ?? null),
       ...videoComments.older,
+      ...filterMessagesAfterCursor(boardComments.latest, named.board ?? null),
+      ...boardComments.older,
       ...uniqueInboxMessages([...inboundLatest, ...olderMessages]),
     ],
     cursor: serializeNamedInboxCursor({
+      board: boardUnavailable
+        ? ""
+        : laterDigitId(named.board, newestVkCommentUnix([...boardComments.latest, ...boardComments.older])) ?? "",
+      boardcomments: boardUnavailable
+        ? ""
+        : nextVkOffsetCursor(boardCommentsPage.page, boardComments.commentsReachedEnd),
+      boardtopics: boardUnavailable ? "" : nextVkOffsetCursor(boardTopicsPage.page, boardComments.reachedEnd),
       comments: laterDigitId(cursor.comments, newestVkCommentUnix([...wallComments.latest, ...wallComments.older])) ?? "",
       conversations: nextVkOffsetCursor(cursor.conversationsPage, olderPeers.reachedEnd),
       history: nextVkOffsetCursor(cursor.historyPage, reachedEnd),
@@ -761,6 +781,149 @@ async function collectVkPhotoComments(
     reachedEnd: (parsed.data.items ?? []).length < pageSize,
     unavailable: false,
   };
+}
+
+async function collectVkBoardComments(
+  accessToken: string,
+  topicsPage: VkOffsetPage,
+  commentsPage: VkOffsetPage,
+  groupId: string,
+): Promise<{
+  latest: InboxMessage[];
+  older: InboxMessage[];
+  reachedEnd: boolean;
+  commentsReachedEnd: boolean;
+  unavailable: boolean;
+}> {
+  const topicsOffset =
+    topicsPage !== 0 && topicsPage !== "done" ? topicsPage * Number(VK_BOARD_TOPIC_COUNT) : null;
+  const commentsOffset =
+    commentsPage !== 0 && commentsPage !== "done" ? commentsPage * Number(VK_BOARD_COMMENT_COUNT) : null;
+  const [latestTopics, olderTopics] = await Promise.all([
+    listVkBoardTopics(accessToken, groupId, 0),
+    topicsOffset === null
+      ? Promise.resolve(emptyVkBoardTopics(true))
+      : listVkBoardTopics(accessToken, groupId, topicsOffset),
+  ]);
+  if (latestTopics.unavailable || olderTopics.unavailable) {
+    return {
+      latest: [],
+      older: [],
+      reachedEnd: true,
+      commentsReachedEnd: true,
+      unavailable: true,
+    };
+  }
+  const commentTopics = [...latestTopics.topics, ...olderTopics.topics];
+  const [latest, olderTopic, olderComments] = await Promise.all([
+    collectVkCommentsForBoardTopics(accessToken, groupId, latestTopics.topics, 0),
+    collectVkCommentsForBoardTopics(accessToken, groupId, olderTopics.topics, 0),
+    commentsOffset === null
+      ? Promise.resolve(emptyVkCommentPage(true))
+      : collectVkCommentsForBoardTopics(accessToken, groupId, commentTopics, commentsOffset),
+  ]);
+  return {
+    latest: latest.messages,
+    older: uniqueInboxMessages([...olderTopic.messages, ...olderComments.messages]),
+    reachedEnd: olderTopics.reachedEnd,
+    commentsReachedEnd: olderComments.reachedEnd,
+    unavailable: false,
+  };
+}
+
+function emptyVkBoardTopics(reachedEnd: boolean): {
+  topics: VkBoardTopic[];
+  reachedEnd: boolean;
+  unavailable: boolean;
+} {
+  return { topics: [], reachedEnd, unavailable: false };
+}
+
+async function listVkBoardTopics(
+  accessToken: string,
+  groupId: string,
+  offset: number,
+): Promise<{ topics: VkBoardTopic[]; reachedEnd: boolean; unavailable: boolean }> {
+  const pageSize = Number(VK_BOARD_TOPIC_COUNT);
+  const params: Record<string, string> = {
+    access_token: accessToken,
+    group_id: groupId,
+    count: VK_BOARD_TOPIC_COUNT,
+  };
+  if (offset > 0) {
+    params.offset = String(offset);
+  }
+  const payload = await vkCallIfAvailable("board.getTopics", params);
+  if (payload === null) {
+    return { topics: [], reachedEnd: true, unavailable: true };
+  }
+  const parsed = wallGetSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK board.getTopics returned an unexpected payload");
+  }
+  const topics = parsed.data.items ?? [];
+  return { topics, reachedEnd: topics.length < pageSize, unavailable: false };
+}
+
+async function collectVkCommentsForBoardTopics(
+  accessToken: string,
+  groupId: string,
+  topics: VkBoardTopic[],
+  offset: number,
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean; nestedAfters: VkThreadMap }> {
+  const pageSize = Number(VK_BOARD_COMMENT_COUNT);
+  const messages: InboxMessage[] = [];
+  let reachedEnd = true;
+  for (const topic of topics) {
+    const params: Record<string, string> = {
+      access_token: accessToken,
+      group_id: groupId,
+      topic_id: String(topic.id),
+      count: VK_BOARD_COMMENT_COUNT,
+      sort: "desc",
+    };
+    if (offset > 0) {
+      params.offset = String(offset);
+    }
+    const commentsPayload = await vkCallIfAvailable("board.getComments", params);
+    if (commentsPayload === null) {
+      continue;
+    }
+    const comments = wallCommentsSchema.safeParse(commentsPayload);
+    if (!comments.success) {
+      throw new SocialError("VK board.getComments returned an unexpected payload");
+    }
+    if ((comments.data.items ?? []).length >= pageSize) {
+      reachedEnd = false;
+    }
+    messages.push(...vkBoardCommentsToInbox(comments.data.items ?? [], groupId, topic.id));
+  }
+  return { messages, reachedEnd: topics.length === 0 ? true : reachedEnd, nestedAfters: {} };
+}
+
+function vkBoardCommentsToInbox(
+  comments: Array<{ id: number; from_id?: number; text?: string; date?: number }>,
+  groupId: string,
+  topicId: number,
+): InboxMessage[] {
+  const messages: InboxMessage[] = [];
+  const communityFromId = -Number(groupId);
+  for (const comment of comments) {
+    const text = comment.text?.trim();
+    if (!text || comment.from_id === undefined || comment.from_id === communityFromId) {
+      continue;
+    }
+    messages.push({
+      externalId: `board:${groupId}:${topicId}:${comment.id}`,
+      externalProfileId: String(comment.from_id),
+      username: null,
+      body: text,
+      url: `https://vk.com/topic-${groupId}_${topicId}?post=${comment.id}`,
+      receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
+      replyKind: "comment",
+    });
+  }
+  return messages;
 }
 
 async function collectVkVideoComments(
@@ -1560,6 +1723,30 @@ export function parseVkInboxVideoCommentRef(externalId: string): {
   return { ownerId, videoId, commentId };
 }
 
+export function parseVkInboxBoardCommentRef(externalId: string): {
+  groupId: string;
+  topicId: string;
+  commentId: string;
+} {
+  const parts = externalId.split(":");
+  const groupId = parts[1];
+  const topicId = parts[2];
+  const commentId = parts[3];
+  if (
+    parts[0] !== "board" ||
+    parts.length !== 4 ||
+    !groupId ||
+    !topicId ||
+    !commentId ||
+    !/^\d+$/.test(groupId) ||
+    !/^\d+$/.test(topicId) ||
+    !/^\d+$/.test(commentId)
+  ) {
+    throw new ValidationError("VK board comment replies require group, topic, and comment ids from board.getComments");
+  }
+  return { groupId, topicId, commentId };
+}
+
 export async function replyToVkWallComment(
   accessToken: string,
   input: { externalId: string; text: string },
@@ -1704,6 +1891,33 @@ export async function replyToVkVideoComment(
   const parsed = z.number().safeParse(payload);
   if (!parsed.success) {
     throw new SocialError("VK video.createComment returned an unexpected payload");
+  }
+  return { externalMessageId: String(parsed.data) };
+}
+
+export async function replyToVkBoardComment(
+  accessToken: string,
+  input: { externalId: string; text: string; fromGroup?: boolean },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("VK board comment replies require a body");
+  }
+
+  const ref = parseVkInboxBoardCommentRef(input.externalId);
+  const params: Record<string, string> = {
+    access_token: accessToken,
+    group_id: ref.groupId,
+    topic_id: ref.topicId,
+    message: text,
+  };
+  if (input.fromGroup) {
+    params.from_group = "1";
+  }
+  const payload = await vkCall("board.createComment", params);
+  const parsed = z.number().safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK board.createComment returned an unexpected payload");
   }
   return { externalMessageId: String(parsed.data) };
 }

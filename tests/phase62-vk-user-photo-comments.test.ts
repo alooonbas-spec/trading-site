@@ -138,7 +138,9 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
         target === vkMethodUrl("newsfeed.getMentions") ||
         target === vkMethodUrl("photos.getAllComments") ||
         target === vkMethodUrl("video.get") ||
-        target === vkMethodUrl("video.getComments")
+        target === vkMethodUrl("video.getComments") ||
+        target === vkMethodUrl("board.getTopics") ||
+        target === vkMethodUrl("board.getComments")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
@@ -194,7 +196,9 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
         target === vkMethodUrl("newsfeed.getMentions") ||
         target === vkMethodUrl("photos.getAllComments") ||
         target === vkMethodUrl("video.get") ||
-        target === vkMethodUrl("video.getComments")
+        target === vkMethodUrl("video.getComments") ||
+        target === vkMethodUrl("board.getTopics") ||
+        target === vkMethodUrl("board.getComments")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
@@ -248,7 +252,9 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       if (
         target === vkMethodUrl("photos.getAllComments") ||
         target === vkMethodUrl("video.get") ||
-        target === vkMethodUrl("video.getComments")
+        target === vkMethodUrl("video.getComments") ||
+        target === vkMethodUrl("board.getTopics") ||
+        target === vkMethodUrl("board.getComments")
       ) {
         return new Response(
           JSON.stringify({
