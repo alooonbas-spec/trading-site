@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 56: Official Graph comments on tagged Facebook posts and Instagram media (`taggedreplies` after paging). No new SQL.
+PHASE 57: Official Graph nested replies on tagged Facebook/Instagram comments (`creplies` seeded from tagged comments). No new SQL.

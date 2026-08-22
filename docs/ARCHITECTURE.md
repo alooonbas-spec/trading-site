@@ -333,7 +333,11 @@ User OAuth inbox calls official `video.get` (count 10, Added album) then `video.
 
 ## Graph comments on tagged posts (PHASE 56)
 
-Facebook `/tagged` and Instagram `/tags` request nested `comments.limit(50)` on the current tagged page. Comments use `replyKind=comment` and the existing Facebook `POST /{comment-id}/comments` / Instagram `POST /{comment-id}/replies` paths. The named `taggedreplies` cursor stores `{ taggedObjectId: after }` (base64url JSON, at most 20 ids) independently of feed/media `replies`. Later polls request `GET /{tagged-id}/comments?after=` (`limit=50`) with official fields. Extra tagged-comment pages are not dropped by the `comments` timestamp watermark. Photo-only tagged posts without caption text still contribute their comments. An empty map stores `taggedreplies:done` and later polls stay done. Collectors still do not fetch `paging.next` URLs.
+Facebook `/tagged` and Instagram `/tags` request nested `comments.limit(50)` on the current tagged page. Comments use `replyKind=comment` and the existing Facebook `POST /{comment-id}/comments` / Instagram `POST /{comment-id}/replies` paths. The named `taggedreplies` cursor stores `{ taggedObjectId: after }` (base64url JSON, at most 20 ids) independently of feed/media `replies`. Later polls request `GET /{tagged-id}/comments?after=` (`limit=50`) with official fields. Extra tagged-comment pages are not dropped by the `comments` timestamp watermark. Photo-only tagged posts without caption text still contribute their comments. An empty map stores `taggedreplies:done` and later polls stay done. Nested replies on those tagged comments seed `creplies` in PHASE 57. Collectors still do not fetch `paging.next` URLs.
+
+## Graph nested replies on tagged comments (PHASE 57)
+
+Tagged Facebook comments request nested `comments.limit(25)` and tagged Instagram comments request nested `replies`, the same edges as feed/media in PHASE 49. Extra PHASE 56 tagged-comment pages also request those nested edges so newly discovered tagged comments can seed `creplies`. Later polls still request `GET /{comment-id}/comments?after=` (Facebook, `limit=25`) or `GET /{comment-id}/replies?after=` (Instagram, `limit=25`). Extra nested-reply pages are not dropped by the `comments` timestamp watermark. This reuses the existing `creplies` map rather than a second cursor. Collectors still do not fetch `paging.next` URLs.
 
 ## Social adapters (PHASE 2)
 
