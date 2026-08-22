@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 109: Facebook album/video and Instagram carousel/reel test coverage. Four multi-step publish flows (Facebook's photo-album and `/videos` paths; Instagram's carousel and REELS container paths) had zero end-to-end coverage, only their single-item counterparts were tested. New cases drive each through the real adapter with a mocked `fetch`, asserting exact request bodies at every step. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.
+PHASE 110: `rollupPostStatus` edge-case test coverage. The post status rollup had untested branches: zero targets, a `PUBLISHED` target alongside a still-`SCHEDULED` sibling, a `FAILED` target alongside a still-`SCHEDULED` sibling, and a settled `CANCELLED`+`FAILED` mix. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.

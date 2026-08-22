@@ -25,6 +25,23 @@ describe("post status machine", () => {
     expect(rollupPostStatus(["CANCELLED", "CANCELLED"])).toBe("CANCELLED");
   });
 
+  it("rolls up edge cases: no targets, and a settled target alongside a still-open one", () => {
+    // No targets at all is a draft with nothing scheduled yet.
+    expect(rollupPostStatus([])).toBe("DRAFT");
+    // A target that already succeeded doesn't make the post PUBLISHED while
+    // a sibling target is still SCHEDULED -- the post as a whole is still
+    // in progress, not done.
+    expect(rollupPostStatus(["SCHEDULED", "PUBLISHED"])).toBe("PUBLISHING");
+    // Likewise, a sibling that already FAILED doesn't retroactively change
+    // an otherwise-all-SCHEDULED post to PUBLISHING vs SCHEDULED by itself --
+    // it's the presence of a non-SCHEDULED open target combined with the
+    // failure that keeps this out of the "still purely SCHEDULED" bucket.
+    expect(rollupPostStatus(["SCHEDULED", "FAILED"])).toBe("PUBLISHING");
+    // Once nothing is open: a mix of CANCELLED and FAILED (not fully
+    // cancelled, nothing published) settles as FAILED, not CANCELLED.
+    expect(rollupPostStatus(["CANCELLED", "FAILED"])).toBe("FAILED");
+  });
+
   it("allows publish from draft or scheduled only", () => {
     expect(canPublishPost("DRAFT")).toBe(true);
     expect(canPublishPost("SCHEDULED")).toBe(true);

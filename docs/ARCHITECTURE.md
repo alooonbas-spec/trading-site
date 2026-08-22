@@ -563,6 +563,10 @@ Replaced the `PHOTO_EXTENSIONS` set and its inline ternary with a `PHOTO_EXTENSI
 
 Four multi-step publish flows had zero end-to-end test coverage — only their single-item counterparts were tested: Facebook's photo-album path (`executeFacebookPublish`'s `photos` branch, which uploads each image unpublished then posts them together via `attached_media`) and its `/videos` endpoint; Instagram's carousel path (`executeInstagramPublish`'s per-image child-container creation followed by a `CAROUSEL` container referencing all children) and its `REELS` container path. New cases in `tests/phase12-meta-vk-publish.test.ts` drive each through the real adapter `.publish()` call with a mocked `fetch`, asserting the exact request bodies reaching Graph API at each step (`published=false` per photo, the `attached_media` JSON, `media_type=CAROUSEL` with a comma-joined `children` list, `media_type=REELS` with `video_url`) and the final external post id. All passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
 
+## rollupPostStatus edge-case test coverage (PHASE 110)
+
+`rollupPostStatus` (`lib/posts/status.ts`) rolls a post's per-target publish outcomes into one overall `PostStatus`, but several of its branches had no direct test: the `targets.length === 0` default (`DRAFT`), a target that's already `PUBLISHED` alongside a sibling still `SCHEDULED` (must stay `PUBLISHING`, not jump to `PUBLISHED` early), a target that's already `FAILED` alongside a sibling still `SCHEDULED` (also `PUBLISHING`, not `SCHEDULED` or `FAILED` yet — nothing is final while a target is still open), and a settled mix of `CANCELLED` and `FAILED` with nothing published (must resolve to `FAILED`, not `CANCELLED`, since not every target was cleanly cancelled). All cases passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
