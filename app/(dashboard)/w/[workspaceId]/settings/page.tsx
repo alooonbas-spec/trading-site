@@ -55,6 +55,7 @@ export default async function SettingsPage({
           <InviteMemberForm
             workspaceId={workspaceId}
             canInvite={canManageMembers(context.role)}
+            currentRole={context.role}
           />
           <MembersTable
             workspaceId={workspaceId}

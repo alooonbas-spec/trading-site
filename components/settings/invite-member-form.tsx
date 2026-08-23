@@ -12,14 +12,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { idleActionState, inviteMemberAction } from "@/app/actions/workspace";
+import { canAssignRole } from "@/lib/auth/permissions";
 import { ASSIGNABLE_ROLES } from "@/lib/validation/workspace";
+import type { WorkspaceRole } from "@/types/status";
 
 export function InviteMemberForm({
   workspaceId,
   canInvite,
+  currentRole,
 }: {
   workspaceId: string;
   canInvite: boolean;
+  currentRole: WorkspaceRole;
 }) {
   const action = inviteMemberAction.bind(null, workspaceId);
   const [state, formAction, pending] = useActionState(action, idleActionState);
@@ -51,7 +55,11 @@ export function InviteMemberForm({
           </SelectTrigger>
           <SelectContent>
             {ASSIGNABLE_ROLES.map((assignableRole) => (
-              <SelectItem key={assignableRole} value={assignableRole}>
+              <SelectItem
+                key={assignableRole}
+                value={assignableRole}
+                disabled={!canAssignRole(currentRole, assignableRole)}
+              >
                 {assignableRole}
               </SelectItem>
             ))}

@@ -38,4 +38,21 @@ describe("PHASE 37 workspace member pagination", () => {
     expect(page).not.toContain('name="after"');
     expect(page).not.toMatch(/if\s*\(\s*platform\s*===/);
   });
+
+  it("filters the invite role picker by canAssignRole, not just the change-role picker", () => {
+    // add_workspace_member (the SQL RPC behind inviteMemberAction) rejects an
+    // ADMIN actor assigning ADMIN -- the invite form previously listed every
+    // ASSIGNABLE_ROLES option unconditionally, so an ADMIN could pick "ADMIN"
+    // in the UI and always get a rejected request. members-table.tsx already
+    // disabled options with canAssignRole for the role-change picker; the
+    // invite form needs the same guard.
+    const page = readFileSync("app/(dashboard)/w/[workspaceId]/settings/page.tsx", "utf8");
+    expect(page).toContain("<InviteMemberForm");
+    expect(page).toMatch(/InviteMemberForm[\s\S]*?currentRole=\{context\.role\}/);
+
+    const form = readFileSync("components/settings/invite-member-form.tsx", "utf8");
+    expect(form).toContain('import { canAssignRole } from "@/lib/auth/permissions"');
+    expect(form).toContain("currentRole");
+    expect(form).toMatch(/disabled=\{!canAssignRole\(currentRole,\s*assignableRole\)\}/);
+  });
 });

@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 112: `canAssignRole` matrix test coverage. This is the privilege-escalation guard behind every role change and invite, but only 5 of its meaningful cases were tested — most notably `ADMIN` assigning `VIEWER` (a distinct branch sharing a result with an already-tested case) had never itself been exercised. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.
+PHASE 113: invite-form role picker fix. `members-table.tsx`'s role-change picker already disabled options `canAssignRole` rejects, but `invite-member-form.tsx`'s invite picker listed every role unconditionally — an ADMIN could pick "ADMIN" and always get rejected by the `add_workspace_member` RPC. Not a security hole (the RPC was always the real boundary), but a real UX bug. Fixed by passing `currentRole` through and disabling options the same way the member table does. Real production fix, with a regression guard in `tests/phase37-members.test.ts`.
