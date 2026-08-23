@@ -571,6 +571,10 @@ Four multi-step publish flows had zero end-to-end test coverage — only their s
 
 `lib/monitoring/status.ts`'s four transition guards (`canRunMonitoringRule`, `canPauseMonitoringRule`, `canResumeMonitoringRule`, `canDisableMonitoringRule`) only had their one `true` case each tested, never the rejecting branches. `MonitoringRuleStatus` has exactly 3 values, so the full 3x4 matrix is cheap to enumerate directly rather than trust it by inference from the one allowed transition. All new cases passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
 
+## canAssignRole matrix test coverage (PHASE 112)
+
+`canAssignRole` (`lib/auth/permissions.ts`) is the core privilege-escalation guard behind every role change and invite in the app, but its test only spot-checked 5 of the meaningful cases: `OWNER` assigning `OPERATOR`/`VIEWER`, `ADMIN` assigning `OWNER`, and non-`ADMIN`/`OWNER` actors (`OPERATOR`, `VIEWER`) attempting to assign at all were all untested — most importantly `ADMIN` assigning `VIEWER`, a distinct branch of the function's `targetRole === "OPERATOR" || targetRole === "VIEWER"` check that happened to share a truthy result with the already-tested `OPERATOR` case but had never itself been exercised. All new cases passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).

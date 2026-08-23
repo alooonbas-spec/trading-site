@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 111: Monitoring rule status matrix test coverage. The four monitoring rule transition guards only had their one `true` case each tested. Filled in the full 3x4 matrix across `MonitoringRuleStatus`'s 3 values. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.
+PHASE 112: `canAssignRole` matrix test coverage. This is the privilege-escalation guard behind every role change and invite, but only 5 of its meaningful cases were tested — most notably `ADMIN` assigning `VIEWER` (a distinct branch sharing a result with an already-tested case) had never itself been exercised. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.

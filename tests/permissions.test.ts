@@ -51,6 +51,21 @@ describe("workspace permissions", () => {
     expect(canAssignRole("OPERATOR", "VIEWER")).toBe(false);
   });
 
+  it("covers the rest of the canAssignRole matrix: owner can assign any non-owner role, admin can also demote to viewer, and non-admin/owner actors can never assign", () => {
+    // OWNER can hand out every non-OWNER role, not just ADMIN.
+    expect(canAssignRole("OWNER", "OPERATOR")).toBe(true);
+    expect(canAssignRole("OWNER", "VIEWER")).toBe(true);
+    // ADMIN's allowed targets are OPERATOR and VIEWER -- VIEWER specifically
+    // was untested even though it's a distinct branch of the OR.
+    expect(canAssignRole("ADMIN", "VIEWER")).toBe(true);
+    expect(canAssignRole("ADMIN", "OWNER")).toBe(false);
+    // OPERATOR and VIEWER actors can never assign roles, to any target,
+    // including themselves or a downgrade.
+    expect(canAssignRole("OPERATOR", "OPERATOR")).toBe(false);
+    expect(canAssignRole("VIEWER", "VIEWER")).toBe(false);
+    expect(canAssignRole("VIEWER", "OPERATOR")).toBe(false);
+  });
+
   it("throws a permission error for illegal assignments", () => {
     expect(() => assertCanAssignRole("ADMIN", "ADMIN")).toThrow(PermissionError);
     expect(() => assertCanAssignRole("OWNER", "ADMIN")).not.toThrow();
