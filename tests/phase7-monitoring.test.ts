@@ -33,6 +33,17 @@ describe("monitoring rule status machine", () => {
     expect(canResumeMonitoringRule("PAUSED")).toBe(true);
     expect(canDisableMonitoringRule("DISABLED")).toBe(false);
   });
+
+  it("rejects every other status for each transition, covering the full 3x4 matrix", () => {
+    expect(canRunMonitoringRule("PAUSED")).toBe(false);
+    expect(canRunMonitoringRule("DISABLED")).toBe(false);
+    expect(canPauseMonitoringRule("PAUSED")).toBe(false);
+    expect(canPauseMonitoringRule("DISABLED")).toBe(false);
+    expect(canResumeMonitoringRule("ACTIVE")).toBe(false);
+    expect(canResumeMonitoringRule("DISABLED")).toBe(false);
+    expect(canDisableMonitoringRule("ACTIVE")).toBe(true);
+    expect(canDisableMonitoringRule("PAUSED")).toBe(true);
+  });
 });
 
 describe("keyword matching and validation", () => {

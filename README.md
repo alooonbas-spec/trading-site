@@ -59,4 +59,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 110: `rollupPostStatus` edge-case test coverage. The post status rollup had untested branches: zero targets, a `PUBLISHED` target alongside a still-`SCHEDULED` sibling, a `FAILED` target alongside a still-`SCHEDULED` sibling, and a settled `CANCELLED`+`FAILED` mix. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.
+PHASE 111: Monitoring rule status matrix test coverage. The four monitoring rule transition guards only had their one `true` case each tested. Filled in the full 3x4 matrix across `MonitoringRuleStatus`'s 3 values. All passed on the first run — coverage confirming already-correct logic. Tests only, no production code changed.

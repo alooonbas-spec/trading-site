@@ -567,6 +567,10 @@ Four multi-step publish flows had zero end-to-end test coverage — only their s
 
 `rollupPostStatus` (`lib/posts/status.ts`) rolls a post's per-target publish outcomes into one overall `PostStatus`, but several of its branches had no direct test: the `targets.length === 0` default (`DRAFT`), a target that's already `PUBLISHED` alongside a sibling still `SCHEDULED` (must stay `PUBLISHING`, not jump to `PUBLISHED` early), a target that's already `FAILED` alongside a sibling still `SCHEDULED` (also `PUBLISHING`, not `SCHEDULED` or `FAILED` yet — nothing is final while a target is still open), and a settled mix of `CANCELLED` and `FAILED` with nothing published (must resolve to `FAILED`, not `CANCELLED`, since not every target was cleanly cancelled). All cases passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
 
+## Monitoring rule status matrix test coverage (PHASE 111)
+
+`lib/monitoring/status.ts`'s four transition guards (`canRunMonitoringRule`, `canPauseMonitoringRule`, `canResumeMonitoringRule`, `canDisableMonitoringRule`) only had their one `true` case each tested, never the rejecting branches. `MonitoringRuleStatus` has exactly 3 values, so the full 3x4 matrix is cheap to enumerate directly rather than trust it by inference from the one allowed transition. All new cases passed on the first run — coverage confirming already-correct logic, not a bug fix. Tests only, no production code changed.
+
 ## Social adapters (PHASE 2)
 
 `getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
