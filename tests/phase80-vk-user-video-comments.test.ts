@@ -124,7 +124,7 @@ describe("PHASE 80 VK video.getComments on tagged videos", () => {
       })),
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideo:1710000200|uservideocomments:2|uservideos:done|videocomments:1|videos:1|videotags:1710000100|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideo:1710000200|uservideocomments:2|uservideos:done|uservideothreads:done|videocomments:1|videos:1|videotags:1710000100|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getComments")),
@@ -187,7 +187,7 @@ describe("PHASE 80 VK video.getComments on tagged videos", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideo:1710000200|uservideocomments:1|uservideos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideo:1710000200|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
   });
 
@@ -238,7 +238,7 @@ describe("PHASE 80 VK video.getComments on tagged videos", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["videotag:77:20", "videotag:77:20:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideo:1710000081|uservideocomments:done|uservideos:done|videocomments:1|videos:1|videotags:1710000100|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideo:1710000081|uservideocomments:done|uservideos:done|uservideothreads:done|videocomments:1|videos:1|videotags:1710000100|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getComments")),

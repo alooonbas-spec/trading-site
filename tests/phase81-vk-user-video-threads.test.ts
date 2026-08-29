@@ -13,18 +13,18 @@ function nestedReplies(
     return {
       id,
       from_id: 42,
-      text: `video nested ${id}`,
+      text: `tagged video nested ${id}`,
       date: dateStart - index,
     };
   });
 }
 
-describe("PHASE 55 VK video comment threads", () => {
+describe("PHASE 81 VK tagged video comment threads", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("walks the next official video comment_id thread window and keeps older nested replies", async () => {
+  it("walks the next official tagged-video comment_id thread window and keeps older nested replies", async () => {
     const nested = nestedReplies(70, 10, 1710000190);
     const older = nestedReplies(50, 10, 1700000050);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
@@ -32,18 +32,23 @@ describe("PHASE 55 VK video comment threads", () => {
       const body = String(init?.body ?? "");
       if (
         target === vkMethodUrl("wall.get") ||
-        target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
-        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("video.getUserVideos") || target === vkMethodUrl("photos.getComments")
+        target === vkMethodUrl("wall.getComments") ||
+        target === vkMethodUrl("wall.getReposts") ||
+        target === vkMethodUrl("newsfeed.getMentions") ||
+        target === vkMethodUrl("photos.getAllComments") ||
+        target === vkMethodUrl("photos.getUserPhotos") ||
+        target === vkMethodUrl("photos.getComments") ||
+        target === vkMethodUrl("video.get")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("video.get")) {
+      if (target === vkMethodUrl("video.getUserVideos")) {
         if (body.includes("offset=")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
         }
-        expect(body).toContain("count=10");
+        expect(body).toContain("count=20");
         return new Response(
-          JSON.stringify({ response: { items: [{ id: 20, owner_id: 10 }] } }),
+          JSON.stringify({ response: { items: [{ id: 20, owner_id: 77, text: "tagged", date: 1710000100 }] } }),
           { status: 200 },
         );
       }
@@ -51,7 +56,7 @@ describe("PHASE 55 VK video comment threads", () => {
       if (body.includes("comment_id=")) {
         expect(body).toContain("comment_id=80");
         expect(body).toContain("video_id=20");
-        expect(body).toContain("owner_id=10");
+        expect(body).toContain("owner_id=77");
         expect(body).toContain("count=10");
         expect(body).toContain("sort=desc");
         expect(body).not.toContain("thread_items_count=");
@@ -71,7 +76,7 @@ describe("PHASE 55 VK video comment threads", () => {
               {
                 id: 80,
                 from_id: 42,
-                text: "parent video",
+                text: "parent tagged video",
                 date: 1710000200,
                 thread: { count: 20, items: nested },
               },
@@ -88,11 +93,12 @@ describe("PHASE 55 VK video comment threads", () => {
       socialAccountId: "a",
     });
     expect(first.messages.map((item) => item.externalId)).toEqual([
-      "video:10:20:80",
-      ...nested.map((item) => `video:10:20:${item.id}`),
+      "videotag:77:20",
+      "videotag:77:20:80",
+      ...nested.map((item) => `videotag:77:20:${item.id}`),
     ]);
     expect(first.cursor).toBe(
-      `mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|video:1710000200|videocomments:1|videos:1|videothreads:${encodeVkThreadMap({ "10_20_80": "1" })}|wall:1|wallcomments:1|wallthreads:done`,
+      `mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideo:1710000200|uservideocomments:1|uservideos:1|uservideothreads:${encodeVkThreadMap({ "77_20_80": "1" })}|videocomments:1|videos:1|videotags:1710000100|videothreads:done|wall:1|wallcomments:1|wallthreads:done`,
     );
 
     const second = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
@@ -101,39 +107,44 @@ describe("PHASE 55 VK video comment threads", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(
-      older.map((item) => `video:10:20:${item.id}`),
+      older.map((item) => `videotag:77:20:${item.id}`),
     );
     expect(second.cursor).toBe(
-      `mentionpages:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideocomments:done|uservideos:done|uservideothreads:done|video:1710000200|videocomments:done|videos:done|videothreads:${encodeVkThreadMap({ "10_20_80": "2" })}|wall:done|wallcomments:done|wallthreads:done`,
+      `mentionpages:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideo:1710000200|uservideocomments:done|uservideos:done|uservideothreads:${encodeVkThreadMap({ "77_20_80": "2" })}|videocomments:done|videos:done|videotags:1710000100|videothreads:done|wall:done|wallcomments:done|wallthreads:done`,
     );
   });
 
-  it("skips video comment_id offset once videothreads:done is stored", async () => {
+  it("skips tagged-video comment_id offset once uservideothreads:done is stored", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const target = String(url);
       const body = String(init?.body ?? "");
       if (
         target === vkMethodUrl("wall.get") ||
-        target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
-        target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("video.getUserVideos") || target === vkMethodUrl("photos.getComments")
+        target === vkMethodUrl("wall.getComments") ||
+        target === vkMethodUrl("wall.getReposts") ||
+        target === vkMethodUrl("newsfeed.getMentions") ||
+        target === vkMethodUrl("photos.getAllComments") ||
+        target === vkMethodUrl("photos.getUserPhotos") ||
+        target === vkMethodUrl("photos.getComments") ||
+        target === vkMethodUrl("video.get")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("video.get")) {
+      if (target === vkMethodUrl("video.getUserVideos")) {
         return new Response(
-          JSON.stringify({ response: { items: [{ id: 20, owner_id: 10 }] } }),
+          JSON.stringify({ response: { items: [{ id: 20, owner_id: 77, text: "tagged", date: 1710000100 }] } }),
           { status: 200 },
         );
       }
       expect(target).toBe(vkMethodUrl("video.getComments"));
       if (body.includes("comment_id=")) {
-        throw new Error(`unexpected video thread comment_id ${body}`);
+        throw new Error(`unexpected tagged video thread comment_id ${body}`);
       }
       expect(body).toContain("thread_items_count=10");
       return new Response(
         JSON.stringify({
           response: {
-            items: [{ id: 81, from_id: 42, text: "newer video", date: 1710000081 }],
+            items: [{ id: 81, from_id: 42, text: "newer tagged video", date: 1710000081 }],
           },
         }),
         { status: 200 },
@@ -144,16 +155,23 @@ describe("PHASE 55 VK video comment threads", () => {
     const result = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "video:1710000000|videothreads:done|videos:done",
+      cursor: "uservideo:1710000000|uservideos:done|uservideothreads:done",
     });
-    expect(result.messages.map((item) => item.externalId)).toEqual(["video:10:20:81"]);
-    expect(result.cursor).toContain("videothreads:done");
+    expect(result.messages.map((item) => item.externalId)).toEqual(["videotag:77:20", "videotag:77:20:81"]);
+    expect(result.cursor).toContain("uservideothreads:done");
   });
 
-  it("isolates unavailable video.getComments for community inbox", async () => {
+  it("does not store uservideothreads on community inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
+      if (target === vkMethodUrl("video.getUserVideos")) {
+        throw new Error("community inbox must not call video.getUserVideos");
+      }
+      if (
+        target === vkMethodUrl("wall.get") ||
+        target === vkMethodUrl("wall.getComments") ||
+        target === vkMethodUrl("wall.getReposts")
+      ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("messages.getConversations")) {
@@ -161,25 +179,15 @@ describe("PHASE 55 VK video comment threads", () => {
       }
       if (
         target === vkMethodUrl("photos.getAllComments") ||
+        target === vkMethodUrl("photos.getUserPhotos") ||
+        target === vkMethodUrl("photos.getComments") ||
+        target === vkMethodUrl("video.get") ||
+        target === vkMethodUrl("video.getComments") ||
         target === vkMethodUrl("board.getTopics") ||
         target === vkMethodUrl("board.getComments") ||
         target === vkMethodUrl("market.get") ||
         target === vkMethodUrl("market.getComments")
       ) {
-        return new Response(
-          JSON.stringify({
-            error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
-          }),
-          { status: 200 },
-        );
-      }
-      if (target === vkMethodUrl("video.get")) {
-        return new Response(
-          JSON.stringify({ response: { items: [{ id: 20, owner_id: -10 }] } }),
-          { status: 200 },
-        );
-      }
-      if (target === vkMethodUrl("video.getComments")) {
         return new Response(
           JSON.stringify({
             error: { error_code: 27, error_msg: "Group authorization failed: method is unavailable with group auth" },
@@ -198,13 +206,30 @@ describe("PHASE 55 VK video comment threads", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("video.getComments"))).toBe(
-      true,
-    );
-    expect(result.messages).toEqual([]);
-    expect(result.cursor).toBe(
-      "conversations:1|history:1|repostpages:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
-    );
-    expect(result.cursor).not.toContain("video:");
+    expect(result.cursor).not.toContain("uservideothreads");
+    expect(result.cursor).not.toContain("uservideos");
+  });
+
+  it("replies to nested tagged video comments through video.createComment", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(String(url)).toBe(vkMethodUrl("video.createComment"));
+      const body = String(init?.body ?? "");
+      expect(body).toContain("owner_id=77");
+      expect(body).toContain("video_id=20");
+      expect(body).toContain("reply_to_comment=70");
+      expect(body).toContain("message=Thanks");
+      return new Response(JSON.stringify({ response: 99 }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sent = await new VkAdapter({ accessToken: "vk-token" }).replyToInbox({
+      workspaceId: "w",
+      socialAccountId: "a",
+      kind: "comment",
+      body: "Thanks",
+      externalEventId: "videotag:77:20:70",
+      target: { externalProfileId: "42", username: null },
+    });
+    expect(sent.externalMessageId).toBe("99");
   });
 });

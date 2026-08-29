@@ -552,7 +552,12 @@ async function collectVkWallCommentInbox(
         ? Promise.resolve(emptyVkMentionPage(true))
         : collectVkPhotoComments(accessToken, photoOffset),
       collectVkUserPhotoInbox(accessToken, userPhotoPage.page, userPhotoCommentsPage.page),
-      collectVkUserVideoInbox(accessToken, userVideoPage.page, userVideoCommentsPage.page),
+      collectVkUserVideoInbox(
+        accessToken,
+        userVideoPage.page,
+        userVideoCommentsPage.page,
+        named.uservideothreads,
+      ),
       collectVkVideoComments(accessToken, videoPage.page, videocommentsPage.page, named.videothreads),
     ]);
   return {
@@ -613,6 +618,7 @@ async function collectVkWallCommentInbox(
         ) ?? "",
       uservideocomments: nextVkOffsetCursor(userVideoCommentsPage.page, userVideos.commentsReachedEnd),
       uservideos: nextVkOffsetCursor(userVideoPage.page, userVideos.reachedEnd),
+      uservideothreads: userVideos.uservideothreads,
       video:
         laterDigitId(named.video, newestVkCommentUnix([...videoComments.latest, ...videoComments.older])) ?? "",
       videocomments: nextVkOffsetCursor(videocommentsPage.page, videoComments.commentsReachedEnd),
@@ -843,6 +849,7 @@ async function collectVkUserVideoInbox(
   accessToken: string,
   userVideoPage: VkOffsetPage,
   commentsPage: VkOffsetPage,
+  uservideothreadsStored?: string,
 ): Promise<{
   latestMentions: InboxMessage[];
   olderMentions: InboxMessage[];
@@ -850,6 +857,7 @@ async function collectVkUserVideoInbox(
   olderComments: InboxMessage[];
   reachedEnd: boolean;
   commentsReachedEnd: boolean;
+  uservideothreads: string;
 }> {
   const videoOffset =
     userVideoPage !== 0 && userVideoPage !== "done" ? userVideoPage * Number(VK_USER_VIDEOS_COUNT) : null;
@@ -868,16 +876,35 @@ async function collectVkUserVideoInbox(
     collectVkCommentsForUserVideos(accessToken, latestVideos.videos, 0),
     collectVkCommentsForUserVideos(accessToken, olderVideos.videos, 0),
     commentOffset === null
-      ? Promise.resolve(emptyVkUserVideoCommentPage(true))
+      ? Promise.resolve(emptyVkCommentPage(true))
       : collectVkCommentsForUserVideos(accessToken, commentVideos, commentOffset),
   ]);
+  const storedThreads = decodeVkThreadMap(uservideothreadsStored);
+  const extraThreads =
+    storedThreads === null
+      ? { messages: [] as InboxMessage[], nextAfters: {} as VkThreadMap, fetchedIds: [] as string[] }
+      : await collectVkVideoThreads(accessToken, storedThreads, false, "videotag");
   return {
     latestMentions: vkUserVideosToMentions(latestVideos.videos),
     olderMentions: vkUserVideosToMentions(olderVideos.videos),
     latestComments: latestComments.messages,
-    olderComments: uniqueInboxMessages([...olderVideoComments.messages, ...extraComments.messages]),
+    olderComments: uniqueInboxMessages([
+      ...olderVideoComments.messages,
+      ...extraComments.messages,
+      ...extraThreads.messages,
+    ]),
     reachedEnd: olderVideos.reachedEnd,
     commentsReachedEnd: extraComments.reachedEnd,
+    uservideothreads: nextVkThreadCursor({
+      stored: uservideothreadsStored,
+      nestedAfters: {
+        ...latestComments.nestedAfters,
+        ...olderVideoComments.nestedAfters,
+        ...extraComments.nestedAfters,
+      },
+      fetchedNextAfters: extraThreads.nextAfters,
+      fetchedIds: extraThreads.fetchedIds,
+    }),
   };
 }
 
@@ -927,17 +954,14 @@ function vkUserVideosToMentions(videos: VkUserVideo[]): InboxMessage[] {
   return messages;
 }
 
-function emptyVkUserVideoCommentPage(reachedEnd: boolean): { messages: InboxMessage[]; reachedEnd: boolean } {
-  return { messages: [], reachedEnd };
-}
-
 async function collectVkCommentsForUserVideos(
   accessToken: string,
   videos: VkUserVideo[],
   offset: number,
-): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean; nestedAfters: VkThreadMap }> {
   const pageSize = Number(VK_USER_VIDEO_COMMENT_COUNT);
   const messages: InboxMessage[] = [];
+  const nestedAfters: VkThreadMap = {};
   let reachedEnd = true;
   for (const video of videos) {
     const ownerId = video.owner_id;
@@ -950,35 +974,24 @@ async function collectVkCommentsForUserVideos(
       video_id: String(video.id),
       count: VK_USER_VIDEO_COMMENT_COUNT,
       sort: "desc",
+      thread_items_count: VK_VIDEO_THREAD_COUNT,
     };
     if (offset > 0) {
       params.offset = String(offset);
     }
     const payload = await vkCall("video.getComments", params);
-    const parsed = userPhotoCommentsSchema.safeParse(payload);
-    if (!parsed.success) {
+    const comments = wallCommentsSchema.safeParse(payload);
+    if (!comments.success) {
       throw new SocialError("VK video.getComments returned an unexpected payload");
     }
-    if ((parsed.data.items ?? []).length >= pageSize) {
+    if ((comments.data.items ?? []).length >= pageSize) {
       reachedEnd = false;
     }
-    for (const comment of parsed.data.items ?? []) {
-      const text = comment.text?.trim();
-      if (!text || comment.from_id === undefined) {
-        continue;
-      }
-      messages.push({
-        externalId: `videotag:${ownerId}:${video.id}:${comment.id}`,
-        externalProfileId: String(comment.from_id),
-        username: null,
-        body: text,
-        url: `https://vk.com/video${ownerId}_${video.id}?reply=${comment.id}`,
-        receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
-        replyKind: "comment",
-      });
-    }
+    const parsed = vkVideoCommentsToInbox(comments.data.items ?? [], ownerId, video.id, "videotag");
+    messages.push(...parsed.messages);
+    Object.assign(nestedAfters, parsed.nestedAfters);
   }
-  return { messages, reachedEnd: videos.length === 0 ? true : reachedEnd };
+  return { messages, reachedEnd: videos.length === 0 ? true : reachedEnd, nestedAfters };
 }
 
 async function collectVkPhotoComments(
@@ -1475,17 +1488,18 @@ function vkVideoCommentsToInbox(
   }>,
   ownerId: number,
   videoId: number,
+  prefix: "video" | "videotag" = "video",
 ): { messages: InboxMessage[]; nestedAfters: VkThreadMap } {
   const messages: InboxMessage[] = [];
   const nestedAfters: VkThreadMap = {};
   for (const comment of comments) {
-    const message = vkVideoCommentMessage(comment, ownerId, videoId);
+    const message = vkVideoCommentMessage(comment, ownerId, videoId, prefix);
     if (message) {
       messages.push(message);
     }
     const threadItems = comment.thread?.items ?? [];
     for (const reply of threadItems) {
-      const nested = vkVideoCommentMessage(reply, ownerId, videoId);
+      const nested = vkVideoCommentMessage(reply, ownerId, videoId, prefix);
       if (nested) {
         messages.push(nested);
       }
@@ -1501,13 +1515,17 @@ function vkVideoCommentMessage(
   comment: { id: number; from_id?: number; text?: string; date?: number },
   ownerId: number,
   videoId: number,
+  prefix: "video" | "videotag" = "video",
 ): InboxMessage | null {
   const text = comment.text?.trim();
-  if (!text || comment.from_id === undefined || comment.from_id === ownerId) {
+  if (!text || comment.from_id === undefined) {
+    return null;
+  }
+  if (prefix === "video" && comment.from_id === ownerId) {
     return null;
   }
   return {
-    externalId: `video:${ownerId}:${videoId}:${comment.id}`,
+    externalId: `${prefix}:${ownerId}:${videoId}:${comment.id}`,
     externalProfileId: String(comment.from_id),
     username: null,
     body: text,
@@ -1521,6 +1539,7 @@ async function collectVkVideoThreads(
   accessToken: string,
   stored: VkThreadMap,
   isolate = false,
+  prefix: "video" | "videotag" = "video",
 ): Promise<{ messages: InboxMessage[]; nextAfters: VkThreadMap; fetchedIds: string[] }> {
   const pageSize = Number(VK_VIDEO_THREAD_COUNT);
   const messages: InboxMessage[] = [];
@@ -1560,7 +1579,7 @@ async function collectVkVideoThreads(
       if (comment.id === Number(ref.commentId)) {
         continue;
       }
-      const message = vkVideoCommentMessage(comment, Number(ref.ownerId), Number(ref.postId));
+      const message = vkVideoCommentMessage(comment, Number(ref.ownerId), Number(ref.postId), prefix);
       if (message) {
         messages.push(message);
       }
