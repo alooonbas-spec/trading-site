@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 86: Official VK nested `wall.getComments` threads on `filter=others` visitor-wall posts. Independent `otherwallthreads` map. No new SQL.
+PHASE 87: Official VK community `wall.get` `filter=suggests` for suggested community-wall posts. Independent `suggests` / `suggestwall` cursors. User OAuth skips this filter. No new SQL.

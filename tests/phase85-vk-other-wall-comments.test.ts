@@ -343,7 +343,7 @@ describe("PHASE 85 VK wall.getComments on filter=others posts", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "conversations:1|history:1|othercomments:1710000200|others:1710000100|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|othercomments:1710000200|others:1710000100|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|suggestwall:1|wall:1|wallcomments:1|wallthreads:done",
     );
   });
 

@@ -255,7 +255,7 @@ describe("PHASE 86 VK nested comments on filter=others posts", () => {
       ...nested.map((item) => `otherwall:-10:80:${item.id}`),
     ]);
     expect(result.cursor).toBe(
-      `conversations:1|history:1|othercomments:1710000200|others:1710000100|otherwall:1|otherwallcomments:1|otherwallthreads:${encodeVkThreadMap({ "-10_80_80": "1" })}|repostpages:1|wall:1|wallcomments:1|wallthreads:done`,
+      `conversations:1|history:1|othercomments:1710000200|others:1710000100|otherwall:1|otherwallcomments:1|otherwallthreads:${encodeVkThreadMap({ "-10_80_80": "1" })}|repostpages:1|suggestwall:1|wall:1|wallcomments:1|wallthreads:done`,
     );
   });
 

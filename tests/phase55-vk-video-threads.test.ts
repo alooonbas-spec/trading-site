@@ -203,7 +203,7 @@ describe("PHASE 55 VK video comment threads", () => {
     );
     expect(result.messages).toEqual([]);
     expect(result.cursor).toBe(
-      "conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|suggestwall:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(result.cursor).not.toContain("video:");
   });

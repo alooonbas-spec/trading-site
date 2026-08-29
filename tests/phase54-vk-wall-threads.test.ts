@@ -190,6 +190,6 @@ describe("PHASE 54 VK wall comment threads", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(result.cursor).toBe("conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|suggestwall:1|wall:1|wallcomments:1|wallthreads:done");
   });
 });

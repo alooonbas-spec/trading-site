@@ -300,7 +300,7 @@ describe("PHASE 77 VK wall.getReposts", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|reposts:1710000200|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|reposts:1710000200|suggestwall:1|wall:1|wallcomments:1|wallthreads:done",
     );
   });
 });

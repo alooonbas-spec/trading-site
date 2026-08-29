@@ -236,7 +236,7 @@ describe("PHASE 84 VK wall.get filter=others", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "conversations:1|history:1|others:1710000200|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|others:1710000200|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|suggestwall:1|wall:1|wallcomments:1|wallthreads:done",
     );
   });
 

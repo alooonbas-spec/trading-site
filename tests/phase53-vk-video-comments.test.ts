@@ -277,7 +277,7 @@ describe("PHASE 53 VK video.getComments", () => {
       socialAccountId: "a",
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("video.get"))).toBe(true);
-    expect(result.cursor).toBe("conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|suggestwall:1|wall:1|wallcomments:1|wallthreads:done");
     expect(result.cursor).not.toContain("videos");
     expect(result.cursor).not.toContain("videocomments");
     expect(result.cursor).not.toContain("videothreads");

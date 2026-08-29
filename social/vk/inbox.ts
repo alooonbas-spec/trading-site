@@ -375,10 +375,12 @@ async function collectVkCommunityInbox(
   const repostPage = vkOffsetCursor(named.repostpages);
   const otherwallPage = vkOffsetCursor(named.otherwall);
   const otherwallCommentsPage = vkOffsetCursor(named.otherwallcomments);
+  const suggestwallPage = vkOffsetCursor(named.suggestwall);
   const photoOwnerId = `-${groupId}`;
   const [
     wallComments,
     otherWall,
+    suggestWall,
     latestPeers,
     olderPeers,
     latestPhotos,
@@ -402,6 +404,7 @@ async function collectVkCommunityInbox(
       otherwallCommentsPage.page,
       named.otherwallthreads,
     ),
+    collectVkSuggestWallInbox(accessToken, metadata, suggestwallPage.page),
     listVkCommunityUserPeers(accessToken, groupId, 0),
     conversationOffset === null
       ? Promise.resolve(emptyVkCommunityPeers(true))
@@ -460,6 +463,8 @@ async function collectVkCommunityInbox(
       ...otherWall.older,
       ...filterMessagesAfterCursor(otherWall.latestComments, named.othercomments ?? null),
       ...otherWall.olderComments,
+      ...filterMessagesAfterCursor(suggestWall.latest, named.suggests ?? null),
+      ...suggestWall.older,
       ...filterMessagesAfterCursor(latestPhotos.messages, named.photos ?? null),
       ...olderPhotos.messages,
       ...filterMessagesAfterCursor(videoComments.latest, named.video ?? null),
@@ -510,6 +515,9 @@ async function collectVkCommunityInbox(
           named.reposts,
           newestVkCommentUnix([...wallComments.latestReposts, ...wallComments.olderReposts]),
         ) ?? "",
+      suggests:
+        laterDigitId(named.suggests, newestVkCommentUnix([...suggestWall.latest, ...suggestWall.older])) ?? "",
+      suggestwall: nextVkOffsetCursor(suggestwallPage.page, suggestWall.reachedEnd),
       video: videosUnavailable
         ? ""
         : laterDigitId(named.video, newestVkCommentUnix([...videoComments.latest, ...videoComments.older])) ?? "",
@@ -905,6 +913,84 @@ async function collectVkOtherWallInbox(
       fetchedNextAfters: extraThreads.nextAfters,
       fetchedIds: extraThreads.fetchedIds,
     }),
+  };
+}
+
+async function listVkSuggestWallPosts(
+  accessToken: string,
+  metadata: Record<string, unknown> | undefined,
+  offset: number,
+): Promise<{ posts: VkOtherWallPost[]; reachedEnd: boolean }> {
+  const pageSize = Number(VK_WALL_COUNT);
+  const target = vkWallTarget(metadata);
+  const params: Record<string, string> = {
+    access_token: accessToken,
+    count: VK_WALL_COUNT,
+    filter: "suggests",
+  };
+  if (target.ownerId) {
+    params.owner_id = target.ownerId;
+  }
+  if (offset > 0) {
+    params.offset = String(offset);
+  }
+  const payload = await vkCall("wall.get", params);
+  const parsed = mentionsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("VK wall.get suggests returned an unexpected payload");
+  }
+  const posts = parsed.data.items ?? [];
+  return { posts, reachedEnd: posts.length < pageSize };
+}
+
+function emptyVkSuggestWallPosts(reachedEnd: boolean): { posts: VkOtherWallPost[]; reachedEnd: boolean } {
+  return { posts: [], reachedEnd };
+}
+
+function vkSuggestWallPostsToMentions(posts: VkOtherWallPost[]): InboxMessage[] {
+  const messages: InboxMessage[] = [];
+  for (const post of posts) {
+    if (!isVkVisitorWallPost(post)) {
+      continue;
+    }
+    const text = post.text?.trim();
+    if (!text) {
+      continue;
+    }
+    messages.push({
+      externalId: `suggest:${post.owner_id}:${post.id}`,
+      externalProfileId: String(post.from_id),
+      username: null,
+      body: text,
+      url: `https://vk.com/wall${post.owner_id}_${post.id}`,
+      receivedAt: post.date ? new Date(post.date * 1000).toISOString() : null,
+      replyKind: "mention",
+    });
+  }
+  return messages;
+}
+
+async function collectVkSuggestWallInbox(
+  accessToken: string,
+  metadata: Record<string, unknown> | undefined,
+  suggestwallPage: VkOffsetPage,
+): Promise<{
+  latest: InboxMessage[];
+  older: InboxMessage[];
+  reachedEnd: boolean;
+}> {
+  const offset =
+    suggestwallPage !== 0 && suggestwallPage !== "done" ? suggestwallPage * Number(VK_WALL_COUNT) : null;
+  const [latestPosts, olderPosts] = await Promise.all([
+    listVkSuggestWallPosts(accessToken, metadata, 0),
+    offset === null
+      ? Promise.resolve(emptyVkSuggestWallPosts(true))
+      : listVkSuggestWallPosts(accessToken, metadata, offset),
+  ]);
+  return {
+    latest: vkSuggestWallPostsToMentions(latestPosts.posts),
+    older: vkSuggestWallPostsToMentions(olderPosts.posts),
+    reachedEnd: olderPosts.reachedEnd,
   };
 }
 
@@ -2404,6 +2490,26 @@ export function parseVkInboxOtherWallRef(externalId: string): {
   return { ownerId, postId };
 }
 
+export function parseVkInboxSuggestRef(externalId: string): {
+  ownerId: string;
+  postId: string;
+} {
+  const parts = externalId.split(":");
+  const ownerId = parts[1];
+  const postId = parts[2];
+  if (
+    parts[0] !== "suggest" ||
+    parts.length !== 3 ||
+    !ownerId ||
+    !postId ||
+    !/^-?\d+$/.test(ownerId) ||
+    !/^\d+$/.test(postId)
+  ) {
+    throw new ValidationError("VK suggested-post replies require owner and post ids from wall.get filter=suggests");
+  }
+  return { ownerId, postId };
+}
+
 export function parseVkInboxOtherWallCommentRef(externalId: string): {
   ownerId: string;
   postId: string;
@@ -2676,6 +2782,23 @@ export async function replyToVkOtherWall(
   }
 
   const ref = parseVkInboxOtherWallRef(input.externalId);
+  return postVkWallComment(accessToken, {
+    owner_id: ref.ownerId,
+    post_id: ref.postId,
+    message: text,
+  });
+}
+
+export async function replyToVkSuggest(
+  accessToken: string,
+  input: { externalId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("VK suggested-post replies require a body");
+  }
+
+  const ref = parseVkInboxSuggestRef(input.externalId);
   return postVkWallComment(accessToken, {
     owner_id: ref.ownerId,
     post_id: ref.postId,
