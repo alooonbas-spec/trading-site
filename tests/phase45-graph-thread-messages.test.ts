@@ -22,7 +22,7 @@ describe("PHASE 45 Graph conversation message after paging", () => {
       if (target.includes("/555/feed")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("/555/tagged") || target.includes("/555/ratings") || target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos")) {
+      if (target.includes("/555/tagged") || target.includes("/555/ratings") || target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos") || target.includes("/555/video_reels")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("/t_900/messages")) {
@@ -77,7 +77,7 @@ describe("PHASE 45 Graph conversation message after paging", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:done|livereplies:done|livevideos:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:${encodeGraphReplies({ t_900: "msg-2" })}|threads:done|videoreplies:done|videos:done`,
+      `creplies:done|donethreads:done|livereplies:done|livevideos:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:${encodeGraphReplies({ t_900: "msg-2" })}|threads:done|videoreplies:done|videos:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/t_900/messages"))).toHaveLength(0);
 
@@ -88,7 +88,7 @@ describe("PHASE 45 Graph conversation message after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-m"]);
     expect(second.cursor).toBe(
-      "creplies:done|donethreads:done|livereplies:done|livevideos:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "creplies:done|donethreads:done|livereplies:done|livevideos:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/t_900/messages"))).toHaveLength(1);
   });
