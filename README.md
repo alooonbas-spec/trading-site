@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 83: Official X Recent Search `to:{userId}` inbox collection. Extra replies-to-user pages are not dropped by the replyto watermark. No new SQL.
+PHASE 84: Official VK `wall.get` `filter=others` inbox collection. Extra visitor-wall pages are not dropped by the others watermark. No new SQL.

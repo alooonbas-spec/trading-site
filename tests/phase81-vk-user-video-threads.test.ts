@@ -98,7 +98,7 @@ describe("PHASE 81 VK tagged video comment threads", () => {
       ...nested.map((item) => `videotag:77:20:${item.id}`),
     ]);
     expect(first.cursor).toBe(
-      `mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideo:1710000200|uservideocomments:1|uservideos:1|uservideothreads:${encodeVkThreadMap({ "77_20_80": "1" })}|videocomments:1|videos:1|videotags:1710000100|videothreads:done|wall:1|wallcomments:1|wallthreads:done`,
+      `mentionpages:1|otherwall:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideo:1710000200|uservideocomments:1|uservideos:1|uservideothreads:${encodeVkThreadMap({ "77_20_80": "1" })}|videocomments:1|videos:1|videotags:1710000100|videothreads:done|wall:1|wallcomments:1|wallthreads:done`,
     );
 
     const second = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
@@ -110,7 +110,7 @@ describe("PHASE 81 VK tagged video comment threads", () => {
       older.map((item) => `videotag:77:20:${item.id}`),
     );
     expect(second.cursor).toBe(
-      `mentionpages:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideo:1710000200|uservideocomments:done|uservideos:done|uservideothreads:${encodeVkThreadMap({ "77_20_80": "2" })}|videocomments:done|videos:done|videotags:1710000100|videothreads:done|wall:done|wallcomments:done|wallthreads:done`,
+      `mentionpages:done|otherwall:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideo:1710000200|uservideocomments:done|uservideos:done|uservideothreads:${encodeVkThreadMap({ "77_20_80": "2" })}|videocomments:done|videos:done|videotags:1710000100|videothreads:done|wall:done|wallcomments:done|wallthreads:done`,
     );
   });
 

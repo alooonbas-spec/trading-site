@@ -122,7 +122,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       })),
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|photocomments:1|phototags:1710000100|repostpages:1|userphoto:1710000200|userphotocomments:2|userphotos:done|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|otherwall:1|photocomments:1|phototags:1710000100|repostpages:1|userphoto:1710000200|userphotocomments:2|userphotos:done|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getComments")),
@@ -185,7 +185,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|repostpages:1|userphoto:1710000200|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|otherwall:1|photocomments:1|repostpages:1|userphoto:1710000200|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
   });
 
@@ -236,7 +236,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["phototag:77:20", "phototag:77:20:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|phototags:1710000100|repostpages:1|userphoto:1710000081|userphotocomments:done|userphotos:done|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|otherwall:1|photocomments:1|phototags:1710000100|repostpages:1|userphoto:1710000081|userphotocomments:done|userphotos:done|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getComments")),

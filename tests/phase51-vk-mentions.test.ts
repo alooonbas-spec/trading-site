@@ -83,7 +83,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
         replyKind: "mention",
       },
     ]);
-    expect(first.cursor).toBe("mentionpages:1|mentions:1710000200|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
+    expect(first.cursor).toBe("mentionpages:1|mentions:1710000200|otherwall:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
     ).toHaveLength(1);
@@ -94,7 +94,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `77:${item.id}`));
-    expect(second.cursor).toBe("mentionpages:2|mentions:1710000200|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideocomments:done|uservideos:done|uservideothreads:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done");
+    expect(second.cursor).toBe("mentionpages:2|mentions:1710000200|otherwall:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideocomments:done|uservideos:done|uservideothreads:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
     ).toHaveLength(3);
@@ -134,7 +134,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
       cursor: "mentionpages:done|mentions:1710000000",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["77:81"]);
-    expect(result.cursor).toBe("mentionpages:done|mentions:1710000081|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("mentionpages:done|mentions:1710000081|otherwall:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
     ).toHaveLength(1);

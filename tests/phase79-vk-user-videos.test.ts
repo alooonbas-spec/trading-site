@@ -90,7 +90,7 @@ describe("PHASE 79 VK video.getUserVideos", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videotags:1710000200|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|otherwall:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videotags:1710000200|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getUserVideos")),
@@ -103,7 +103,7 @@ describe("PHASE 79 VK video.getUserVideos", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `videotag:77:${item.id}`));
     expect(second.cursor).toBe(
-      "mentionpages:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideocomments:done|uservideos:2|uservideothreads:done|videocomments:done|videos:done|videotags:1710000200|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
+      "mentionpages:done|otherwall:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideocomments:done|uservideos:2|uservideothreads:done|videocomments:done|videos:done|videotags:1710000200|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getUserVideos")),
@@ -145,7 +145,7 @@ describe("PHASE 79 VK video.getUserVideos", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["videotag:77:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:done|uservideothreads:done|videocomments:1|videos:1|videotags:1710000081|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|otherwall:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:done|uservideothreads:done|videocomments:1|videos:1|videotags:1710000081|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getUserVideos")),

@@ -98,7 +98,7 @@ describe("PHASE 54 VK wall comment threads", () => {
       ...nested.map((item) => `10:20:${item.id}`),
     ]);
     expect(first.cursor).toBe(
-      `comments:1710000200|mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:${encodeVkThreadMap({ "10_20_80": "1" })}`,
+      `comments:1710000200|mentionpages:1|otherwall:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:${encodeVkThreadMap({ "10_20_80": "1" })}`,
     );
 
     const second = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
@@ -108,7 +108,7 @@ describe("PHASE 54 VK wall comment threads", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `10:20:${item.id}`));
     expect(second.cursor).toBe(
-      `comments:1710000200|mentionpages:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideocomments:done|uservideos:done|uservideothreads:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:${encodeVkThreadMap({ "10_20_80": "2" })}`,
+      `comments:1710000200|mentionpages:done|otherwall:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideocomments:done|uservideos:done|uservideothreads:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:${encodeVkThreadMap({ "10_20_80": "2" })}`,
     );
   });
 
@@ -190,6 +190,6 @@ describe("PHASE 54 VK wall comment threads", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(result.cursor).toBe("conversations:1|history:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("conversations:1|history:1|otherwall:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
   });
 });
