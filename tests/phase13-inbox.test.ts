@@ -147,6 +147,9 @@ describe("X inbox", () => {
           { status: 200 },
         );
       }
+      if (target.includes("/quote_tweets") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       expect(target).toContain("https://api.x.com/2/dm_events");
       return new Response(JSON.stringify({ data: [] }), { status: 200 });
     });

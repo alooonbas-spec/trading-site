@@ -9,7 +9,7 @@ import {
 } from "@/lib/inbox/cursor";
 import { readJson, socialFetch } from "@/social/core/http";
 import type { InboxInput, InboxMessage, InboxResult } from "@/social/core/adapter";
-import { decodeXPageToken, nextXPageCursor } from "@/social/x/paging";
+import { decodeXPageMap, decodeXPageToken, nextXPageCursor, nextXPageMapCursor, X_PAGE_MAP_FETCH_LIMIT, X_TWEET_ID } from "@/social/x/paging";
 
 const mentionsSchema = z.object({
   data: z
@@ -172,6 +172,21 @@ export function parseXMentionTweets(payload: unknown, ownUserId: string): InboxM
   return messages;
 }
 
+const userTweetsSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+      }),
+    )
+    .optional(),
+  meta: z
+    .object({
+      next_token: z.string().optional(),
+    })
+    .optional(),
+});
+
 function xNextToken(meta?: { next_token?: string }): string | null {
   const token = meta?.next_token?.trim();
   return token ? token : null;
@@ -232,6 +247,120 @@ async function collectXDirectMessages(
   };
 }
 
+async function collectXUserTweets(
+  accessToken: string,
+  userId: string,
+  paginationToken?: string | null,
+): Promise<{ tweetIds: string[]; nextToken: string | null }> {
+  const url = new URL(`https://api.x.com/2/users/${userId}/tweets`);
+  url.searchParams.set("max_results", "10");
+  url.searchParams.set("exclude", "retweets");
+  if (paginationToken) {
+    url.searchParams.set("pagination_token", paginationToken);
+  }
+  const response = await socialFetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+  const payload = await readJson<unknown>(response);
+  const parsed = userTweetsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("X user tweets returned an unexpected payload");
+  }
+  return {
+    tweetIds: (parsed.data.data ?? []).map((tweet) => tweet.id).filter((id) => X_TWEET_ID.test(id)),
+    nextToken: xNextToken(parsed.data.meta),
+  };
+}
+
+async function collectXQuotesForTweet(
+  accessToken: string,
+  ownUserId: string,
+  tweetId: string,
+  paginationToken?: string | null,
+): Promise<{ messages: InboxMessage[]; newestId: string | null; nextToken: string | null }> {
+  const url = new URL(`https://api.x.com/2/tweets/${tweetId}/quote_tweets`);
+  url.searchParams.set("max_results", "10");
+  url.searchParams.set("tweet.fields", "author_id,created_at");
+  url.searchParams.set("expansions", "author_id");
+  url.searchParams.set("user.fields", "username");
+  if (paginationToken) {
+    url.searchParams.set("pagination_token", paginationToken);
+  }
+  const response = await socialFetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+  const payload = await readJson<unknown>(response);
+  const parsed = mentionsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("X quote tweets returned an unexpected payload");
+  }
+  const messages = parseXMentionTweets(payload, ownUserId);
+  return {
+    messages,
+    newestId: messages.reduce<string | null>((newest, message) => laterDigitId(newest, message.externalId), null),
+    nextToken: xNextToken(parsed.data.meta),
+  };
+}
+
+async function collectXQuotesForTweets(
+  accessToken: string,
+  ownUserId: string,
+  tweetIds: string[],
+): Promise<{
+  messages: InboxMessage[];
+  newestId: string | null;
+  quoteTokens: Record<string, string>;
+}> {
+  const pages = await Promise.all(
+    tweetIds.map((tweetId) => collectXQuotesForTweet(accessToken, ownUserId, tweetId)),
+  );
+  const quoteTokens: Record<string, string> = {};
+  const messages: InboxMessage[] = [];
+  let newestId: string | null = null;
+  for (const [index, page] of pages.entries()) {
+    const tweetId = tweetIds[index];
+    if (tweetId && page.nextToken) {
+      quoteTokens[tweetId] = page.nextToken;
+    }
+    messages.push(...page.messages);
+    newestId = laterDigitId(newestId, page.newestId);
+  }
+  return { messages, newestId, quoteTokens };
+}
+
+async function collectXQuotePages(
+  accessToken: string,
+  ownUserId: string,
+  stored: Record<string, string>,
+): Promise<{
+  messages: InboxMessage[];
+  newestId: string | null;
+  nextTokens: Record<string, string>;
+  fetchedIds: string[];
+}> {
+  const fetchedIds = Object.keys(stored)
+    .filter((id) => X_TWEET_ID.test(id))
+    .slice(0, X_PAGE_MAP_FETCH_LIMIT);
+  const pages = await Promise.all(
+    fetchedIds.map((tweetId) => collectXQuotesForTweet(accessToken, ownUserId, tweetId, stored[tweetId])),
+  );
+  const nextTokens: Record<string, string> = {};
+  const messages: InboxMessage[] = [];
+  let newestId: string | null = null;
+  for (const [index, page] of pages.entries()) {
+    const tweetId = fetchedIds[index];
+    if (tweetId && page.nextToken) {
+      nextTokens[tweetId] = page.nextToken;
+    }
+    messages.push(...page.messages);
+    newestId = laterDigitId(newestId, page.newestId);
+  }
+  return { messages, newestId, nextTokens, fetchedIds };
+}
+
+function filterXQuotesAfterCursor(messages: InboxMessage[], sinceId?: string | null): InboxMessage[] {
+  if (!sinceId) {
+    return messages;
+  }
+  return messages.filter((message) => isDigitIdAfter(message.externalId, sinceId));
+}
+
 export async function collectXInbox(accessToken: string, input: InboxInput): Promise<InboxResult> {
   const headers = { Authorization: `Bearer ${accessToken}` };
   const meResponse = await socialFetch("https://api.x.com/2/users/me", { headers });
@@ -244,9 +373,23 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
   const cursor = parseXInboxCursor(input.cursor);
   const olderMentionToken = decodeXPageToken(named.mentionpages);
   const olderDmToken = decodeXPageToken(named.dmpages);
+  const olderTweetToken = decodeXPageToken(named.tweetpages);
+  const storedQuotePages = decodeXPageMap(named.quotepages);
   const emptyPage = { messages: [] as InboxMessage[], newestId: null as string | null, nextToken: null as string | null };
+  const emptyTweets = { tweetIds: [] as string[], nextToken: null as string | null };
+  const emptyQuotes = {
+    messages: [] as InboxMessage[],
+    newestId: null as string | null,
+    quoteTokens: {} as Record<string, string>,
+  };
+  const emptyQuotePages = {
+    messages: [] as InboxMessage[],
+    newestId: null as string | null,
+    nextTokens: {} as Record<string, string>,
+    fetchedIds: [] as string[],
+  };
   const userId = me.data.data.id;
-  const [latestMentions, olderMentions, latestDms, olderDms] = await Promise.all([
+  const [latestMentions, olderMentions, latestDms, olderDms, latestTweets, olderTweets, extraQuotes] = await Promise.all([
     collectXMentions(accessToken, userId, { sinceId: cursor.mentions }),
     olderMentionToken
       ? collectXMentions(accessToken, userId, { paginationToken: olderMentionToken })
@@ -255,11 +398,28 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
     olderDmToken
       ? collectXDirectMessages(accessToken, userId, { paginationToken: olderDmToken })
       : Promise.resolve(emptyPage),
+    collectXUserTweets(accessToken, userId),
+    olderTweetToken ? collectXUserTweets(accessToken, userId, olderTweetToken) : Promise.resolve(emptyTweets),
+    storedQuotePages
+      ? collectXQuotePages(accessToken, userId, storedQuotePages)
+      : Promise.resolve(emptyQuotePages),
+  ]);
+  const [latestQuotes, olderQuotes] = await Promise.all([
+    collectXQuotesForTweets(accessToken, userId, latestTweets.tweetIds),
+    olderTweets.tweetIds.length > 0
+      ? collectXQuotesForTweets(accessToken, userId, olderTweets.tweetIds)
+      : Promise.resolve(emptyQuotes),
   ]);
 
   return {
     messages: [
-      ...uniqueInboxMessages([...latestMentions.messages, ...olderMentions.messages]),
+      ...uniqueInboxMessages([
+        ...latestMentions.messages,
+        ...olderMentions.messages,
+        ...filterXQuotesAfterCursor(latestQuotes.messages, named.quotes),
+        ...olderQuotes.messages,
+        ...extraQuotes.messages,
+      ]),
       ...uniqueInboxMessages([...latestDms.messages, ...olderDms.messages]),
     ],
     cursor: serializeNamedInboxCursor({
@@ -277,6 +437,23 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
         fetchedOlder: Boolean(olderMentionToken),
       }),
       mentions: laterDigitId(cursor.mentions, laterDigitId(latestMentions.newestId, olderMentions.newestId)) ?? "",
+      quotepages: nextXPageMapCursor({
+        stored: named.quotepages,
+        nestedTokens: { ...latestQuotes.quoteTokens, ...olderQuotes.quoteTokens },
+        fetchedNextTokens: extraQuotes.nextTokens,
+        fetchedIds: extraQuotes.fetchedIds,
+      }),
+      quotes:
+        laterDigitId(
+          named.quotes,
+          laterDigitId(latestQuotes.newestId, laterDigitId(olderQuotes.newestId, extraQuotes.newestId)),
+        ) ?? "",
+      tweetpages: nextXPageCursor({
+        stored: named.tweetpages,
+        firstPageToken: latestTweets.nextToken,
+        olderPageToken: olderTweets.nextToken,
+        fetchedOlder: Boolean(olderTweetToken),
+      }),
     }),
   };
 }
