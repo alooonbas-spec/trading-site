@@ -6,12 +6,16 @@ import { facebookCommentReplyUrl } from "@/social/facebook/inbox";
 import { InstagramAdapter } from "@/social/instagram/adapter";
 import { INSTAGRAM_GRAPH_ORIGIN } from "@/social/instagram/publish";
 
-describe("PHASE 73 Graph Facebook Page live videos comments", () => {
+function isFacebookUploadedVideos(target: string): boolean {
+  return target.includes("/555/videos") && !target.includes("/555/video_reels");
+}
+
+describe("PHASE 75 Graph Facebook Page albums comments", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("walks the next official Facebook live videos after cursor and keeps older comments", async () => {
+  it("walks the next official Facebook albums after cursor and keeps older comments", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -26,26 +30,27 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
         target.includes("/555/tagged") ||
         target.includes("/555/ratings") ||
         target.includes("/555/photos") ||
-        target.includes("/555/videos") ||
-        target.includes("/555/video_reels") || target.includes("/555/albums")
+        target.includes("/555/live_videos") ||
+        target.includes("/555/video_reels") ||
+        isFacebookUploadedVideos(target)
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/live_videos`);
+      expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/albums`);
       expect(decodeURIComponent(target)).toContain("comments.limit(50)");
       expect(decodeURIComponent(target)).toContain("comments.limit(25)");
       expect(target).not.toContain("paging.next");
-      if (target.includes("after=live-2")) {
+      if (target.includes("after=album-2")) {
         return new Response(
           JSON.stringify({
             data: [
               {
-                id: "lv9002",
+                id: "a9002",
                 comments: {
                   data: [
                     {
-                      id: "old-lv-c",
-                      message: "older live comment",
+                      id: "old-a-c",
+                      message: "older album comment",
                       from: { id: "800", name: "Commenter" },
                       created_time: "2026-08-20T09:00:00+0000",
                     },
@@ -62,23 +67,23 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
         JSON.stringify({
           data: [
             {
-              id: "lv9001",
+              id: "a9001",
               comments: {
                 data: [
                   {
-                    id: "new-lv-c",
-                    message: "newer live comment",
+                    id: "new-a-c",
+                    message: "newer album comment",
                     from: { id: "800", name: "Commenter" },
                     created_time: "2026-08-21T12:00:00+0000",
                   },
                   {
-                    id: "own-lv-c",
+                    id: "own-a-c",
                     message: "page reply",
                     from: { id: "555", name: "Hub Page" },
                     created_time: "2026-08-21T12:01:00+0000",
                   },
                   {
-                    id: "blank-lv-c",
+                    id: "blank-a-c",
                     message: "   ",
                     from: { id: "800", name: "Commenter" },
                     created_time: "2026-08-21T12:02:00+0000",
@@ -87,7 +92,7 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
               },
             },
           ],
-          paging: { cursors: { after: "live-2" } },
+          paging: { cursors: { after: "album-2" } },
         }),
         { status: 200 },
       );
@@ -100,33 +105,33 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
     });
     expect(first.messages).toEqual([
       {
-        externalId: "new-lv-c",
+        externalId: "new-a-c",
         externalProfileId: "800",
         username: "Commenter",
-        body: "newer live comment",
-        url: "https://www.facebook.com/new-lv-c",
+        body: "newer album comment",
+        url: "https://www.facebook.com/new-a-c",
         receivedAt: "2026-08-21T12:00:00+0000",
         replyKind: "comment",
       },
     ]);
     expect(first.cursor).toBe(
-      `albumreplies:done|albums:done|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:${encodeGraphAfter("live-2")}|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `albumreplies:done|albums:${encodeGraphAfter("album-2")}|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/live_videos"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/albums"))).toHaveLength(1);
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
       cursor: first.cursor,
     });
-    expect(second.messages.map((item) => item.externalId)).toEqual(["old-lv-c"]);
+    expect(second.messages.map((item) => item.externalId)).toEqual(["old-a-c"]);
     expect(second.cursor).toBe(
       "albumreplies:done|albums:done|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/live_videos"))).toHaveLength(3);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/albums"))).toHaveLength(3);
   });
 
-  it("walks the next official Facebook live video comment after cursor and keeps older comments", async () => {
+  it("walks the next official Facebook album comment after cursor and keeps older comments", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -141,8 +146,9 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
         target.includes("/555/tagged") ||
         target.includes("/555/ratings") ||
         target.includes("/555/photos") ||
-        target.includes("/555/videos") ||
-        target.includes("/555/video_reels") || target.includes("/555/albums")
+        target.includes("/555/live_videos") ||
+        target.includes("/555/video_reels") ||
+        isFacebookUploadedVideos(target)
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -151,20 +157,22 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
         target.includes("/tag1/comments") ||
         target.includes("/st9001/comments") ||
         target.includes("/v9001/comments") ||
-        target.includes("/p9001/comments")
+        target.includes("/p9001/comments") ||
+        target.includes("/lv9001/comments") ||
+        target.includes("/r9001/comments")
       ) {
-        throw new Error(`unexpected feed, tagged, video, or photo comments after ${target}`);
+        throw new Error(`unexpected feed, tagged, video, photo, live, or reel comments after ${target}`);
       }
-      if (target.includes("/lv9001/comments")) {
-        expect(target).toContain("after=live-cmt-2");
+      if (target.includes("/a9001/comments")) {
+        expect(target).toContain("after=album-cmt-2");
         expect(target).toContain("limit=50");
         expect(target).not.toContain("paging.next");
         return new Response(
           JSON.stringify({
             data: [
               {
-                id: "old-lv-c",
-                message: "older live comment",
+                id: "old-a-c",
+                message: "older album comment",
                 from: { id: "800", name: "Commenter" },
                 created_time: "2026-08-20T09:00:00+0000",
               },
@@ -173,7 +181,7 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
           { status: 200 },
         );
       }
-      expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/live_videos`);
+      expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/albums`);
       expect(decodeURIComponent(target)).toContain("comments.limit(50)");
       expect(target).not.toContain("paging.next");
       expect(target).not.toContain("after=");
@@ -181,17 +189,17 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
         JSON.stringify({
           data: [
             {
-              id: "lv9001",
+              id: "a9001",
               comments: {
                 data: [
                   {
-                    id: "new-lv-c",
-                    message: "newer live comment",
+                    id: "new-a-c",
+                    message: "newer album comment",
                     from: { id: "800", name: "Commenter" },
                     created_time: "2026-08-21T12:00:00+0000",
                   },
                 ],
-                paging: { cursors: { after: "live-cmt-2" } },
+                paging: { cursors: { after: "album-cmt-2" } },
               },
             },
           ],
@@ -205,25 +213,25 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(first.messages.map((item) => item.externalId)).toEqual(["new-lv-c"]);
+    expect(first.messages.map((item) => item.externalId)).toEqual(["new-a-c"]);
     expect(first.cursor).toBe(
-      `albumreplies:done|albums:done|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:${encodeGraphReplies({ lv9001: "live-cmt-2" })}|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `albumreplies:${encodeGraphReplies({ a9001: "album-cmt-2" })}|albums:done|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/lv9001/comments"))).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/a9001/comments"))).toHaveLength(0);
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
       cursor: first.cursor,
     });
-    expect(second.messages.map((item) => item.externalId)).toEqual(["old-lv-c"]);
+    expect(second.messages.map((item) => item.externalId)).toEqual(["old-a-c"]);
     expect(second.cursor).toBe(
       "albumreplies:done|albums:done|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/lv9001/comments"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/a9001/comments"))).toHaveLength(1);
   });
 
-  it("skips Facebook live video after paging once livevideos:done and livereplies:done are stored", async () => {
+  it("skips Facebook album after paging once albums:done and albumreplies:done are stored", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -238,35 +246,36 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
         target.includes("/555/tagged") ||
         target.includes("/555/ratings") ||
         target.includes("/555/photos") ||
-        target.includes("/555/videos") ||
-        target.includes("/555/video_reels") || target.includes("/555/albums")
+        target.includes("/555/live_videos") ||
+        target.includes("/555/video_reels") ||
+        isFacebookUploadedVideos(target)
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("/lv9001/comments")) {
-        throw new Error(`unexpected live video comments after ${target}`);
+      if (target.includes("/a9001/comments")) {
+        throw new Error(`unexpected album comments after ${target}`);
       }
-      expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/live_videos`);
+      expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/albums`);
       expect(target).not.toContain("after=");
       return new Response(
         JSON.stringify({
           data: [
             {
-              id: "lv9001",
+              id: "a9001",
               comments: {
                 data: [
                   {
-                    id: "new-lv-c",
-                    message: "newer live comment",
+                    id: "new-a-c",
+                    message: "newer album comment",
                     from: { id: "800", name: "Commenter" },
                     created_time: "2026-08-21T10:00:00+0000",
                   },
                 ],
-                paging: { cursors: { after: "live-cmt-2" } },
+                paging: { cursors: { after: "album-cmt-2" } },
               },
             },
           ],
-          paging: { cursors: { after: "live-2" } },
+          paging: { cursors: { after: "album-2" } },
         }),
         { status: 200 },
       );
@@ -276,20 +285,20 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
     const result = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "comments:2026-08-21T08:00:00+0000|livereplies:done|livevideos:done",
+      cursor: "comments:2026-08-21T08:00:00+0000|albumreplies:done|albums:done",
     });
-    expect(result.messages.map((item) => item.externalId)).toEqual(["new-lv-c"]);
+    expect(result.messages.map((item) => item.externalId)).toEqual(["new-a-c"]);
     expect(result.cursor).toBe(
       "albumreplies:done|albums:done|comments:2026-08-21T10:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/live_videos"))).toHaveLength(1);
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/lv9001/comments"))).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/albums"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/a9001/comments"))).toHaveLength(0);
   });
 
-  it("does not collect Instagram live videos as a separate Graph edge", async () => {
+  it("does not collect Instagram albums as a separate Graph edge", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target.includes("/live_videos")) {
+      if (target.includes("/albums")) {
         throw new Error(`Instagram inbox must not call ${target}`);
       }
       if (target.includes("/ig-1/conversations") || target.includes("/ig-1/tags")) {
@@ -311,11 +320,11 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
     expect(result.cursor).toBe(
       "creplies:done|posts:done|replies:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done",
     );
-    expect(result.cursor).not.toContain("livevideos");
-    expect(result.cursor).not.toContain("livereplies");
+    expect(result.cursor).not.toContain("albums");
+    expect(result.cursor).not.toContain("albumreplies");
   });
 
-  it("replies to Facebook live video comments through the existing comment endpoint", async () => {
+  it("replies to Facebook album comments through the existing comment endpoint", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const target = String(url);
       if (target.startsWith(`${FACEBOOK_GRAPH_ORIGIN}/me/accounts`)) {
@@ -324,7 +333,7 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
           { status: 200 },
         );
       }
-      expect(target.startsWith(facebookCommentReplyUrl("new-lv-c"))).toBe(true);
+      expect(target.startsWith(facebookCommentReplyUrl("new-a-c"))).toBe(true);
       expect(init?.method).toBe("POST");
       expect(JSON.parse(String(init?.body))).toEqual({ message: "Thanks" });
       return new Response(JSON.stringify({ id: "reply-99" }), { status: 200 });
@@ -336,7 +345,7 @@ describe("PHASE 73 Graph Facebook Page live videos comments", () => {
       socialAccountId: "a",
       kind: "comment",
       body: "Thanks",
-      externalEventId: "new-lv-c",
+      externalEventId: "new-a-c",
       target: { externalProfileId: "800", username: "Commenter" },
     });
     expect(sent.externalMessageId).toBe("reply-99");

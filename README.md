@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 74: Isolated official Graph Facebook Page `/{page-id}/video_reels` comments. Extra reel pages and extra reel-comment pages are not dropped by the comments watermark. Instagram is unchanged. No new SQL.
+PHASE 75: Isolated official Graph Facebook Page `/{page-id}/albums` comments. Extra album pages and extra album-comment pages are not dropped by the comments watermark. Instagram is unchanged. No new SQL.

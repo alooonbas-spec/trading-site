@@ -376,6 +376,55 @@ async function collectFacebookVideoReels(
   return { messages, nextAfter: graphPagingAfter(payload), repliesAfter, crepliesAfter };
 }
 
+async function collectFacebookAlbums(
+  page: FacebookPageAuth,
+  after?: string | null,
+): Promise<{
+  messages: InboxMessage[];
+  nextAfter: string | null;
+  repliesAfter: GraphRepliesMap;
+  crepliesAfter: GraphRepliesMap;
+}> {
+  const url = new URL(`${FACEBOOK_GRAPH_ORIGIN}/${page.id}/albums`);
+  url.searchParams.set(
+    "fields",
+    "id,updated_time,comments.limit(50){id,from,message,created_time,comments.limit(25){id,from,message,created_time}}",
+  );
+  url.searchParams.set("limit", "10");
+  url.searchParams.set("access_token", page.accessToken);
+  if (after) {
+    url.searchParams.set("after", after);
+  }
+  const response = await socialFetch(url.toString());
+  const payload = await readJson<unknown>(response);
+  throwIfGraphError(payload);
+  const parsed = commentsSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new SocialError("Facebook Page albums returned an unexpected payload");
+  }
+
+  const messages: InboxMessage[] = [];
+  const repliesAfter: GraphRepliesMap = {};
+  const crepliesAfter: GraphRepliesMap = {};
+  for (const album of parsed.data.data ?? []) {
+    const nestedAfter = graphPagingAfter(album.comments);
+    if (nestedAfter && GRAPH_OBJECT_ID.test(album.id)) {
+      repliesAfter[album.id] = nestedAfter;
+    }
+    for (const comment of album.comments?.data ?? []) {
+      pushFacebookComment(messages, comment, page.id);
+      const replyAfter = graphPagingAfter(comment.comments);
+      if (replyAfter && GRAPH_OBJECT_ID.test(comment.id)) {
+        crepliesAfter[comment.id] = replyAfter;
+      }
+      for (const reply of comment.comments?.data ?? []) {
+        pushFacebookComment(messages, reply, page.id);
+      }
+    }
+  }
+  return { messages, nextAfter: graphPagingAfter(payload), repliesAfter, crepliesAfter };
+}
+
 function pushFacebookComment(
   messages: InboxMessage[],
   comment: {
@@ -919,6 +968,8 @@ export async function collectFacebookInbox(
   const storedLiveReplies = decodeGraphReplies(cursor.livereplies);
   const olderReelsAfter = decodeGraphAfter(cursor.reels);
   const storedReelReplies = decodeGraphReplies(cursor.reelreplies);
+  const olderAlbumsAfter = decodeGraphAfter(cursor.albums);
+  const storedAlbumReplies = decodeGraphReplies(cursor.albumreplies);
   const emptyPage = {
     messages: [] as InboxMessage[],
     nextAfter: null,
@@ -985,6 +1036,9 @@ export async function collectFacebookInbox(
     latestReels,
     olderReels,
     extraReelReplies,
+    latestAlbums,
+    olderAlbums,
+    extraAlbumReplies,
   ] = await Promise.all([
       collectFacebookComments(page),
       olderPostsAfter ? collectFacebookComments(page, olderPostsAfter) : Promise.resolve(emptyPage),
@@ -1041,6 +1095,11 @@ export async function collectFacebookInbox(
       storedReelReplies
         ? collectFacebookCommentReplies(page, storedReelReplies)
         : Promise.resolve(emptyReplies),
+      collectFacebookAlbums(page),
+      olderAlbumsAfter ? collectFacebookAlbums(page, olderAlbumsAfter) : Promise.resolve(emptyPage),
+      storedAlbumReplies
+        ? collectFacebookCommentReplies(page, storedAlbumReplies)
+        : Promise.resolve(emptyReplies),
     ]);
   const comments = uniqueInboxMessages([
     ...filterMessagesAfterCursor(latestComments.messages, cursor.comments),
@@ -1065,6 +1124,9 @@ export async function collectFacebookInbox(
     ...filterMessagesAfterCursor(latestReels.messages, cursor.comments),
     ...olderReels.messages,
     ...extraReelReplies.messages,
+    ...filterMessagesAfterCursor(latestAlbums.messages, cursor.comments),
+    ...olderAlbums.messages,
+    ...extraAlbumReplies.messages,
   ]);
   const latestMessages = latestDirect.messages;
   const olderMessages = olderDirect.messages;
@@ -1120,6 +1182,9 @@ export async function collectFacebookInbox(
             ...latestReels.messages,
             ...olderReels.messages,
             ...extraReelReplies.messages,
+            ...latestAlbums.messages,
+            ...olderAlbums.messages,
+            ...extraAlbumReplies.messages,
           ]),
         ) ?? "",
       messages:
@@ -1139,6 +1204,18 @@ export async function collectFacebookInbox(
             ...extraThreadMsgs.messages,
           ]),
         ) ?? "",
+      albumreplies: nextGraphRepliesCursor({
+        stored: cursor.albumreplies,
+        nestedAfters: { ...latestAlbums.repliesAfter, ...olderAlbums.repliesAfter },
+        fetchedNextAfters: extraAlbumReplies.nextAfters,
+        fetchedIds: extraAlbumReplies.fetchedIds,
+      }),
+      albums: nextGraphAfterCursor({
+        stored: cursor.albums,
+        firstPageAfter: latestAlbums.nextAfter,
+        olderPageAfter: olderAlbums.nextAfter,
+        fetchedOlder: Boolean(olderAlbumsAfter),
+      }),
       donethreads: nextGraphAfterCursor({
         stored: cursor.donethreads,
         firstPageAfter: latestDone.nextAfter,
@@ -1252,6 +1329,9 @@ export async function collectFacebookInbox(
           ...latestReels.crepliesAfter,
           ...olderReels.crepliesAfter,
           ...extraReelReplies.crepliesAfter,
+          ...latestAlbums.crepliesAfter,
+          ...olderAlbums.crepliesAfter,
+          ...extraAlbumReplies.crepliesAfter,
         },
         fetchedNextAfters: extraCreplies.nextAfters,
         fetchedIds: extraCreplies.fetchedIds,

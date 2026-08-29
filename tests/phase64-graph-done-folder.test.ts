@@ -23,7 +23,7 @@ describe("PHASE 64 Graph Facebook conversations folder=page_done", () => {
         target.includes("/555/feed") ||
         target.includes("/555/tagged") ||
         target.includes("/555/ratings") ||
-        target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos") || target.includes("/555/video_reels")
+        target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos") || target.includes("/555/video_reels") || target.includes("/555/albums")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -87,7 +87,7 @@ describe("PHASE 64 Graph Facebook conversations folder=page_done", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-done-m"]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:${encodeGraphAfter("done-2")}|livereplies:done|livevideos:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `albumreplies:done|albums:done|creplies:done|donethreads:${encodeGraphAfter("done-2")}|livereplies:done|livevideos:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -97,7 +97,7 @@ describe("PHASE 64 Graph Facebook conversations folder=page_done", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-done-m"]);
     expect(second.cursor).toBe(
-      "creplies:done|donethreads:done|livereplies:done|livevideos:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "albumreplies:done|albums:done|creplies:done|donethreads:done|livereplies:done|livevideos:done|messages:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(
       fetchMock.mock.calls.filter(
@@ -119,7 +119,7 @@ describe("PHASE 64 Graph Facebook conversations folder=page_done", () => {
         target.includes("/555/feed") ||
         target.includes("/555/tagged") ||
         target.includes("/555/ratings") ||
-        target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos") || target.includes("/555/video_reels")
+        target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos") || target.includes("/555/video_reels") || target.includes("/555/albums")
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
@@ -162,7 +162,7 @@ describe("PHASE 64 Graph Facebook conversations folder=page_done", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-done-m"]);
     expect(result.cursor).toBe(
-      "creplies:done|donethreads:done|livereplies:done|livevideos:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "albumreplies:done|albums:done|creplies:done|donethreads:done|livereplies:done|livevideos:done|messages:2026-08-21T09:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(
       fetchMock.mock.calls.filter(

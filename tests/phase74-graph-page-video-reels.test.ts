@@ -31,6 +31,7 @@ describe("PHASE 74 Graph Facebook Page video reels comments", () => {
         target.includes("/555/ratings") ||
         target.includes("/555/photos") ||
         target.includes("/555/live_videos") ||
+        target.includes("/555/albums") ||
         isFacebookUploadedVideos(target)
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
@@ -114,7 +115,7 @@ describe("PHASE 74 Graph Facebook Page video reels comments", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:${encodeGraphAfter("reel-2")}|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `albumreplies:done|albums:done|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:${encodeGraphAfter("reel-2")}|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/video_reels"))).toHaveLength(1);
 
@@ -125,7 +126,7 @@ describe("PHASE 74 Graph Facebook Page video reels comments", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-r-c"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "albumreplies:done|albums:done|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/video_reels"))).toHaveLength(3);
   });
@@ -146,6 +147,7 @@ describe("PHASE 74 Graph Facebook Page video reels comments", () => {
         target.includes("/555/ratings") ||
         target.includes("/555/photos") ||
         target.includes("/555/live_videos") ||
+        target.includes("/555/albums") ||
         isFacebookUploadedVideos(target)
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
@@ -212,7 +214,7 @@ describe("PHASE 74 Graph Facebook Page video reels comments", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["new-r-c"]);
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:${encodeGraphReplies({ r9001: "reel-cmt-2" })}|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `albumreplies:done|albums:done|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:${encodeGraphReplies({ r9001: "reel-cmt-2" })}|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/r9001/comments"))).toHaveLength(0);
 
@@ -223,7 +225,7 @@ describe("PHASE 74 Graph Facebook Page video reels comments", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-r-c"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "albumreplies:done|albums:done|comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/r9001/comments"))).toHaveLength(1);
   });
@@ -244,6 +246,7 @@ describe("PHASE 74 Graph Facebook Page video reels comments", () => {
         target.includes("/555/ratings") ||
         target.includes("/555/photos") ||
         target.includes("/555/live_videos") ||
+        target.includes("/555/albums") ||
         isFacebookUploadedVideos(target)
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
@@ -285,7 +288,7 @@ describe("PHASE 74 Graph Facebook Page video reels comments", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["new-r-c"]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T10:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "albumreplies:done|albums:done|comments:2026-08-21T10:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|reelreplies:done|reels:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/video_reels"))).toHaveLength(1);
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/r9001/comments"))).toHaveLength(0);
