@@ -274,10 +274,10 @@ describe("PHASE 21 collector watermarks", () => {
         if (target === vkMethodUrl("wall.get")) {
           return new Response(JSON.stringify({ response: { items: [{ id: 20, owner_id: 10 }] } }), { status: 200 });
         }
-        if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
+        if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("video.getUserVideos") || target === vkMethodUrl("photos.getComments")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
         }
-        if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
+        if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("video.getUserVideos") || target === vkMethodUrl("photos.getComments")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
         }
         if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
@@ -307,7 +307,7 @@ describe("PHASE 21 collector watermarks", () => {
       cursor: "1710000000",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["10:20:2"]);
-    expect(result.cursor).toBe("comments:1710000099|mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("comments:1710000099|mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
   });
 });
 

@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ValidationError } from "@/lib/errors";
 import { VkAdapter } from "@/social/vk/adapter";
 import { vkMethodUrl } from "@/social/vk/api";
-import { parseVkInboxPhotoTagRef } from "@/social/vk/inbox";
+import { parseVkInboxVideoTagRef } from "@/social/vk/inbox";
 
-function taggedPhotos(
+function taggedVideos(
   startId: number,
   count: number,
   dateStart: number,
@@ -15,27 +15,28 @@ function taggedPhotos(
     return {
       id,
       owner_id: ownerId,
-      text: `tagged photo ${id}`,
+      text: `tagged video ${id}`,
       date: dateStart - index,
     };
   });
 }
 
-describe("PHASE 61 VK photos.getUserPhotos", () => {
+describe("PHASE 79 VK video.getUserVideos", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("parses photo tag refs and refuses photo comment ids", () => {
-    expect(parseVkInboxPhotoTagRef("phototag:77:20")).toEqual({ ownerId: "77", photoId: "20" });
-    expect(parseVkInboxPhotoTagRef("phototag:-100:9")).toEqual({ ownerId: "-100", photoId: "9" });
-    expect(() => parseVkInboxPhotoTagRef("photo:9:4")).toThrow(ValidationError);
-    expect(() => parseVkInboxPhotoTagRef("phototag:77")).toThrow(ValidationError);
-    expect(() => parseVkInboxPhotoTagRef("phototag:abc:20")).toThrow(ValidationError);
+  it("parses video tag refs and refuses video comment or photo tag ids", () => {
+    expect(parseVkInboxVideoTagRef("videotag:77:20")).toEqual({ ownerId: "77", videoId: "20" });
+    expect(parseVkInboxVideoTagRef("videotag:-100:9")).toEqual({ ownerId: "-100", videoId: "9" });
+    expect(() => parseVkInboxVideoTagRef("video:10:20:4")).toThrow(ValidationError);
+    expect(() => parseVkInboxVideoTagRef("videotag:77")).toThrow(ValidationError);
+    expect(() => parseVkInboxVideoTagRef("videotag:abc:20")).toThrow(ValidationError);
+    expect(() => parseVkInboxVideoTagRef("phototag:77:20")).toThrow(ValidationError);
   });
 
-  it("walks the next official getUserPhotos offset window and keeps older tagged photos", async () => {
-    const older = taggedPhotos(20, 20, 1700000020);
+  it("walks the next official getUserVideos offset window and keeps older tagged videos", async () => {
+    const older = taggedVideos(20, 20, 1700000020);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const target = String(url);
       const body = String(init?.body ?? "");
@@ -45,13 +46,13 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
       if (target === vkMethodUrl("newsfeed.getMentions")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getComments")) {
+      if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments") || target === vkMethodUrl("video.getUserVideos")) {
+      if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      expect(target).toBe(vkMethodUrl("photos.getUserPhotos"));
+      expect(target).toBe(vkMethodUrl("video.getUserVideos"));
       expect(body).toContain("count=20");
       expect(body).not.toContain("user_id=");
       if (body.includes("offset=20")) {
@@ -62,7 +63,7 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
         JSON.stringify({
           response: {
             items: [
-              { id: 80, owner_id: 77, text: "newer tagged photo", date: 1710000200 },
+              { id: 80, owner_id: 77, text: "newer tagged video", date: 1710000200 },
               { id: 79, owner_id: 77, text: "   ", date: 1710000199 },
               { id: 78, text: "missing owner", date: 1710000198 },
             ],
@@ -79,20 +80,20 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
     });
     expect(first.messages).toEqual([
       {
-        externalId: "phototag:77:80",
+        externalId: "videotag:77:80",
         externalProfileId: "77",
         username: null,
-        body: "newer tagged photo",
-        url: "https://vk.com/photo77_80",
+        body: "newer tagged video",
+        url: "https://vk.com/video77_80",
         receivedAt: new Date(1710000200 * 1000).toISOString(),
         replyKind: "mention",
       },
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|photocomments:1|phototags:1710000200|repostpages:1|userphotocomments:1|userphotos:1|uservideos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideos:1|videocomments:1|videos:1|videotags:1710000200|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
-      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getUserPhotos")),
+      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getUserVideos")),
     ).toHaveLength(1);
 
     const second = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
@@ -100,36 +101,36 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
       socialAccountId: "a",
       cursor: first.cursor,
     });
-    expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `phototag:77:${item.id}`));
+    expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `videotag:77:${item.id}`));
     expect(second.cursor).toBe(
-      "mentionpages:done|photocomments:done|phototags:1710000200|repostpages:done|userphotocomments:done|userphotos:2|uservideos:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
+      "mentionpages:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideos:2|videocomments:done|videos:done|videotags:1710000200|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
     );
     expect(
-      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getUserPhotos")),
+      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getUserVideos")),
     ).toHaveLength(3);
   });
 
-  it("skips getUserPhotos offset once userphotos:done is stored", async () => {
+  it("skips getUserVideos offset once uservideos:done is stored", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const target = String(url);
       const body = String(init?.body ?? "");
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getComments")) {
+      if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments") || target === vkMethodUrl("video.getUserVideos")) {
+      if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      expect(target).toBe(vkMethodUrl("photos.getUserPhotos"));
+      expect(target).toBe(vkMethodUrl("video.getUserVideos"));
       if (body.includes("offset=")) {
-        throw new Error(`unexpected user photos offset ${body}`);
+        throw new Error(`unexpected user videos offset ${body}`);
       }
       return new Response(
         JSON.stringify({
           response: {
-            items: [{ id: 81, owner_id: 77, text: "newer tagged photo", date: 1710000081 }],
+            items: [{ id: 81, owner_id: 77, text: "newer tagged video", date: 1710000081 }],
           },
         }),
         { status: 200 },
@@ -140,22 +141,22 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
     const result = await new VkAdapter({ accessToken: "user-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "phototags:1710000000|userphotos:done",
+      cursor: "uservideos:done|videotags:1710000000",
     });
-    expect(result.messages.map((item) => item.externalId)).toEqual(["phototag:77:81"]);
+    expect(result.messages.map((item) => item.externalId)).toEqual(["videotag:77:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|phototags:1710000081|repostpages:1|userphotocomments:1|userphotos:done|uservideos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideos:done|videocomments:1|videos:1|videotags:1710000081|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
-      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getUserPhotos")),
+      fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getUserVideos")),
     ).toHaveLength(1);
   });
 
-  it("does not call photos.getUserPhotos for community inbox", async () => {
+  it("does not call video.getUserVideos for community inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("video.getUserVideos") || target === vkMethodUrl("photos.getComments")) {
-        throw new Error("community inbox must not call photos.getUserPhotos");
+      if (target === vkMethodUrl("video.getUserVideos") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
+        throw new Error("community inbox must not call video.getUserVideos");
       }
       if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
@@ -191,16 +192,16 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
       socialAccountId: "a",
     });
     expect(
-      fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("photos.getUserPhotos")),
+      fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("video.getUserVideos")),
     ).toBe(false);
   });
 
-  it("replies to VK photo tags through photos.createComment on the source photo", async () => {
+  it("replies to VK video tags through video.createComment on the source video", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      expect(String(url)).toBe(vkMethodUrl("photos.createComment"));
+      expect(String(url)).toBe(vkMethodUrl("video.createComment"));
       const body = String(init?.body ?? "");
       expect(body).toContain("owner_id=77");
-      expect(body).toContain("photo_id=80");
+      expect(body).toContain("video_id=80");
       expect(body).toContain("message=Thanks");
       expect(body).not.toContain("reply_to_comment=");
       return new Response(JSON.stringify({ response: 99 }), { status: 200 });
@@ -212,7 +213,7 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
       socialAccountId: "a",
       kind: "mention",
       body: "Thanks",
-      externalEventId: "phototag:77:80",
+      externalEventId: "videotag:77:80",
       target: { externalProfileId: "77", username: null },
     });
     expect(sent.externalMessageId).toBe("99");

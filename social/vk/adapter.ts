@@ -24,7 +24,7 @@ import type {
 } from "@/social/core/adapter";
 import { VK_SCOPES } from "@/social/vk/api";
 import { executeVkPublish, planVkPublish } from "@/social/vk/publish";
-import { collectVkInbox, replyToVkBoardComment, replyToVkMarketComment, replyToVkPhotoComment, replyToVkPhotoTag, replyToVkUserPhotoComment, replyToVkVideoComment, replyToVkWallComment, replyToVkWallMention, replyToVkWallRepost } from "@/social/vk/inbox";
+import { collectVkInbox, replyToVkBoardComment, replyToVkMarketComment, replyToVkPhotoComment, replyToVkPhotoTag, replyToVkUserPhotoComment, replyToVkVideoComment, replyToVkVideoTag, replyToVkWallComment, replyToVkWallMention, replyToVkWallRepost } from "@/social/vk/inbox";
 import { collectVkNewsfeedSearch, vkMonitorAccessToken } from "@/social/vk/monitor";
 import { connectVkCommunity, fetchVkCommunity, isVkCommunityAccount, vkCommunityGroupId } from "@/social/vk/community";
 import { resolveVkCommunityPeerId, sendVkCommunityMessage } from "@/social/vk/contact";
@@ -307,6 +307,13 @@ export class VkAdapter extends BaseSocialAdapter {
         });
         return { externalMessageId: sent.externalMessageId };
       }
+      if (input.externalEventId.startsWith("videotag:")) {
+        const sent = await replyToVkVideoTag(token, {
+          externalId: input.externalEventId,
+          text: input.body,
+        });
+        return { externalMessageId: sent.externalMessageId };
+      }
       if (input.externalEventId.startsWith("phototag:")) {
         const sent = await replyToVkPhotoTag(token, {
           externalId: input.externalEventId,
@@ -341,6 +348,14 @@ export class VkAdapter extends BaseSocialAdapter {
         externalId: input.externalEventId,
         text: input.body,
         fromGroup: isVkCommunityAccount(this.context.metadata),
+      });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
+    if (input.externalEventId.startsWith("videotag:")) {
+      const sent = await replyToVkVideoTag(token, {
+        externalId: input.externalEventId,
+        text: input.body,
       });
       return { externalMessageId: sent.externalMessageId };
     }
