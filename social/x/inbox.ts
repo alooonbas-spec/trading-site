@@ -280,6 +280,10 @@ function xRetweetsOfQuery(userId: string): string {
   return `retweets_of:${userId}`;
 }
 
+function xRepliesToUserQuery(userId: string): string {
+  return `to:${userId}`;
+}
+
 function searchQuery(target: string): string | null {
   try {
     return new URL(target).searchParams.get("query");
@@ -293,16 +297,26 @@ export function isXRetweetSearch(target: string): boolean {
   return target.startsWith(X_RECENT_SEARCH_INBOX_URL) && Boolean(query?.startsWith("retweets_of:"));
 }
 
-async function collectXRetweets(
+export function isXReplyToSearch(target: string): boolean {
+  const query = searchQuery(target);
+  return target.startsWith(X_RECENT_SEARCH_INBOX_URL) && Boolean(query?.startsWith("to:"));
+}
+
+async function collectXRecentSearchInbox(
   accessToken: string,
   ownUserId: string,
-  input: { sinceId?: string | null; paginationToken?: string | null },
+  input: {
+    query: string;
+    sinceId?: string | null;
+    paginationToken?: string | null;
+    unexpectedPayload: string;
+  },
 ): Promise<{ messages: InboxMessage[]; newestId: string | null; nextToken: string | null }> {
   if (!/^\d+$/.test(ownUserId)) {
     return { messages: [], newestId: null, nextToken: null };
   }
   const url = new URL(X_RECENT_SEARCH_INBOX_URL);
-  url.searchParams.set("query", xRetweetsOfQuery(ownUserId));
+  url.searchParams.set("query", input.query);
   url.searchParams.set("max_results", "10");
   url.searchParams.set("tweet.fields", "author_id,created_at");
   url.searchParams.set("expansions", "author_id");
@@ -316,7 +330,7 @@ async function collectXRetweets(
   const payload = await readJson<unknown>(response);
   const parsed = mentionsSchema.safeParse(payload);
   if (!parsed.success) {
-    throw new SocialError("X retweets search returned an unexpected payload");
+    throw new SocialError(input.unexpectedPayload);
   }
   const messages = parseXMentionTweets(payload, ownUserId);
   return {
@@ -324,6 +338,32 @@ async function collectXRetweets(
     newestId: messages.reduce<string | null>((newest, message) => laterDigitId(newest, message.externalId), null),
     nextToken: xNextToken(parsed.data.meta),
   };
+}
+
+async function collectXRetweets(
+  accessToken: string,
+  ownUserId: string,
+  input: { sinceId?: string | null; paginationToken?: string | null },
+): Promise<{ messages: InboxMessage[]; newestId: string | null; nextToken: string | null }> {
+  return collectXRecentSearchInbox(accessToken, ownUserId, {
+    query: xRetweetsOfQuery(ownUserId),
+    sinceId: input.sinceId,
+    paginationToken: input.paginationToken,
+    unexpectedPayload: "X retweets search returned an unexpected payload",
+  });
+}
+
+async function collectXRepliesToUser(
+  accessToken: string,
+  ownUserId: string,
+  input: { sinceId?: string | null; paginationToken?: string | null },
+): Promise<{ messages: InboxMessage[]; newestId: string | null; nextToken: string | null }> {
+  return collectXRecentSearchInbox(accessToken, ownUserId, {
+    query: xRepliesToUserQuery(ownUserId),
+    sinceId: input.sinceId,
+    paginationToken: input.paginationToken,
+    unexpectedPayload: "X replies-to-user search returned an unexpected payload",
+  });
 }
 
 async function collectXQuotesForTweet(
@@ -521,6 +561,7 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
   const storedQuotePages = decodeXPageMap(named.quotepages);
   const storedReplyPages = decodeXPageMap(named.replypages);
   const olderRetweetToken = decodeXPageToken(named.retweetpages);
+  const olderReplyToToken = decodeXPageToken(named.replytopages);
   const emptyPage = { messages: [] as InboxMessage[], newestId: null as string | null, nextToken: null as string | null };
   const emptyTweets = { tweetIds: [] as string[], nextToken: null as string | null };
   const emptyQuotes = {
@@ -551,6 +592,8 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
     extraReplies,
     latestRetweets,
     olderRetweets,
+    latestRepliesToUser,
+    olderRepliesToUser,
   ] = await Promise.all([
     collectXMentions(accessToken, userId, { sinceId: cursor.mentions }),
     olderMentionToken
@@ -571,6 +614,10 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
     collectXRetweets(accessToken, userId, { sinceId: named.retweets }),
     olderRetweetToken
       ? collectXRetweets(accessToken, userId, { paginationToken: olderRetweetToken })
+      : Promise.resolve(emptyPage),
+    collectXRepliesToUser(accessToken, userId, { sinceId: named.replyto }),
+    olderReplyToToken
+      ? collectXRepliesToUser(accessToken, userId, { paginationToken: olderReplyToToken })
       : Promise.resolve(emptyPage),
   ]);
   const [latestQuotes, olderQuotes, latestReplies, olderReplies] = await Promise.all([
@@ -597,6 +644,8 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
         ...extraReplies.messages,
         ...latestRetweets.messages,
         ...olderRetweets.messages,
+        ...latestRepliesToUser.messages,
+        ...olderRepliesToUser.messages,
       ]),
       ...uniqueInboxMessages([...latestDms.messages, ...olderDms.messages]),
     ],
@@ -636,6 +685,13 @@ export async function collectXInbox(accessToken: string, input: InboxInput): Pro
         nestedTokens: { ...latestReplies.replyTokens, ...olderReplies.replyTokens },
         fetchedNextTokens: extraReplies.nextTokens,
         fetchedIds: extraReplies.fetchedIds,
+      }),
+      replyto: laterDigitId(named.replyto, laterDigitId(latestRepliesToUser.newestId, olderRepliesToUser.newestId)) ?? "",
+      replytopages: nextXPageCursor({
+        stored: named.replytopages,
+        firstPageToken: latestRepliesToUser.nextToken,
+        olderPageToken: olderRepliesToUser.nextToken,
+        fetchedOlder: Boolean(olderReplyToToken),
       }),
       retweetpages: nextXPageCursor({
         stored: named.retweetpages,

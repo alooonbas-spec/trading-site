@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 82: Official X Recent Search `retweets_of:{userId}` inbox collection. Extra retweet pages are not dropped by the retweets watermark. No new SQL.
+PHASE 83: Official X Recent Search `to:{userId}` inbox collection. Extra replies-to-user pages are not dropped by the replyto watermark. No new SQL.

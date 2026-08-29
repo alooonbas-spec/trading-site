@@ -111,7 +111,7 @@ describe("PHASE 76 X quote tweets", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      `dmpages:done|mentionpages:done|quotepages:done|quotes:7001|replypages:done|retweetpages:done|tweetpages:${encodeXPageToken("tweet-2")}`,
+      `dmpages:done|mentionpages:done|quotepages:done|quotes:7001|replypages:done|replytopages:done|retweetpages:done|tweetpages:${encodeXPageToken("tweet-2")}`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => isXUserTweets(String(url)))).toHaveLength(1);
 
@@ -121,7 +121,7 @@ describe("PHASE 76 X quote tweets", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["7000"]);
-    expect(second.cursor).toBe("dmpages:done|mentionpages:done|quotepages:done|quotes:7001|replypages:done|retweetpages:done|tweetpages:done");
+    expect(second.cursor).toBe("dmpages:done|mentionpages:done|quotepages:done|quotes:7001|replypages:done|replytopages:done|retweetpages:done|tweetpages:done");
     expect(fetchMock.mock.calls.filter(([url]) => isXUserTweets(String(url)))).toHaveLength(3);
   });
 
@@ -181,7 +181,7 @@ describe("PHASE 76 X quote tweets", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["7001"]);
     expect(first.cursor).toBe(
-      `dmpages:done|mentionpages:done|quotepages:${encodeXPageMap({ "9001": "quote-2" })}|quotes:7001|replypages:done|retweetpages:done|tweetpages:done`,
+      `dmpages:done|mentionpages:done|quotepages:${encodeXPageMap({ "9001": "quote-2" })}|quotes:7001|replypages:done|replytopages:done|retweetpages:done|tweetpages:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=quote-2"))).toHaveLength(0);
 
@@ -191,7 +191,7 @@ describe("PHASE 76 X quote tweets", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["7000"]);
-    expect(second.cursor).toBe("dmpages:done|mentionpages:done|quotepages:done|quotes:7001|replypages:done|retweetpages:done|tweetpages:done");
+    expect(second.cursor).toBe("dmpages:done|mentionpages:done|quotepages:done|quotes:7001|replypages:done|replytopages:done|retweetpages:done|tweetpages:done");
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=quote-2"))).toHaveLength(1);
   });
 
@@ -242,7 +242,7 @@ describe("PHASE 76 X quote tweets", () => {
       cursor: "quotes:6990|quotepages:done|tweetpages:done",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["7001"]);
-    expect(result.cursor).toBe("dmpages:done|mentionpages:done|quotepages:done|quotes:7001|replypages:done|retweetpages:done|tweetpages:done");
+    expect(result.cursor).toBe("dmpages:done|mentionpages:done|quotepages:done|quotes:7001|replypages:done|replytopages:done|retweetpages:done|tweetpages:done");
     expect(fetchMock.mock.calls.filter(([url]) => isXUserTweets(String(url)))).toHaveLength(1);
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token="))).toHaveLength(0);
   });

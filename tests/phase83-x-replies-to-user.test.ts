@@ -15,12 +15,12 @@ function searchQuery(target: string): string | null {
   }
 }
 
-describe("PHASE 82 X retweets_of recent search", () => {
+describe("PHASE 83 X to:user recent search", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("walks the next official retweets_of pagination_token and keeps older retweets", async () => {
+  it("walks the next official to:user pagination_token and keeps older replies to the user", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith("https://api.x.com/2/users/me")) {
@@ -30,31 +30,29 @@ describe("PHASE 82 X retweets_of recent search", () => {
         target.includes("/mentions") ||
         target.includes("/dm_events") ||
         target.includes("/quote_tweets") ||
-        isXUserTweets(target)
+        isXUserTweets(target) ||
+        isXRetweetSearch(target)
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (isXReplyToSearch(target)) {
-        return new Response(JSON.stringify({ data: [] }), { status: 200 });
-      }
-      expect(isXRetweetSearch(target)).toBe(true);
+      expect(isXReplyToSearch(target)).toBe(true);
       expect(target.startsWith(X_RECENT_SEARCH_INBOX_URL)).toBe(true);
-      expect(searchQuery(target)).toBe("retweets_of:100");
+      expect(searchQuery(target)).toBe("to:100");
       expect(target).toContain("max_results=10");
       expect(target).not.toContain("paging.next");
-      if (target.includes("pagination_token=rt-2")) {
+      if (target.includes("pagination_token=to-2")) {
         expect(target).not.toContain("since_id=");
         return new Response(
           JSON.stringify({
             data: [
               {
-                id: "6000",
-                text: "RT @hub: older",
+                id: "5000",
+                text: "older reply to hub",
                 author_id: "800",
                 created_at: "2026-08-20T09:00:00.000Z",
               },
             ],
-            includes: { users: [{ id: "800", username: "amplifier" }] },
+            includes: { users: [{ id: "800", username: "replier" }] },
           }),
           { status: 200 },
         );
@@ -67,20 +65,20 @@ describe("PHASE 82 X retweets_of recent search", () => {
         JSON.stringify({
           data: [
             {
-              id: "6001",
-              text: "RT @hub: newer",
+              id: "5001",
+              text: "newer reply to hub",
               author_id: "800",
               created_at: "2026-08-21T12:00:00.000Z",
             },
             {
-              id: "6002",
-              text: "RT @hub: own",
+              id: "5002",
+              text: "own reply to hub",
               author_id: "100",
               created_at: "2026-08-21T12:01:00.000Z",
             },
           ],
-          includes: { users: [{ id: "800", username: "amplifier" }] },
-          meta: { next_token: "rt-2" },
+          includes: { users: [{ id: "800", username: "replier" }] },
+          meta: { next_token: "to-2" },
         }),
         { status: 200 },
       );
@@ -93,33 +91,33 @@ describe("PHASE 82 X retweets_of recent search", () => {
     });
     expect(first.messages).toEqual([
       {
-        externalId: "6001",
+        externalId: "5001",
         externalProfileId: "800",
-        username: "@amplifier",
-        body: "RT @hub: newer",
-        url: "https://x.com/amplifier/status/6001",
+        username: "@replier",
+        body: "newer reply to hub",
+        url: "https://x.com/replier/status/5001",
         receivedAt: "2026-08-21T12:00:00.000Z",
         replyKind: "mention",
       },
     ]);
     expect(first.cursor).toBe(
-      `dmpages:done|mentionpages:done|quotepages:done|replypages:done|replytopages:done|retweetpages:${encodeXPageToken("rt-2")}|retweets:6001|tweetpages:done`,
+      `dmpages:done|mentionpages:done|quotepages:done|replypages:done|replyto:5001|replytopages:${encodeXPageToken("to-2")}|retweetpages:done|tweetpages:done`,
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=rt-2"))).toHaveLength(0);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=to-2"))).toHaveLength(0);
 
     const second = await new XAdapter({ accessToken: "x-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
       cursor: first.cursor,
     });
-    expect(second.messages.map((item) => item.externalId)).toEqual(["6000"]);
+    expect(second.messages.map((item) => item.externalId)).toEqual(["5000"]);
     expect(second.cursor).toBe(
-      "dmpages:done|mentionpages:done|quotepages:done|replypages:done|replytopages:done|retweetpages:done|retweets:6001|tweetpages:done",
+      "dmpages:done|mentionpages:done|quotepages:done|replypages:done|replyto:5001|replytopages:done|retweetpages:done|tweetpages:done",
     );
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=rt-2"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=to-2"))).toHaveLength(1);
   });
 
-  it("skips retweet pagination_token once retweetpages:done is stored", async () => {
+  it("skips to:user pagination_token once replytopages:done is stored", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith("https://api.x.com/2/users/me")) {
@@ -129,31 +127,29 @@ describe("PHASE 82 X retweets_of recent search", () => {
         target.includes("/mentions") ||
         target.includes("/dm_events") ||
         target.includes("/quote_tweets") ||
-        isXUserTweets(target)
+        isXUserTweets(target) ||
+        isXRetweetSearch(target)
       ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (isXReplyToSearch(target)) {
-        return new Response(JSON.stringify({ data: [] }), { status: 200 });
-      }
-      expect(isXRetweetSearch(target)).toBe(true);
+      expect(isXReplyToSearch(target)).toBe(true);
       if (target.includes("pagination_token=")) {
-        throw new Error(`unexpected retweet pagination_token ${target}`);
+        throw new Error(`unexpected to:user pagination_token ${target}`);
       }
-      expect(target).toContain("since_id=5990");
-      expect(searchQuery(target)).toBe("retweets_of:100");
+      expect(target).toContain("since_id=4990");
+      expect(searchQuery(target)).toBe("to:100");
       return new Response(
         JSON.stringify({
           data: [
             {
-              id: "6001",
-              text: "RT @hub: newer",
+              id: "5001",
+              text: "newer reply to hub",
               author_id: "800",
               created_at: "2026-08-21T10:00:00.000Z",
             },
           ],
-          includes: { users: [{ id: "800", username: "amplifier" }] },
-          meta: { next_token: "rt-2" },
+          includes: { users: [{ id: "800", username: "replier" }] },
+          meta: { next_token: "to-2" },
         }),
         { status: 200 },
       );
@@ -163,25 +159,27 @@ describe("PHASE 82 X retweets_of recent search", () => {
     const result = await new XAdapter({ accessToken: "x-token" }).collectInbox({
       workspaceId: "w",
       socialAccountId: "a",
-      cursor: "retweetpages:done|retweets:5990",
+      cursor: "replyto:4990|replytopages:done",
     });
-    expect(result.messages.map((item) => item.externalId)).toEqual(["6001"]);
+    expect(result.messages.map((item) => item.externalId)).toEqual(["5001"]);
     expect(result.cursor).toBe(
-      "dmpages:done|mentionpages:done|quotepages:done|replypages:done|replytopages:done|retweetpages:done|retweets:6001|tweetpages:done",
+      "dmpages:done|mentionpages:done|quotepages:done|replypages:done|replyto:5001|replytopages:done|retweetpages:done|tweetpages:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token="))).toHaveLength(0);
   });
 
-  it("drops duplicate retweet ids already collected as mentions", async () => {
+  it("drops duplicate to:user ids already collected as mentions", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
       if (target.startsWith("https://api.x.com/2/users/me")) {
         return new Response(JSON.stringify({ data: { id: "100", username: "hub" } }), { status: 200 });
       }
-      if (target.includes("/dm_events") || target.includes("/quote_tweets") || isXUserTweets(target)) {
-        return new Response(JSON.stringify({ data: [] }), { status: 200 });
-      }
-      if (isXReplyToSearch(target)) {
+      if (
+        target.includes("/dm_events") ||
+        target.includes("/quote_tweets") ||
+        isXUserTweets(target) ||
+        isXRetweetSearch(target)
+      ) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("/mentions")) {
@@ -189,30 +187,30 @@ describe("PHASE 82 X retweets_of recent search", () => {
           JSON.stringify({
             data: [
               {
-                id: "6001",
-                text: "RT @hub: newer",
+                id: "5001",
+                text: "newer reply to hub",
                 author_id: "800",
                 created_at: "2026-08-21T12:00:00.000Z",
               },
             ],
-            includes: { users: [{ id: "800", username: "amplifier" }] },
-            meta: { newest_id: "6001" },
+            includes: { users: [{ id: "800", username: "replier" }] },
+            meta: { newest_id: "5001" },
           }),
           { status: 200 },
         );
       }
-      expect(isXRetweetSearch(target)).toBe(true);
+      expect(isXReplyToSearch(target)).toBe(true);
       return new Response(
         JSON.stringify({
           data: [
             {
-              id: "6001",
-              text: "RT @hub: newer",
+              id: "5001",
+              text: "newer reply to hub",
               author_id: "800",
               created_at: "2026-08-21T12:00:00.000Z",
             },
           ],
-          includes: { users: [{ id: "800", username: "amplifier" }] },
+          includes: { users: [{ id: "800", username: "replier" }] },
         }),
         { status: 200 },
       );
@@ -223,16 +221,16 @@ describe("PHASE 82 X retweets_of recent search", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(result.messages.filter((item) => item.externalId === "6001")).toHaveLength(1);
+    expect(result.messages.filter((item) => item.externalId === "5001")).toHaveLength(1);
   });
 
-  it("replies to X retweets through the existing mention tweet endpoint", async () => {
+  it("replies to X to:user posts through the existing mention tweet endpoint", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       expect(url).toBe(xMentionReplyUrl());
       expect(init?.method).toBe("POST");
       expect(JSON.parse(String(init?.body))).toEqual({
         text: "Thanks",
-        reply: { in_reply_to_tweet_id: "6001" },
+        reply: { in_reply_to_tweet_id: "5001" },
       });
       return new Response(JSON.stringify({ data: { id: "reply-99" } }), { status: 200 });
     });
@@ -243,8 +241,8 @@ describe("PHASE 82 X retweets_of recent search", () => {
       socialAccountId: "a",
       kind: "mention",
       body: "Thanks",
-      externalEventId: "6001",
-      target: { externalProfileId: "800", username: "@amplifier" },
+      externalEventId: "5001",
+      target: { externalProfileId: "800", username: "@replier" },
     });
     expect(sent.externalMessageId).toBe("reply-99");
   });
