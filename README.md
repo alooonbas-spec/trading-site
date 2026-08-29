@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 84: Official VK `wall.get` `filter=others` inbox collection. Extra visitor-wall pages are not dropped by the others watermark. No new SQL.
+PHASE 85: Official VK `wall.getComments` on `filter=others` visitor-wall posts. Independent `othercomments` / `otherwallcomments` cursors. No new SQL.

@@ -24,7 +24,7 @@ import type {
 } from "@/social/core/adapter";
 import { VK_SCOPES } from "@/social/vk/api";
 import { executeVkPublish, planVkPublish } from "@/social/vk/publish";
-import { collectVkInbox, replyToVkBoardComment, replyToVkMarketComment, replyToVkOtherWall, replyToVkPhotoComment, replyToVkPhotoTag, replyToVkUserPhotoComment, replyToVkUserVideoComment, replyToVkVideoComment, replyToVkVideoTag, replyToVkWallComment, replyToVkWallMention, replyToVkWallRepost } from "@/social/vk/inbox";
+import { collectVkInbox, replyToVkBoardComment, replyToVkMarketComment, replyToVkOtherWall, replyToVkOtherWallComment, replyToVkPhotoComment, replyToVkPhotoTag, replyToVkUserPhotoComment, replyToVkUserVideoComment, replyToVkVideoComment, replyToVkVideoTag, replyToVkWallComment, replyToVkWallMention, replyToVkWallRepost } from "@/social/vk/inbox";
 import { collectVkNewsfeedSearch, vkMonitorAccessToken } from "@/social/vk/monitor";
 import { connectVkCommunity, fetchVkCommunity, isVkCommunityAccount, vkCommunityGroupId } from "@/social/vk/community";
 import { resolveVkCommunityPeerId, sendVkCommunityMessage } from "@/social/vk/contact";
@@ -390,6 +390,14 @@ export class VkAdapter extends BaseSocialAdapter {
         ownerId: isVkCommunityAccount(this.context.metadata)
           ? `-${vkCommunityGroupId(this.context.metadata)}`
           : undefined,
+      });
+      return { externalMessageId: sent.externalMessageId };
+    }
+
+    if (input.externalEventId.startsWith("otherwall:")) {
+      const sent = await replyToVkOtherWallComment(token, {
+        externalId: input.externalEventId,
+        text: input.body,
       });
       return { externalMessageId: sent.externalMessageId };
     }

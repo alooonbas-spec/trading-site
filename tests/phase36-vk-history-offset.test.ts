@@ -129,7 +129,7 @@ describe("PHASE 36 VK community history offset", () => {
     expect(result.messages.map((item) => item.externalId)).toEqual(
       historyItems(70, 50).map((item) => String(item.id)),
     );
-    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:2|messages:120|otherwall:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:2|messages:120|otherwall:1|otherwallcomments:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getHistory"))).toHaveLength(2);
   });
 
@@ -195,7 +195,7 @@ describe("PHASE 36 VK community history offset", () => {
       cursor: "comments:1710000000|history:done|messages:80",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["81"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:done|messages:81|otherwall:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:done|messages:81|otherwall:1|otherwallcomments:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getHistory"))).toHaveLength(1);
   });
 });

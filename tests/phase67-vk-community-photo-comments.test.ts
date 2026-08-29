@@ -125,7 +125,7 @@ describe("PHASE 67 VK community photos.getAllComments", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      "conversations:1|history:1|otherwall:1|photocomments:1|photos:1710000200|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|otherwall:1|otherwallcomments:1|photocomments:1|photos:1710000200|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
@@ -141,7 +141,7 @@ describe("PHASE 67 VK community photos.getAllComments", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `photo:${item.pid}:${item.id}`));
     expect(second.cursor).toBe(
-      "conversations:done|history:done|otherwall:done|photocomments:2|photos:1710000200|repostpages:done|wall:done|wallcomments:done|wallthreads:done",
+      "conversations:done|history:done|otherwall:done|otherwallcomments:done|photocomments:2|photos:1710000200|repostpages:done|wall:done|wallcomments:done|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
@@ -180,7 +180,7 @@ describe("PHASE 67 VK community photos.getAllComments", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["photo:9:80"]);
     expect(result.cursor).toBe(
-      "conversations:1|history:1|otherwall:1|photocomments:done|photos:1710000200|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|otherwall:1|otherwallcomments:1|photocomments:done|photos:1710000200|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getAllComments")),
@@ -212,7 +212,7 @@ describe("PHASE 67 VK community photos.getAllComments", () => {
       socialAccountId: "a",
     });
     expect(result.messages).toEqual([]);
-    expect(result.cursor).toBe("conversations:1|history:1|otherwall:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("conversations:1|history:1|otherwall:1|otherwallcomments:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
     expect(result.cursor).not.toContain("photocomments");
   });
 

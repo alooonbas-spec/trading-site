@@ -374,6 +374,7 @@ async function collectVkCommunityInbox(
   const marketCommentsPage = vkOffsetCursor(named.marketcomments);
   const repostPage = vkOffsetCursor(named.repostpages);
   const otherwallPage = vkOffsetCursor(named.otherwall);
+  const otherwallCommentsPage = vkOffsetCursor(named.otherwallcomments);
   const photoOwnerId = `-${groupId}`;
   const [
     wallComments,
@@ -394,7 +395,7 @@ async function collectVkCommunityInbox(
       named.wallthreads,
       repostPage.page,
     ),
-    collectVkOtherWallInbox(accessToken, metadata, otherwallPage.page),
+    collectVkOtherWallInbox(accessToken, metadata, otherwallPage.page, otherwallCommentsPage.page),
     listVkCommunityUserPeers(accessToken, groupId, 0),
     conversationOffset === null
       ? Promise.resolve(emptyVkCommunityPeers(true))
@@ -451,6 +452,8 @@ async function collectVkCommunityInbox(
       ...wallComments.olderReposts,
       ...filterMessagesAfterCursor(otherWall.latest, named.others ?? null),
       ...otherWall.older,
+      ...filterMessagesAfterCursor(otherWall.latestComments, named.othercomments ?? null),
+      ...otherWall.olderComments,
       ...filterMessagesAfterCursor(latestPhotos.messages, named.photos ?? null),
       ...olderPhotos.messages,
       ...filterMessagesAfterCursor(videoComments.latest, named.video ?? null),
@@ -480,9 +483,15 @@ async function collectVkCommunityInbox(
         : nextVkOffsetCursor(marketCommentsPage.page, marketComments.commentsReachedEnd),
       marketitems: marketUnavailable ? "" : nextVkOffsetCursor(marketItemsPage.page, marketComments.reachedEnd),
       messages: laterDigitId(cursor.messages, newestMessageId) ?? "",
+      othercomments:
+        laterDigitId(
+          named.othercomments,
+          newestVkCommentUnix([...otherWall.latestComments, ...otherWall.olderComments]),
+        ) ?? "",
       others:
         laterDigitId(named.others, newestVkCommentUnix([...otherWall.latest, ...otherWall.older])) ?? "",
       otherwall: nextVkOffsetCursor(otherwallPage.page, otherWall.reachedEnd),
+      otherwallcomments: nextVkOffsetCursor(otherwallCommentsPage.page, otherWall.commentsReachedEnd),
       photocomments: photosUnavailable ? "" : nextVkOffsetCursor(photoPage.page, olderPhotos.reachedEnd),
       photos: photosUnavailable
         ? ""
@@ -534,6 +543,7 @@ async function collectVkWallCommentInbox(
   const videocommentsPage = vkOffsetCursor(named.videocomments);
   const repostPage = vkOffsetCursor(named.repostpages);
   const otherwallPage = vkOffsetCursor(named.otherwall);
+  const otherwallCommentsPage = vkOffsetCursor(named.otherwallcomments);
   const [
     wallComments,
     otherWall,
@@ -553,7 +563,7 @@ async function collectVkWallCommentInbox(
         named.wallthreads,
         repostPage.page,
       ),
-      collectVkOtherWallInbox(accessToken, metadata, otherwallPage.page),
+      collectVkOtherWallInbox(accessToken, metadata, otherwallPage.page, otherwallCommentsPage.page),
       collectVkMentions(accessToken, 0),
       mentionOffset === null
         ? Promise.resolve(emptyVkMentionPage(true))
@@ -579,6 +589,8 @@ async function collectVkWallCommentInbox(
       ...wallComments.olderReposts,
       ...filterMessagesAfterCursor(otherWall.latest, named.others ?? null),
       ...otherWall.older,
+      ...filterMessagesAfterCursor(otherWall.latestComments, named.othercomments ?? null),
+      ...otherWall.olderComments,
       ...filterMessagesAfterCursor(latestMentions.messages, named.mentions ?? null),
       ...olderMentions.messages,
       ...filterMessagesAfterCursor(userPhotos.latestMentions, named.phototags ?? null),
@@ -602,9 +614,15 @@ async function collectVkWallCommentInbox(
           named.mentions,
           newestVkCommentUnix([...latestMentions.messages, ...olderMentions.messages]),
         ) ?? "",
+      othercomments:
+        laterDigitId(
+          named.othercomments,
+          newestVkCommentUnix([...otherWall.latestComments, ...otherWall.olderComments]),
+        ) ?? "",
       others:
         laterDigitId(named.others, newestVkCommentUnix([...otherWall.latest, ...otherWall.older])) ?? "",
       otherwall: nextVkOffsetCursor(otherwallPage.page, otherWall.reachedEnd),
+      otherwallcomments: nextVkOffsetCursor(otherwallCommentsPage.page, otherWall.commentsReachedEnd),
       photocomments: nextVkOffsetCursor(photoPage.page, olderPhotos.reachedEnd),
       photos:
         laterDigitId(named.photos, newestVkCommentUnix([...latestPhotos.messages, ...olderPhotos.messages])) ??
@@ -697,11 +715,25 @@ function emptyVkMentionPage(reachedEnd: boolean): { messages: InboxMessage[]; re
   return { messages: [], reachedEnd };
 }
 
-async function collectVkOtherWallPosts(
+type VkOtherWallPost = {
+  id: number;
+  owner_id?: number;
+  from_id?: number;
+  date?: number;
+  text?: string;
+};
+
+function isVkVisitorWallPost(
+  post: VkOtherWallPost,
+): post is VkOtherWallPost & { owner_id: number; from_id: number } {
+  return post.owner_id !== undefined && post.from_id !== undefined && post.from_id !== post.owner_id;
+}
+
+async function listVkOtherWallPosts(
   accessToken: string,
   metadata: Record<string, unknown> | undefined,
   offset: number,
-): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+): Promise<{ posts: VkOtherWallPost[]; reachedEnd: boolean }> {
   const pageSize = Number(VK_WALL_COUNT);
   const target = vkWallTarget(metadata);
   const params: Record<string, string> = {
@@ -720,47 +752,130 @@ async function collectVkOtherWallPosts(
   if (!parsed.success) {
     throw new SocialError("VK wall.get others returned an unexpected payload");
   }
+  const posts = parsed.data.items ?? [];
+  return { posts, reachedEnd: posts.length < pageSize };
+}
+
+function emptyVkOtherWallPosts(reachedEnd: boolean): { posts: VkOtherWallPost[]; reachedEnd: boolean } {
+  return { posts: [], reachedEnd };
+}
+
+function emptyVkOtherWallCommentPage(reachedEnd: boolean): { messages: InboxMessage[]; reachedEnd: boolean } {
+  return { messages: [], reachedEnd };
+}
+
+function vkOtherWallPostsToMentions(posts: VkOtherWallPost[]): InboxMessage[] {
   const messages: InboxMessage[] = [];
-  for (const post of parsed.data.items ?? []) {
+  for (const post of posts) {
+    if (!isVkVisitorWallPost(post)) {
+      continue;
+    }
     const text = post.text?.trim();
-    const ownerId = post.owner_id;
-    const fromId = post.from_id;
-    if (!text || ownerId === undefined || fromId === undefined || fromId === ownerId) {
+    if (!text) {
       continue;
     }
     messages.push({
-      externalId: `otherwall:${ownerId}:${post.id}`,
-      externalProfileId: String(fromId),
+      externalId: `otherwall:${post.owner_id}:${post.id}`,
+      externalProfileId: String(post.from_id),
       username: null,
       body: text,
-      url: `https://vk.com/wall${ownerId}_${post.id}`,
+      url: `https://vk.com/wall${post.owner_id}_${post.id}`,
       receivedAt: post.date ? new Date(post.date * 1000).toISOString() : null,
       replyKind: "mention",
     });
   }
-  return {
-    messages,
-    reachedEnd: (parsed.data.items ?? []).length < pageSize,
-  };
+  return messages;
+}
+
+async function collectVkCommentsForOtherWallPosts(
+  accessToken: string,
+  posts: VkOtherWallPost[],
+  offset: number,
+): Promise<{ messages: InboxMessage[]; reachedEnd: boolean }> {
+  const pageSize = Number(VK_WALL_COMMENT_COUNT);
+  const messages: InboxMessage[] = [];
+  let reachedEnd = true;
+  for (const post of posts) {
+    if (!isVkVisitorWallPost(post)) {
+      continue;
+    }
+    const params: Record<string, string> = {
+      access_token: accessToken,
+      owner_id: String(post.owner_id),
+      post_id: String(post.id),
+      count: VK_WALL_COMMENT_COUNT,
+      sort: "desc",
+    };
+    if (offset > 0) {
+      params.offset = String(offset);
+    }
+    const commentsPayload = await vkCall("wall.getComments", params);
+    const comments = wallCommentsSchema.safeParse(commentsPayload);
+    if (!comments.success) {
+      throw new SocialError("VK wall.getComments returned an unexpected payload");
+    }
+    if ((comments.data.items ?? []).length >= pageSize) {
+      reachedEnd = false;
+    }
+    for (const comment of comments.data.items ?? []) {
+      const text = comment.text?.trim();
+      if (!text || comment.from_id === undefined || comment.from_id === post.owner_id) {
+        continue;
+      }
+      messages.push({
+        externalId: `otherwall:${post.owner_id}:${post.id}:${comment.id}`,
+        externalProfileId: String(comment.from_id),
+        username: null,
+        body: text,
+        url: `https://vk.com/wall${post.owner_id}_${post.id}?reply=${comment.id}`,
+        receivedAt: comment.date ? new Date(comment.date * 1000).toISOString() : null,
+        replyKind: "comment",
+      });
+    }
+  }
+  return { messages, reachedEnd: posts.length === 0 ? true : reachedEnd };
 }
 
 async function collectVkOtherWallInbox(
   accessToken: string,
   metadata: Record<string, unknown> | undefined,
   otherwallPage: VkOffsetPage,
-): Promise<{ latest: InboxMessage[]; older: InboxMessage[]; reachedEnd: boolean }> {
+  commentsPage: VkOffsetPage,
+): Promise<{
+  latest: InboxMessage[];
+  older: InboxMessage[];
+  latestComments: InboxMessage[];
+  olderComments: InboxMessage[];
+  reachedEnd: boolean;
+  commentsReachedEnd: boolean;
+}> {
   const offset =
     otherwallPage !== 0 && otherwallPage !== "done" ? otherwallPage * Number(VK_WALL_COUNT) : null;
-  const [latest, older] = await Promise.all([
-    collectVkOtherWallPosts(accessToken, metadata, 0),
+  const commentOffset =
+    commentsPage !== 0 && commentsPage !== "done"
+      ? commentsPage * Number(VK_WALL_COMMENT_COUNT)
+      : null;
+  const [latestPosts, olderPosts] = await Promise.all([
+    listVkOtherWallPosts(accessToken, metadata, 0),
     offset === null
-      ? Promise.resolve(emptyVkMentionPage(true))
-      : collectVkOtherWallPosts(accessToken, metadata, offset),
+      ? Promise.resolve(emptyVkOtherWallPosts(true))
+      : listVkOtherWallPosts(accessToken, metadata, offset),
+  ]);
+  const commentPosts = [...latestPosts.posts, ...olderPosts.posts];
+  const [latestComments, olderPostComments, extraComments] = await Promise.all([
+    collectVkCommentsForOtherWallPosts(accessToken, latestPosts.posts, 0),
+    collectVkCommentsForOtherWallPosts(accessToken, olderPosts.posts, 0),
+    commentOffset === null
+      ? Promise.resolve(emptyVkOtherWallCommentPage(true))
+      : collectVkCommentsForOtherWallPosts(accessToken, commentPosts, commentOffset),
   ]);
   return {
-    latest: latest.messages,
-    older: older.messages,
-    reachedEnd: older.reachedEnd,
+    latest: vkOtherWallPostsToMentions(latestPosts.posts),
+    older: vkOtherWallPostsToMentions(olderPosts.posts),
+    latestComments: latestComments.messages,
+    olderComments: uniqueInboxMessages([...olderPostComments.messages, ...extraComments.messages]),
+    reachedEnd: olderPosts.reachedEnd,
+    commentsReachedEnd: extraComments.reachedEnd,
   };
 }
 
@@ -2257,6 +2372,32 @@ export function parseVkInboxOtherWallRef(externalId: string): {
   return { ownerId, postId };
 }
 
+export function parseVkInboxOtherWallCommentRef(externalId: string): {
+  ownerId: string;
+  postId: string;
+  commentId: string;
+} {
+  const parts = externalId.split(":");
+  const ownerId = parts[1];
+  const postId = parts[2];
+  const commentId = parts[3];
+  if (
+    parts[0] !== "otherwall" ||
+    parts.length !== 4 ||
+    !ownerId ||
+    !postId ||
+    !commentId ||
+    !/^-?\d+$/.test(ownerId) ||
+    !/^\d+$/.test(postId) ||
+    !/^\d+$/.test(commentId)
+  ) {
+    throw new ValidationError(
+      "VK other-wall comment replies require owner, post, and comment ids from wall.getComments",
+    );
+  }
+  return { ownerId, postId, commentId };
+}
+
 export function parseVkInboxVideoTagRef(externalId: string): {
   ownerId: string;
   videoId: string;
@@ -2506,6 +2647,24 @@ export async function replyToVkOtherWall(
   return postVkWallComment(accessToken, {
     owner_id: ref.ownerId,
     post_id: ref.postId,
+    message: text,
+  });
+}
+
+export async function replyToVkOtherWallComment(
+  accessToken: string,
+  input: { externalId: string; text: string },
+): Promise<{ externalMessageId: string }> {
+  const text = input.text.trim();
+  if (!text) {
+    throw new ValidationError("VK other-wall comment replies require a body");
+  }
+
+  const ref = parseVkInboxOtherWallCommentRef(input.externalId);
+  return postVkWallComment(accessToken, {
+    owner_id: ref.ownerId,
+    post_id: ref.postId,
+    reply_to_comment: ref.commentId,
     message: text,
   });
 }
