@@ -134,7 +134,7 @@ describe("PHASE 69 VK community board.getComments", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      "board:1710000200|boardcomments:1|boardtopics:1|conversations:1|history:1|otherwall:1|otherwallcomments:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
+      "board:1710000200|boardcomments:1|boardtopics:1|conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("board.getTopics")),
@@ -155,7 +155,7 @@ describe("PHASE 69 VK community board.getComments", () => {
       older.map((item) => `board:10:20:${item.id}`),
     );
     expect(second.cursor).toBe(
-      "board:1710000200|boardcomments:2|boardtopics:done|conversations:done|history:done|otherwall:done|otherwallcomments:done|repostpages:done|wall:done|wallcomments:done|wallthreads:done",
+      "board:1710000200|boardcomments:2|boardtopics:done|conversations:done|history:done|otherwall:done|otherwallcomments:done|otherwallthreads:done|repostpages:done|wall:done|wallcomments:done|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("board.getTopics")),
@@ -202,7 +202,7 @@ describe("PHASE 69 VK community board.getComments", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["board:10:20:81"]);
     expect(result.cursor).toBe(
-      "board:1710000081|boardcomments:done|boardtopics:done|conversations:1|history:1|otherwall:1|otherwallcomments:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
+      "board:1710000081|boardcomments:done|boardtopics:done|conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("board.getTopics")),
@@ -237,7 +237,7 @@ describe("PHASE 69 VK community board.getComments", () => {
       socialAccountId: "a",
     });
     expect(result.messages).toEqual([]);
-    expect(result.cursor).toBe("conversations:1|history:1|otherwall:1|otherwallcomments:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("conversations:1|history:1|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
     expect(result.cursor).not.toContain("board:");
     expect(result.cursor).not.toContain("boardcomments");
     expect(result.cursor).not.toContain("boardtopics");

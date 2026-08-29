@@ -86,7 +86,7 @@ describe("PHASE 85 VK wall.getComments on filter=others posts", () => {
       expect(body).toContain("sort=desc");
       expect(body).toContain("owner_id=10");
       expect(body).toContain("post_id=80");
-      expect(body).not.toContain("thread_items_count=");
+      expect(body).toContain("thread_items_count=10");
       expect(body).not.toContain("reply_to_comment=");
       expect(body).not.toContain("comment_id=");
       if (body.includes("offset=50")) {
@@ -143,7 +143,7 @@ describe("PHASE 85 VK wall.getComments on filter=others posts", () => {
       })),
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|othercomments:1710000200|others:1710000100|otherwall:done|otherwallcomments:2|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|othercomments:1710000200|others:1710000100|otherwall:done|otherwallcomments:2|otherwallthreads:done|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("wall.getComments")),
@@ -199,7 +199,7 @@ describe("PHASE 85 VK wall.getComments on filter=others posts", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "mentionpages:1|othercomments:1710000200|otherwall:1|otherwallcomments:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|othercomments:1710000200|otherwall:1|otherwallcomments:1|otherwallthreads:done|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
   });
 
@@ -249,7 +249,7 @@ describe("PHASE 85 VK wall.getComments on filter=others posts", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["otherwall:10:80", "otherwall:10:80:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|othercomments:1710000081|others:1710000100|otherwall:done|otherwallcomments:done|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|othercomments:1710000081|others:1710000100|otherwall:done|otherwallcomments:done|otherwallthreads:done|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("wall.getComments")),
@@ -303,7 +303,7 @@ describe("PHASE 85 VK wall.getComments on filter=others posts", () => {
       expect(target).toBe(vkMethodUrl("wall.getComments"));
       expect(body).toContain("owner_id=-10");
       expect(body).toContain("post_id=80");
-      expect(body).not.toContain("thread_items_count=");
+      expect(body).toContain("thread_items_count=10");
       return new Response(
         JSON.stringify({
           response: {
@@ -343,7 +343,7 @@ describe("PHASE 85 VK wall.getComments on filter=others posts", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "conversations:1|history:1|othercomments:1710000200|others:1710000100|otherwall:1|otherwallcomments:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|othercomments:1710000200|others:1710000100|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
     );
   });
 

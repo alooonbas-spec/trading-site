@@ -106,7 +106,7 @@ describe("PHASE 84 VK wall.get filter=others", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|others:1710000200|otherwall:1|otherwallcomments:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|others:1710000200|otherwall:1|otherwallcomments:1|otherwallthreads:done|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(
@@ -121,7 +121,7 @@ describe("PHASE 84 VK wall.get filter=others", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `otherwall:10:${item.id}`));
     expect(second.cursor).toBe(
-      "mentionpages:done|others:1710000200|otherwall:2|otherwallcomments:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideocomments:done|uservideos:done|uservideothreads:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
+      "mentionpages:done|others:1710000200|otherwall:2|otherwallcomments:done|otherwallthreads:done|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|uservideocomments:done|uservideos:done|uservideothreads:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(
@@ -163,7 +163,7 @@ describe("PHASE 84 VK wall.get filter=others", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["otherwall:10:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|others:1710000081|otherwall:done|otherwallcomments:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|others:1710000081|otherwall:done|otherwallcomments:1|otherwallthreads:done|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|uservideocomments:1|uservideos:1|uservideothreads:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([, init]) => String(init?.body ?? "").includes("filter=others")),
@@ -236,7 +236,7 @@ describe("PHASE 84 VK wall.get filter=others", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "conversations:1|history:1|others:1710000200|otherwall:1|otherwallcomments:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|others:1710000200|otherwall:1|otherwallcomments:1|otherwallthreads:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
     );
   });
 

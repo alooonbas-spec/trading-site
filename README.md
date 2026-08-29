@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 85: Official VK `wall.getComments` on `filter=others` visitor-wall posts. Independent `othercomments` / `otherwallcomments` cursors. No new SQL.
+PHASE 86: Official VK nested `wall.getComments` threads on `filter=others` visitor-wall posts. Independent `otherwallthreads` map. No new SQL.
