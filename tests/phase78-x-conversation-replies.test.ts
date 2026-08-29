@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { encodeXPageMap, encodeXPageToken } from "@/social/x/paging";
 import { XAdapter } from "@/social/x/adapter";
-import { X_RECENT_SEARCH_INBOX_URL, xMentionReplyUrl } from "@/social/x/inbox";
+import { X_RECENT_SEARCH_INBOX_URL, isXRetweetSearch, xMentionReplyUrl } from "@/social/x/inbox";
 
 function isXUserTweets(target: string): boolean {
   return /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target);
@@ -30,6 +30,9 @@ describe("PHASE 78 X conversation replies", () => {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("/2/tweets/search/recent")) {
+        if (isXRetweetSearch(target)) {
+          return new Response(JSON.stringify({ data: [] }), { status: 200 });
+        }
         expect(target.startsWith(X_RECENT_SEARCH_INBOX_URL)).toBe(true);
         expect(target).not.toContain("paging.next");
         expect(target).toContain("max_results=10");
@@ -106,7 +109,7 @@ describe("PHASE 78 X conversation replies", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      `dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:done|tweetpages:${encodeXPageToken("tweet-2")}`,
+      `dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:done|retweetpages:done|tweetpages:${encodeXPageToken("tweet-2")}`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => isXUserTweets(String(url)))).toHaveLength(1);
 
@@ -117,7 +120,7 @@ describe("PHASE 78 X conversation replies", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["8000"]);
     expect(second.cursor).toBe(
-      "dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:done|tweetpages:done",
+      "dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:done|retweetpages:done|tweetpages:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => isXUserTweets(String(url)))).toHaveLength(3);
   });
@@ -136,6 +139,9 @@ describe("PHASE 78 X conversation replies", () => {
         return new Response(JSON.stringify({ data: [{ id: "9001" }] }), { status: 200 });
       }
       expect(target.startsWith(X_RECENT_SEARCH_INBOX_URL)).toBe(true);
+      if (isXRetweetSearch(target)) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
       expect(conversationQuery(target)).toBe("conversation_id:9001 is:reply");
       expect(target).not.toContain("paging.next");
       if (target.includes("pagination_token=reply-2")) {
@@ -179,7 +185,7 @@ describe("PHASE 78 X conversation replies", () => {
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["8001"]);
     expect(first.cursor).toBe(
-      `dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:${encodeXPageMap({ "9001": "reply-2" })}|tweetpages:done`,
+      `dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:${encodeXPageMap({ "9001": "reply-2" })}|retweetpages:done|tweetpages:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=reply-2"))).toHaveLength(0);
 
@@ -190,7 +196,7 @@ describe("PHASE 78 X conversation replies", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["8000"]);
     expect(second.cursor).toBe(
-      "dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:done|tweetpages:done",
+      "dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:done|retweetpages:done|tweetpages:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=reply-2"))).toHaveLength(1);
   });
@@ -208,6 +214,9 @@ describe("PHASE 78 X conversation replies", () => {
         throw new Error(`unexpected pagination_token ${target}`);
       }
       if (target.includes("/2/tweets/search/recent")) {
+        if (isXRetweetSearch(target)) {
+          return new Response(JSON.stringify({ data: [] }), { status: 200 });
+        }
         expect(conversationQuery(target)).toBe("conversation_id:9001 is:reply");
         return new Response(
           JSON.stringify({
@@ -243,7 +252,7 @@ describe("PHASE 78 X conversation replies", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["8001"]);
     expect(result.cursor).toBe(
-      "dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:done|tweetpages:done",
+      "dmpages:done|mentionpages:done|quotepages:done|replies:8001|replypages:done|retweetpages:done|tweetpages:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => isXUserTweets(String(url)))).toHaveLength(1);
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token="))).toHaveLength(0);
@@ -276,6 +285,9 @@ describe("PHASE 78 X conversation replies", () => {
         );
       }
       if (target.includes("/2/tweets/search/recent")) {
+        if (isXRetweetSearch(target)) {
+          return new Response(JSON.stringify({ data: [] }), { status: 200 });
+        }
         return new Response(
           JSON.stringify({
             data: [

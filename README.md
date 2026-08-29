@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 81: Official VK nested `video.getComments` threads on tagged videos (`thread_items_count` and `comment_id`). Named cursor `uservideothreads` is independent of own-video `videothreads`. Community tokens skip this method. No new SQL.
+PHASE 82: Official X Recent Search `retweets_of:{userId}` inbox collection. Extra retweet pages are not dropped by the retweets watermark. No new SQL.
