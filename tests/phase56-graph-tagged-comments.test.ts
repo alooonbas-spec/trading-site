@@ -21,10 +21,10 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
           { status: 200 },
         );
       }
-      if (target.includes("/555/feed") || target.includes("/555/conversations") || target.includes("/555/videos") || target.includes("/555/photos")) {
+      if (target.includes("/555/feed") || target.includes("/555/conversations") || target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("/555/ratings") || target.includes("/555/videos") || target.includes("/555/photos")) {
+      if (target.includes("/555/ratings") || target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       if (target.includes("/555_1/comments")) {
@@ -90,7 +90,7 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
       replyKind: "comment",
     });
     expect(first.cursor).toBe(
-      `comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:${encodeGraphReplies({ tag1: "tag-cmt-2" })}|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:${encodeGraphReplies({ tag1: "tag-cmt-2" })}|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/tag1/comments"))).toHaveLength(0);
 
@@ -101,7 +101,7 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-tag-c"]);
     expect(second.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/tag1/comments"))).toHaveLength(1);
   });
@@ -170,10 +170,10 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
           { status: 200 },
         );
       }
-      if (target.includes("/555/feed") || target.includes("/555/conversations") || target.includes("/555/videos") || target.includes("/555/photos")) {
+      if (target.includes("/555/feed") || target.includes("/555/conversations") || target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("/555/ratings") || target.includes("/555/videos") || target.includes("/555/photos")) {
+      if (target.includes("/555/ratings") || target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/tagged`);
@@ -218,7 +218,7 @@ describe("PHASE 56 Graph comments on tagged posts and media", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "comments:2026-08-21T12:00:00+0000|creplies:done|donethreads:done|livereplies:done|livevideos:done|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
   });
 

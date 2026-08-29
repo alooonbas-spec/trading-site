@@ -25,10 +25,10 @@ describe("PHASE 50 Graph tagged mention after paging", () => {
           { status: 200 },
         );
       }
-      if (target.includes("/555/feed") || target.includes("/555/conversations") || target.includes("/555/videos") || target.includes("/555/photos")) {
+      if (target.includes("/555/feed") || target.includes("/555/conversations") || target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("/555/ratings") || target.includes("/555/videos") || target.includes("/555/photos")) {
+      if (target.includes("/555/ratings") || target.includes("/555/videos") || target.includes("/555/photos") || target.includes("/555/live_videos")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain(`${FACEBOOK_GRAPH_ORIGIN}/555/tagged`);
@@ -84,7 +84,7 @@ describe("PHASE 50 Graph tagged mention after paging", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      `creplies:done|donethreads:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:${encodeGraphAfter("tag-2")}|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
+      `creplies:done|donethreads:done|livereplies:done|livevideos:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:${encodeGraphAfter("tag-2")}|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done`,
     );
 
     const second = await new FacebookAdapter({ accessToken: "user-token" }).collectInbox({
@@ -94,7 +94,7 @@ describe("PHASE 50 Graph tagged mention after paging", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["old-tag"]);
     expect(second.cursor).toBe(
-      "creplies:done|donethreads:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
+      "creplies:done|donethreads:done|livereplies:done|livevideos:done|mentions:2026-08-21T12:00:00+0000|otherthreads:done|pendingthreads:done|photoreplies:done|photos:done|posts:done|ratingreplies:done|ratings:done|replies:done|spamthreads:done|tagged:done|taggedreplies:done|threadmsgs:done|threads:done|videoreplies:done|videos:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/555/tagged"))).toHaveLength(3);
   });
