@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 79: Official VK `video.getUserVideos` tagged-video mentions. Extra tagged-video pages are not dropped by the videotags watermark. Community tokens skip this method. No new SQL.
+PHASE 80: Official VK `video.getComments` on tagged videos from `video.getUserVideos`. Extra comment pages are not dropped by the uservideo watermark. Community tokens skip this method. No new SQL.
