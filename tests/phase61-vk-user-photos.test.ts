@@ -39,7 +39,7 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const target = String(url);
       const body = String(init?.body ?? "");
-      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
+      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("newsfeed.getMentions")) {
@@ -89,7 +89,7 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|photocomments:1|phototags:1710000200|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|phototags:1710000200|repostpages:1|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getUserPhotos")),
@@ -102,7 +102,7 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `phototag:77:${item.id}`));
     expect(second.cursor).toBe(
-      "mentionpages:done|photocomments:done|phototags:1710000200|userphotocomments:done|userphotos:2|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
+      "mentionpages:done|photocomments:done|phototags:1710000200|repostpages:done|userphotocomments:done|userphotos:2|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getUserPhotos")),
@@ -113,7 +113,7 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const target = String(url);
       const body = String(init?.body ?? "");
-      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
+      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getComments")) {
@@ -144,7 +144,7 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["phototag:77:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|phototags:1710000081|userphotocomments:1|userphotos:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|phototags:1710000081|repostpages:1|userphotocomments:1|userphotos:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getUserPhotos")),
@@ -157,7 +157,7 @@ describe("PHASE 61 VK photos.getUserPhotos", () => {
       if (target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
         throw new Error("community inbox must not call photos.getUserPhotos");
       }
-      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
+      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("messages.getConversations")) {

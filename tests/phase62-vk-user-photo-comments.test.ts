@@ -48,7 +48,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       const body = String(init?.body ?? "");
       if (
         target === vkMethodUrl("wall.get") ||
-        target === vkMethodUrl("wall.getComments") ||
+        target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
         target === vkMethodUrl("newsfeed.getMentions") ||
         target === vkMethodUrl("photos.getAllComments")
       ) {
@@ -122,7 +122,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       })),
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|photocomments:1|phototags:1710000100|userphoto:1710000200|userphotocomments:2|userphotos:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|phototags:1710000100|repostpages:1|userphoto:1710000200|userphotocomments:2|userphotos:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getComments")),
@@ -134,7 +134,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       const target = String(url);
       if (
         target === vkMethodUrl("wall.get") ||
-        target === vkMethodUrl("wall.getComments") ||
+        target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
         target === vkMethodUrl("newsfeed.getMentions") ||
         target === vkMethodUrl("photos.getAllComments") ||
         target === vkMethodUrl("video.get") ||
@@ -184,7 +184,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       },
     ]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|userphoto:1710000200|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|repostpages:1|userphoto:1710000200|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
   });
 
@@ -194,7 +194,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       const body = String(init?.body ?? "");
       if (
         target === vkMethodUrl("wall.get") ||
-        target === vkMethodUrl("wall.getComments") ||
+        target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
         target === vkMethodUrl("newsfeed.getMentions") ||
         target === vkMethodUrl("photos.getAllComments") ||
         target === vkMethodUrl("video.get") ||
@@ -234,7 +234,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["phototag:77:20", "phototag:77:20:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|phototags:1710000100|userphoto:1710000081|userphotocomments:done|userphotos:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|phototags:1710000100|repostpages:1|userphoto:1710000081|userphotocomments:done|userphotos:done|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("photos.getComments")),
@@ -247,7 +247,7 @@ describe("PHASE 62 VK photos.getComments on tagged photos", () => {
       if (target === vkMethodUrl("photos.getComments") || target === vkMethodUrl("photos.getUserPhotos")) {
         throw new Error("community inbox must not call photos.getComments");
       }
-      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
+      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("messages.getConversations")) {

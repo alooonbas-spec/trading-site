@@ -41,7 +41,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
       if (target === vkMethodUrl("wall.get")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
-      if (target === vkMethodUrl("wall.getComments")) {
+      if (target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
@@ -83,7 +83,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
         replyKind: "mention",
       },
     ]);
-    expect(first.cursor).toBe("mentionpages:1|mentions:1710000200|photocomments:1|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
+    expect(first.cursor).toBe("mentionpages:1|mentions:1710000200|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
     ).toHaveLength(1);
@@ -94,7 +94,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(older.map((item) => `77:${item.id}`));
-    expect(second.cursor).toBe("mentionpages:2|mentions:1710000200|photocomments:done|userphotocomments:done|userphotos:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done");
+    expect(second.cursor).toBe("mentionpages:2|mentions:1710000200|photocomments:done|repostpages:done|userphotocomments:done|userphotos:done|videocomments:done|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
     ).toHaveLength(3);
@@ -104,7 +104,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const target = String(url);
       const body = String(init?.body ?? "");
-      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
+      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
@@ -134,7 +134,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
       cursor: "mentionpages:done|mentions:1710000000",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["77:81"]);
-    expect(result.cursor).toBe("mentionpages:done|mentions:1710000081|photocomments:1|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("mentionpages:done|mentions:1710000081|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("newsfeed.getMentions")),
     ).toHaveLength(1);
@@ -146,7 +146,7 @@ describe("PHASE 51 VK newsfeed.getMentions", () => {
       if (target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")) {
         throw new Error("community inbox must not call user newsfeed or photos.getAllComments");
       }
-      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
+      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("messages.getConversations")) {

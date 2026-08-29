@@ -55,7 +55,7 @@ describe("PHASE 53 VK video.getComments", () => {
       const body = String(init?.body ?? "");
       if (
         target === vkMethodUrl("wall.get") ||
-        target === vkMethodUrl("wall.getComments") ||
+        target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
         target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
@@ -122,7 +122,7 @@ describe("PHASE 53 VK video.getComments", () => {
       })),
     ]);
     expect(first.cursor).toBe(
-      "mentionpages:1|photocomments:1|userphotocomments:1|userphotos:1|video:1710000200|videocomments:2|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|video:1710000200|videocomments:2|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.getComments")),
@@ -135,7 +135,7 @@ describe("PHASE 53 VK video.getComments", () => {
       const body = String(init?.body ?? "");
       if (
         target === vkMethodUrl("wall.get") ||
-        target === vkMethodUrl("wall.getComments") ||
+        target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
         target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
@@ -183,7 +183,7 @@ describe("PHASE 53 VK video.getComments", () => {
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["video:10:10:1", "video:10:20:3"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|userphotocomments:1|userphotos:1|video:1710000200|videocomments:1|videos:2|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|video:1710000200|videocomments:1|videos:2|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.get"))).toHaveLength(2);
   });
@@ -194,7 +194,7 @@ describe("PHASE 53 VK video.getComments", () => {
       const body = String(init?.body ?? "");
       if (
         target === vkMethodUrl("wall.get") ||
-        target === vkMethodUrl("wall.getComments") ||
+        target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
         target === vkMethodUrl("newsfeed.getMentions") || target === vkMethodUrl("photos.getAllComments") || target === vkMethodUrl("photos.getUserPhotos") || target === vkMethodUrl("photos.getComments")
       ) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
@@ -232,7 +232,7 @@ describe("PHASE 53 VK video.getComments", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["video:10:20:81"]);
     expect(result.cursor).toBe(
-      "mentionpages:1|photocomments:1|userphotocomments:1|userphotos:1|video:1710000081|videocomments:done|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "mentionpages:1|photocomments:1|repostpages:1|userphotocomments:1|userphotos:1|video:1710000081|videocomments:done|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.get"))).toHaveLength(1);
     expect(
@@ -243,7 +243,7 @@ describe("PHASE 53 VK video.getComments", () => {
   it("isolates unavailable video.get for community inbox", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments")) {
+      if (target === vkMethodUrl("wall.get") || target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts")) {
         return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
       }
       if (target === vkMethodUrl("messages.getConversations")) {
@@ -277,7 +277,7 @@ describe("PHASE 53 VK video.getComments", () => {
       socialAccountId: "a",
     });
     expect(fetchMock.mock.calls.some(([url]) => String(url) === vkMethodUrl("video.get"))).toBe(true);
-    expect(result.cursor).toBe("conversations:1|history:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("conversations:1|history:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
     expect(result.cursor).not.toContain("videos");
     expect(result.cursor).not.toContain("videocomments");
     expect(result.cursor).not.toContain("videothreads");

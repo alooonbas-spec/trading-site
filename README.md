@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 76: Isolated official X `GET /2/users/:id/tweets` plus `GET /2/tweets/:id/quote_tweets`. Extra tweet pages and extra quote pages are not dropped by the quotes watermark. Mentions and DMs are unchanged. No new SQL.
+PHASE 77: Official VK `wall.getReposts` on collected wall posts. Extra repost offset pages are not dropped by the unix reposts watermark. Silent shares without text are skipped. No new SQL.

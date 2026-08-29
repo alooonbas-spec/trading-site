@@ -37,7 +37,7 @@ function photosUnavailable(): Response {
 function emptyWallAndConversations(target: string): Response | null {
   if (
     target === vkMethodUrl("wall.get") ||
-    target === vkMethodUrl("wall.getComments") ||
+    target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
     target === vkMethodUrl("messages.getConversations") ||
     target === vkMethodUrl("messages.getHistory")
   ) {
@@ -132,7 +132,7 @@ describe("PHASE 68 VK community video.getComments", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      "conversations:1|history:1|video:1710000200|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|repostpages:1|video:1710000200|videocomments:1|videos:1|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.get"))).toHaveLength(1);
     expect(
@@ -151,7 +151,7 @@ describe("PHASE 68 VK community video.getComments", () => {
       older.map((item) => `video:-10:20:${item.id}`),
     );
     expect(second.cursor).toBe(
-      "conversations:done|history:done|video:1710000200|videocomments:2|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
+      "conversations:done|history:done|repostpages:done|video:1710000200|videocomments:2|videos:done|videothreads:done|wall:done|wallcomments:done|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.get"))).toHaveLength(3);
     expect(
@@ -203,7 +203,7 @@ describe("PHASE 68 VK community video.getComments", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["video:-10:20:81"]);
     expect(result.cursor).toBe(
-      "conversations:1|history:1|video:1710000081|videocomments:done|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|repostpages:1|video:1710000081|videocomments:done|videos:done|videothreads:done|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("video.get"))).toHaveLength(1);
     expect(
@@ -239,7 +239,7 @@ describe("PHASE 68 VK community video.getComments", () => {
       socialAccountId: "a",
     });
     expect(result.messages).toEqual([]);
-    expect(result.cursor).toBe("conversations:1|history:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("conversations:1|history:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
     expect(result.cursor).not.toContain("videos");
     expect(result.cursor).not.toContain("videocomments");
     expect(result.cursor).not.toContain("videothreads");

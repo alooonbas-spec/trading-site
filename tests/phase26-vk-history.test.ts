@@ -103,7 +103,7 @@ describe("PHASE 26 VK community history collection", () => {
       cursor: "comments:1710000000|messages:8",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["11", "8"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:1|messages:11|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:1|messages:11|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
   });
 
   it("skips already-seen history ids after the history marker is stored", async () => {
@@ -175,7 +175,7 @@ describe("PHASE 26 VK community history collection", () => {
       cursor: "comments:1710000000|history:1|messages:11",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["12"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:done|messages:12|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("comments:1710000000|conversations:1|history:done|messages:12|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
   });
 
   it("does not call messages.getHistory for user OAuth wall-comment inbox", async () => {
@@ -194,6 +194,9 @@ describe("PHASE 26 VK community history collection", () => {
         }
         if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+        }
+        if (target === vkMethodUrl("wall.getReposts")) {
+        return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
         }
         expect(target).toBe(vkMethodUrl("wall.getComments"));
       return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });

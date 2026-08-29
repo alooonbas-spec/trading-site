@@ -152,7 +152,7 @@ describe("PHASE 39 VK community conversation offset", () => {
       cursor: "comments:1710000000|conversations:1|history:done|messages:200",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["201", "50"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:2|history:done|messages:201|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("comments:1710000000|conversations:2|history:done|messages:201|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getConversations")),
     ).toHaveLength(2);
@@ -236,7 +236,7 @@ describe("PHASE 39 VK community conversation offset", () => {
       cursor: "comments:1710000000|conversations:1|history:done|messages:200",
     });
     expect(result.messages.map((item) => item.externalId).sort()).toEqual(["201", "50"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:done|history:done|messages:201|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("comments:1710000000|conversations:done|history:done|messages:201|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
   });
 
   it("stops conversation offset when the older window is short and skips offset after done", async () => {
@@ -298,7 +298,7 @@ describe("PHASE 39 VK community conversation offset", () => {
       cursor: "comments:1710000000|conversations:done|history:done|messages:80",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["81"]);
-    expect(result.cursor).toBe("comments:1710000000|conversations:done|history:done|messages:81|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("comments:1710000000|conversations:done|history:done|messages:81|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("messages.getConversations")),
     ).toHaveLength(1);
@@ -320,6 +320,9 @@ describe("PHASE 39 VK community conversation offset", () => {
         }
         if (target === vkMethodUrl("video.get") || target === vkMethodUrl("video.getComments")) {
           return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
+        }
+        if (target === vkMethodUrl("wall.getReposts")) {
+        return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });
         }
         expect(target).toBe(vkMethodUrl("wall.getComments"));
       return new Response(JSON.stringify({ response: { items: [] } }), { status: 200 });

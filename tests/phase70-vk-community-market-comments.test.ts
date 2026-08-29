@@ -38,7 +38,7 @@ function otherCollectorsUnavailable(): Response {
 function emptyWallAndConversations(target: string): Response | null {
   if (
     target === vkMethodUrl("wall.get") ||
-    target === vkMethodUrl("wall.getComments") ||
+    target === vkMethodUrl("wall.getComments") || target === vkMethodUrl("wall.getReposts") ||
     target === vkMethodUrl("messages.getConversations") ||
     target === vkMethodUrl("messages.getHistory")
   ) {
@@ -133,7 +133,7 @@ describe("PHASE 70 VK community market.getComments", () => {
       },
     ]);
     expect(first.cursor).toBe(
-      "conversations:1|history:1|market:1710000200|marketcomments:1|marketitems:1|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|market:1710000200|marketcomments:1|marketitems:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("market.get"))).toHaveLength(1);
     expect(
@@ -152,7 +152,7 @@ describe("PHASE 70 VK community market.getComments", () => {
       older.map((item) => `market:-10:20:${item.id}`),
     );
     expect(second.cursor).toBe(
-      "conversations:done|history:done|market:1710000200|marketcomments:2|marketitems:done|wall:done|wallcomments:done|wallthreads:done",
+      "conversations:done|history:done|market:1710000200|marketcomments:2|marketitems:done|repostpages:done|wall:done|wallcomments:done|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("market.get"))).toHaveLength(3);
     expect(
@@ -198,7 +198,7 @@ describe("PHASE 70 VK community market.getComments", () => {
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["market:-10:20:81"]);
     expect(result.cursor).toBe(
-      "conversations:1|history:1|market:1710000081|marketcomments:done|marketitems:done|wall:1|wallcomments:1|wallthreads:done",
+      "conversations:1|history:1|market:1710000081|marketcomments:done|marketitems:done|repostpages:1|wall:1|wallcomments:1|wallthreads:done",
     );
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === vkMethodUrl("market.get"))).toHaveLength(1);
     expect(
@@ -231,7 +231,7 @@ describe("PHASE 70 VK community market.getComments", () => {
       socialAccountId: "a",
     });
     expect(result.messages).toEqual([]);
-    expect(result.cursor).toBe("conversations:1|history:1|wall:1|wallcomments:1|wallthreads:done");
+    expect(result.cursor).toBe("conversations:1|history:1|repostpages:1|wall:1|wallcomments:1|wallthreads:done");
     expect(result.cursor).not.toContain("market:");
     expect(result.cursor).not.toContain("marketcomments");
     expect(result.cursor).not.toContain("marketitems");
