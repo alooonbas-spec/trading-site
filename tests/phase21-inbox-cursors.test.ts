@@ -80,7 +80,7 @@ describe("PHASE 21 collector watermarks", () => {
           { status: 200 },
         );
       }
-      if (target.includes("/quote_tweets") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
+      if (target.includes("/quote_tweets") || target.includes("/2/tweets/search/recent") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain("https://api.x.com/2/dm_events");
@@ -99,7 +99,7 @@ describe("PHASE 21 collector watermarks", () => {
       socialAccountId: "a",
       cursor: "mentions:50|dms:70",
     });
-    expect(result.cursor).toBe("dmpages:done|dms:80|mentionpages:done|mentions:60|quotepages:done|tweetpages:done");
+    expect(result.cursor).toBe("dmpages:done|dms:80|mentionpages:done|mentions:60|quotepages:done|replypages:done|tweetpages:done");
     expect(result.messages.map((item) => item.externalId)).toEqual(["60", "80"]);
   });
 

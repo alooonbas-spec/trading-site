@@ -80,7 +80,7 @@ describe("PHASE 17 X Direct Messages", () => {
           { status: 200 },
         );
       }
-      if (target.includes("/quote_tweets") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
+      if (target.includes("/quote_tweets") || target.includes("/2/tweets/search/recent") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain("https://api.x.com/2/dm_events");
@@ -99,7 +99,7 @@ describe("PHASE 17 X Direct Messages", () => {
       workspaceId: "w",
       socialAccountId: "a",
     });
-    expect(result.cursor).toBe("dmpages:done|dms:dm-1|mentionpages:done|mentions:tweet-1|quotepages:done|tweetpages:done");
+    expect(result.cursor).toBe("dmpages:done|dms:dm-1|mentionpages:done|mentions:tweet-1|quotepages:done|replypages:done|tweetpages:done");
     expect(result.messages).toEqual([
       expect.objectContaining({
         externalId: "tweet-1",
@@ -130,7 +130,7 @@ describe("PHASE 17 X Direct Messages", () => {
         if (target.includes("/mentions")) {
           return new Response(JSON.stringify({ data: [], meta: { newest_id: "1" } }), { status: 200 });
         }
-        if (target.includes("/quote_tweets") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
+        if (target.includes("/quote_tweets") || target.includes("/2/tweets/search/recent") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
           return new Response(JSON.stringify({ data: [] }), { status: 200 });
         }
         return new Response("forbidden", { status: 403 });

@@ -58,4 +58,4 @@ Do not put access tokens, refresh tokens, API keys, or session cookies in client
 
 ## Current phase
 
-PHASE 77: Official VK `wall.getReposts` on collected wall posts. Extra repost offset pages are not dropped by the unix reposts watermark. Silent shares without text are skipped. No new SQL.
+PHASE 78: Official X `GET /2/tweets/search/recent` with `conversation_id:{tweetId} is:reply` on collected user tweets. Extra reply pages are not dropped by the replies watermark. Mentions, DMs, and quote tweets are unchanged. No new SQL.

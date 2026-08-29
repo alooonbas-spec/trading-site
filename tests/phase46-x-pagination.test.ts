@@ -45,7 +45,7 @@ describe("PHASE 46 X mention and DM pagination_token", () => {
       if (target.includes("/mentions")) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
-      if (target.includes("/quote_tweets") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
+      if (target.includes("/quote_tweets") || target.includes("/2/tweets/search/recent") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain("https://api.x.com/2/dm_events");
@@ -90,7 +90,7 @@ describe("PHASE 46 X mention and DM pagination_token", () => {
       socialAccountId: "a",
     });
     expect(first.messages.map((item) => item.externalId)).toEqual(["80"]);
-    expect(first.cursor).toBe(`dmpages:${encodeXPageToken("page-2")}|dms:80|mentionpages:done|quotepages:done|tweetpages:done`);
+    expect(first.cursor).toBe(`dmpages:${encodeXPageToken("page-2")}|dms:80|mentionpages:done|quotepages:done|replypages:done|tweetpages:done`);
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=")),
     ).toHaveLength(0);
@@ -101,7 +101,7 @@ describe("PHASE 46 X mention and DM pagination_token", () => {
       cursor: first.cursor,
     });
     expect(second.messages.map((item) => item.externalId)).toEqual(["50"]);
-    expect(second.cursor).toBe("dmpages:done|dms:80|mentionpages:done|quotepages:done|tweetpages:done");
+    expect(second.cursor).toBe("dmpages:done|dms:80|mentionpages:done|quotepages:done|replypages:done|tweetpages:done");
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes("pagination_token=page-2")),
     ).toHaveLength(1);
@@ -127,7 +127,7 @@ describe("PHASE 46 X mention and DM pagination_token", () => {
           { status: 200 },
         );
       }
-      if (target.includes("/quote_tweets") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
+      if (target.includes("/quote_tweets") || target.includes("/2/tweets/search/recent") || /\/2\/users\/[^/]+\/tweets(?:\?|$)/.test(target)) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
       }
       expect(target).toContain("https://api.x.com/2/dm_events");
@@ -141,6 +141,6 @@ describe("PHASE 46 X mention and DM pagination_token", () => {
       cursor: "dmpages:done|dms:70|mentionpages:done|mentions:50",
     });
     expect(result.messages.map((item) => item.externalId)).toEqual(["60"]);
-    expect(result.cursor).toBe("dmpages:done|dms:70|mentionpages:done|mentions:60|quotepages:done|tweetpages:done");
+    expect(result.cursor).toBe("dmpages:done|dms:70|mentionpages:done|mentions:60|quotepages:done|replypages:done|tweetpages:done");
   });
 });
