@@ -1,0 +1,467 @@
+# Social Hub architecture
+
+Modular monolith + workers. One Postgres database. Platform logic lives in social adapters, not in business services.
+
+## Domain model
+
+```
+User → Workspace → Social Accounts
+                 → Leads → Social Profiles
+                 → Lead Account Relationships
+                 → Lead Interactions
+                 → Campaigns → Campaign Leads / Campaign Accounts
+                 → Posts → Post Targets
+                 → Monitoring Rules → Monitoring Events
+                 → Jobs
+                 → Inbox Events
+```
+
+One workspace has many social accounts. Never assume 1 platform = 1 account.
+
+## Independent state machines
+
+| Machine | Owns |
+| --- | --- |
+| `LeadStatus` | CRM stage of a person |
+| `ContactStatus` | State of one (lead, profile, our account) relationship |
+| `CampaignStatus` | Campaign lifecycle |
+| `PostStatus` | Post lifecycle |
+| `PostTargetStatus` | Per-account publish outcome |
+| `MonitoringRuleStatus` | Monitoring rule lifecycle |
+| `JobStatus` | Queue item |
+| `SocialAccountStatus` | Connected account health |
+
+`do_not_contact` exists only on `leads`. It is not a contact status.
+
+## Request path
+
+UI → Route / Server Action → Domain Service → Social Adapter → Platform API or TinyFish (server-side only)
+
+Tokens, API keys, and session cookies never go to the client.
+
+## CRM (PHASE 3)
+
+- `leads` own `LeadStatus` and the only `do_not_contact` flag.
+- `social_profiles` are platform identities unique per workspace (`workspace_id, platform, external_profile_id`).
+- `contact_relationships` own `ContactStatus` for one (lead, their profile, our account) pair.
+- `lead_interactions` are an append-only timeline.
+- Merge moves profiles/relationships/interactions onto the surviving lead, ORs `do_not_contact`, and archives the source.
+
+Outbound contact status changes (`QUEUED`, invite/message pending/sent) are blocked when `do_not_contact` is true. Recording replies, failures, or blocks is still allowed.
+
+## Campaigns and jobs (PHASE 4)
+
+- Campaigns select many leads and many social accounts. Start enqueues one CONTACT job per matching (lead profile, our account) pair on the same platform when that account's adapter can perform the campaign action.
+- MESSAGE requires `messaging`. INVITE requires `invites` (no adapter enables invites yet). OPEN_PROFILE and MANUAL_ACTION_REQUIRED still enqueue without an adapter send.
+- Workers claim jobs with `FOR UPDATE SKIP LOCKED`. They skip paused campaigns, `do_not_contact` leads, and inoperable accounts.
+- `AccountRateLimiter` consumes per-account windows via `increment_account_rate_bucket`. Limits come from `adapter.getRateLimit()`, not from `if (platform === …)` in the worker.
+- INVITE/MESSAGE call `adapter.executeContactAction`. Capability gating at start avoids queuing jobs that would only throw `UnsupportedActionError`.
+
+## Public collection (PHASE 5)
+
+TinyFish is server-only. The API key is `TINYFISH_API_KEY` (never `NEXT_PUBLIC_*`) and is sent as `X-API-Key` to official endpoints:
+
+- Fetch: `POST https://api.fetch.tinyfish.ai`
+- Search: `GET https://api.search.tinyfish.ai`
+- Agent: `POST https://agent.tinyfish.ai/v1/automation/run`
+
+PHASE 5 uses Fetch to collect a public profile page. Each adapter resolves an official public URL (Telegram `t.me`, VK `vk.com`, X `x.com`, Instagram `instagram.com`, Facebook `facebook.com`). Arbitrary URLs are rejected.
+
+Safety policy:
+
+- Goals/purpose text that mentions captcha solving, stealth, or rate-limit bypass is rejected.
+- `bot_blocked` fails honestly. There is no stealth retry.
+- HTTP 429 is surfaced as `RateLimitError`. The client does not tight-loop.
+
+`publicCollection` is true only when the server key is configured. Contact actions stay disabled.
+
+## Publishing (PHASE 6)
+
+- A post has many `post_targets` (one per social account). Never assume 1 platform = 1 account.
+- Publish enqueues `PUBLISH` jobs onto the shared queue. Scheduling uses `jobs.run_after`, not adapter-native scheduling.
+- Workers skip cancelled posts, inoperable accounts, and already-published targets. They honor `AccountRateLimiter`.
+- `adapter.getCapabilities().publishing` decides whether `adapter.publish` runs. Post status (`DRAFT` / `SCHEDULED` / `PUBLISHING` / `PUBLISHED` / `PARTIAL` / `FAILED` / `CANCELLED`) is independent of JobStatus and CampaignStatus. `do_not_contact` is not on posts.
+
+## Monitoring (PHASE 7)
+
+- `monitoring_rules` own `MonitoringRuleStatus` (`ACTIVE` / `PAUSED` / `DISABLED`). `monitoring_events` are append-only and unique per `(workspace_id, rule_id, external_id)`.
+- `do_not_contact` is not on monitoring tables.
+- Workers claim `MONITOR` jobs with `FOR UPDATE SKIP LOCKED` and skip paused/disabled rules. They branch on `job.type`, never `platform ===`.
+- Adapters collect mentions. X uses official `GET https://api.x.com/2/tweets/search/recent` when a token is present. Telegram uses official `getUpdates`. VK uses official `newsfeed.search` when a user or service token is present (PHASE 19). Other platforms and tokenless runs use TinyFish Search (`GET https://api.search.tinyfish.ai`) on official domains only.
+- TinyFish Search honors HTTP 429 with no tight-loop retry, never sends stealth browser profiles, and never bypasses captcha. Missing `TINYFISH_API_KEY` fails honestly.
+- Keyword matching happens after collection. Non-official source hosts are rejected.
+
+## Analytics (PHASE 8)
+
+- Lead, contact, campaign, account, post, monitoring, and job-family metrics stay on their own machines.
+- Analytics reads live workspace tables. It does not invent a universal success total or copy `do_not_contact` onto other entities.
+- CONTACT, PUBLISH, and MONITOR job counts are tallied separately.
+
+## Token refresh and Telegram send (PHASE 9)
+
+- `adapter.refreshTokens()` is the only place that talks to a platform token endpoint. Workers call `prepareAccountAdapter`, which refreshes expired tokens before CONTACT, PUBLISH, or MONITOR jobs.
+- X uses official `POST https://api.x.com/2/oauth2/token` with `grant_type=refresh_token`. Instagram uses `GET https://graph.instagram.com/refresh_access_token`. Facebook uses `fb_exchange_token`. VK uses `https://id.vk.ru/oauth2/auth`. Telegram bot tokens are not refreshable; missing refresh fails honestly.
+- Successful refreshes persist encrypted tokens and log `SOCIAL_ACCOUNT_TOKEN_REFRESHED`. If a provider omits a new refresh token, the previous encrypted refresh token is kept.
+- Telegram text publish and MESSAGE use official `sendMessage`. Publishing needs `metadata.publishChatId`. INVITE still throws `UnsupportedActionError`. Facebook, Instagram, and VK contact actions stay disabled.
+
+## Background worker (PHASE 10)
+
+- `GET`/`POST /api/jobs/process` is a public path authenticated with `Authorization: Bearer $CRON_SECRET` or `WORKER_SECRET`. Missing or wrong secrets fail honestly.
+- The handler runs inside `runAsWorker()`, so `createClient()` uses `SUPABASE_SERVICE_ROLE_KEY` (never `NEXT_PUBLIC_*`) and never cookies.
+- `claim_due_jobs` is granted only to `service_role`. It claims due `PENDING`/`RETRY` jobs across workspaces with `FOR UPDATE SKIP LOCKED`, still skipping paused campaigns and non-ACTIVE monitoring rules.
+- UI "Process queue" still uses workspace-scoped `claim_jobs`. The worker does not introduce `if (platform === …)`.
+- Vercel Cron is configured daily (`0 0 * * *`) so Hobby deploys stay valid. More frequent processing uses the same endpoint from an external scheduler.
+
+## Media publishing (PHASE 11)
+
+- Telegram publishes image, GIF, video, PDF, and ZIP URLs through official `sendPhoto` / `sendAnimation` / `sendVideo` / `sendDocument` / `sendMediaGroup`. Telegram fetches the public URL. Local and private hosts are rejected.
+- X downloads public media, then uses official `POST https://api.x.com/2/media/upload/initialize`, `/append`, and `/finalize` with `media.write`, and attaches `media.media_ids` on `POST https://api.x.com/2/tweets`. Existing X accounts must reconnect to grant `media.write`.
+- Mixed types, private IPs, and unsupported document URLs fail honestly. The worker still does not branch on `platform ===`.
+
+## Facebook, Instagram, and VK publishing (PHASE 12)
+
+- Facebook publishes through a Page access token from official `GET /me/accounts`, then `POST /{page-id}/feed`, `/{page-id}/photos`, or `/{page-id}/videos`. OAuth now requests `pages_manage_posts`. Multiple Pages require `metadata.pageId`.
+- Instagram uses Instagram API with Instagram Login: `POST /{ig-user-id}/media` and `/{ig-user-id}/media_publish` with `instagram_business_content_publish`. Text-only posts are rejected. Images must be jpeg/png; Reels must be mp4.
+- VK uses official `wall.post`. Photos go through `photos.getWallUploadServer` → upload → `photos.saveWallPhoto`. Optional `metadata.publishOwnerId` targets a community wall. Video upload is PHASE 16.
+- Existing Facebook, Instagram, and VK accounts must reconnect to grant the new scopes. App Review still applies; tester/admin tokens work before review. Contact send for Facebook and Instagram is PHASE 18. VK contact stays `UnsupportedActionError`.
+
+## Inbox replies (PHASE 13)
+
+- `INBOX` jobs poll connected accounts. `adapter.collectInbox()` talks to official APIs: Telegram `getUpdates` DMs, X mentions and Direct Messages, Facebook Page comments and Messenger conversations, Instagram media comments and Direct Messages, and VK `wall.getComments`.
+- Events are stored in `inbox_events` (unique per account + external id). Unknown senders are kept unmatched and are not turned into leads. X inbox also reads Direct Messages (PHASE 17).
+- Matched CRM profiles record a `REPLY` interaction. Existing contact relationships move to `REPLIED` unless they are `BLOCKED`. `do_not_contact` does not block recording replies.
+- Instagram comment inbox needs `instagram_business_manage_comments` (reconnect). Telegram `getUpdates` is a single Bot API consumer; PHASE 15 shares that stream between inbox and monitoring.
+- The worker still branches on `job.type`, never `platform ===`.
+
+## Inbox UI (PHASE 14)
+
+- The Inbox page lists stored events with unmatched/matched filters. Unmatched senders are attached to an **existing** lead. Inbox never inserts a `leads` row.
+- Attach creates or reuses a `social_profiles` identity from the event (platform comes from the receiving social account). If that identity is already linked to another lead, attach fails honestly.
+- Sibling unmatched events for the same identity are rematched together. Each records a `REPLY` interaction. Existing contact relationships move to `REPLIED` unless they are `BLOCKED`. `do_not_contact` does not block recording replies.
+- Lead merge moves matched inbox events onto the surviving lead and reassigns events before a duplicate profile is deleted.
+- The worker still branches on `job.type`, never `platform ===`.
+
+## Telegram shared updates (PHASE 15)
+
+- Telegram Bot API `getUpdates` is one consumer per bot. Adapters expose `sharedUpdateStream` when inbox and monitoring must share that stream.
+- INBOX and MONITOR jobs for those accounts call `adapter.collectSharedUpdates()` once, then ingest private DMs and keyword-match monitor candidates. Dedup stays on unique inbox and monitoring event constraints.
+- The shared cursor lives on `social_accounts.metadata.updateStreamCursor` (kept in sync with `inboxCursor`). The worker never writes a cursor backwards and never branches on `platform ===`.
+- Concurrent INBOX/MONITOR jobs on the same account are released and retried shortly instead of issuing a second `getUpdates`.
+- Telegram INVITE remains `UnsupportedActionError`. Other platforms keep separate inbox and monitor APIs.
+
+## VK video publishing (PHASE 16)
+
+- VK videos use official `video.save` to get an upload URL, then `POST` the public mp4/mov file as `video_file`, then `wall.post` with a `video{owner_id}_{video_id}` attachment.
+- Photos and videos cannot be mixed in one post. webm, documents, private hosts, and mixed media fail honestly. Existing VK accounts must reconnect to grant the `video` scope.
+- Community walls still use `metadata.publishOwnerId`. Contact actions on VK stay `UnsupportedActionError`.
+
+## X Direct Messages and campaign gating (PHASE 17)
+
+- X OAuth requests `dm.read` and `dm.write` in addition to tweet, user, media, and offline scopes. Existing X accounts must reconnect.
+- Inbox collects mentions (`GET /2/users/:id/mentions`) and inbound DMs (`GET /2/dm_events` with `event_types=MessageCreate`). Unique `inbox_events` still dedup. Outbound DMs from the connected account are skipped. Attachments-only DMs without text are skipped rather than invented.
+- Outbound MESSAGE uses official `POST /2/dm_conversations/with/{participant_id}/messages`. Numeric profile ids are used as `participant_id`. Username-only profiles are resolved through `GET /2/users/by/username/:username`. INVITE stays `UnsupportedActionError`.
+- Campaign start filters CONTACT pairs through adapter capabilities, not `if (platform === …)`. MESSAGE enqueues for Telegram and X (PHASE 17) and Facebook/Instagram (PHASE 18). INVITE enqueues for nobody (`invites` is false on every adapter). Zero remaining pairs fail with `ValidationError`.
+- Facebook and Instagram messaging is PHASE 18. VK contact send stays disabled. Telegram INVITE stays disabled.
+
+## Facebook Messenger and Instagram DMs (PHASE 18)
+
+- Facebook OAuth adds `pages_manage_metadata` and `pages_messaging`. Inbox reads Page comments and Messenger conversations (`GET /{page-id}/conversations?platform=MESSENGER`). Outbound MESSAGE uses official `POST /{page-id}/messages` with `messaging_type=RESPONSE` and a Page-scoped recipient id.
+- Instagram OAuth adds `instagram_business_manage_messages`. Inbox reads media comments and Direct Messages (`GET /{ig-user-id}/conversations?platform=instagram`). Outbound MESSAGE uses official `POST /{ig-user-id}/messages` with an Instagram-scoped recipient id.
+- Public usernames cannot be messaged. Recipients must already have opened a conversation (24-hour window). Graph errors fail honestly. INVITE stays `UnsupportedActionError`.
+- Campaign start now enqueues MESSAGE for Facebook and Instagram through the same capability filter. Existing Facebook and Instagram accounts must reconnect.
+- VK user `messages.send` is not implemented: new apps are not granted the user `messages` scope. Community tokens would be a later phase.
+
+## VK newsfeed monitoring (PHASE 19)
+
+- VK monitoring uses official `newsfeed.search` with a connected user token, or `VK_SERVICE_TOKEN` when no user token is present. Keyword matching still happens after collection. The unix `date` watermark is sent back as `start_time`. PHASE 47 walks older `start_from` windows.
+- Tokenless runs without a service token fall back to TinyFish Search, or fail honestly if TinyFish is not configured. Facebook and Instagram still have no public keyword-search API, so they stay on TinyFish.
+- No new VK OAuth scope is required. The worker still branches on `job.type`, never `platform ===`.
+
+## Official inbox replies (PHASE 20)
+
+- Operators reply to a stored `inbox_events` row from Inbox or a lead page. The server action calls `adapter.replyToInbox()` after `prepareAccountAdapter` and the same `increment_account_rate_bucket` limiter the worker uses. Services do not branch on `platform ===`.
+- Collectors persist `reply_kind` (`direct_message`, `comment`, `mention`). Pre-PHASE-20 rows infer kind from platform and public URL (Telegram private DMs, X status URLs as mentions, Facebook/Instagram public URLs as comments, VK wall comments). Inference never invents a send that the adapter cannot perform.
+- Direct messages reuse official MESSAGE send: Telegram `sendMessage`, X `POST /2/dm_conversations/with/{id}/messages`, Facebook `POST /{page-id}/messages`, Instagram `POST /{ig-user-id}/messages`.
+- Comment replies use official write APIs: Facebook `POST /{comment-id}/comments` (`pages_manage_engagement`; reconnect existing Pages), Instagram `POST /{ig-comment-id}/replies`, VK `wall.createComment` with `reply_to_comment`.
+- X mention replies use `POST /2/tweets` with `reply.in_reply_to_tweet_id`. VK user Direct Messages stay disabled.
+- Matched outbound replies check `leads.do_not_contact` and record interaction type `MESSAGE`. Unmatched inbound replies are allowed (the person already wrote in) and do not create leads. `REPLIED` and `BLOCKED` relationship statuses are not overwritten; other statuses may move to `MESSAGE_SENT`.
+- `inboxReply` is true on Telegram, X, Facebook, Instagram, and VK. Capability-off adapters still throw `UnsupportedActionError`.
+
+## Inbox cursors (PHASE 21)
+
+- Facebook, Instagram, and VK inbox jobs used to return the previous cursor unchanged, so every poll re-fetched the same window and relied only on the unique `(workspace, account, external_id)` constraint.
+- Each adapter owns an opaque `inboxCursor`. The worker stores the later of the previous metadata cursor and `collectInbox().cursor` via `laterUpdateStreamCursor`. It still does not branch on `platform ===`.
+- X mentions keep official `since_id`. Direct Messages have no `since_id`, so the adapter skips event ids at or before a `dms` watermark. Legacy numeric cursors stay the mentions watermark.
+- Facebook and Instagram keep independent `comments` and `messages` timestamps so a newer DM cannot hide a later comment (or the reverse). Graph `since` is not applied to Page feed: that would drop comments on older posts.
+- VK wall comments use a unix `date` watermark on the latest `wall.get` page. PHASE 40 walks older `wall.get` offset windows; comments on newly discovered older posts are not dropped by that watermark on first sight. Unique constraints remain the safety net if two events share a timestamp.
+
+## Inbox operations (PHASE 22)
+
+Inbox filters by receiving account, account platform, match state, and stored `reply_kind`. Owners and admins can poll inbox-capable accounts from Inbox. Process queue still claims the shared workspace jobs with SKIP LOCKED.
+
+## VK community Direct Messages (PHASE 23)
+
+VK community tokens connect through the existing `VkAdapter`. Tokens stay encrypted at rest. Inbox uses `messages.getConversations` to discover 1:1 peers, then `messages.getHistory` for the latest 50 inbound Direct Messages per conversation, plus wall comments. Outbound MESSAGE uses `messages.send`. User OAuth still cannot DM.
+
+## Jobs queue (PHASE 24)
+
+The Jobs page lists CONTACT, PUBLISH, MONITOR, and INBOX jobs. Operators retry FAILED jobs and cancel PENDING/RETRY jobs. Retry does not rewrite `LeadStatus` or `do_not_contact`. Process queue remains shared SKIP LOCKED.
+
+## Activity log (PHASE 25)
+
+The Activity page lists `activity_log` rows with action, entity, account, and platform filters. Platform is account identity. Metadata is passed through `logger.redact` before display so tokens and secrets never reach the client. The log is append-only; viewing it does not rewrite any status machine.
+
+## VK community DM history (PHASE 26)
+
+Community inbox no longer stops at `last_message`. After listing conversations, the adapter calls official `messages.getHistory` for each 1:1 user peer (count 50). A `history:1` cursor marker means later polls may skip Direct Message ids at or before the messages watermark. PHASE 23 cursors without that marker backfill the recent history window once. Unique `(workspace, account, external_id)` still dedups. Chat peers stay skipped. User OAuth inbox is still wall comments only.
+
+## Operator list pagination (PHASE 27)
+
+Inbox, Jobs, and Activity pages fetch 201 rows and keep 200. If more exist, an opaque `after` keyset (`created_at`, `id`) loads older rows. Invalid cursors are ignored. There is no SQL `OFFSET`. Filter forms omit `after` so a new filter starts from the newest page.
+
+## Lead detail pagination (PHASE 28)
+
+The lead page paginates matched inbox events (`inbox`) and the interaction timeline (`timeline`) independently with the same keyset. Paginating one list keeps the other cursor. Official replies are still blocked when the lead is `do_not_contact`.
+
+## Operator index pagination (PHASE 29)
+
+Leads, Campaigns, Posts, and Monitoring index pages use the same `created_at` keyset as Inbox. Filter forms omit `after`. Campaign/post compose pickers and inbox/lead-merge `listLeads` stay unbounded. Monitoring rule events replace the previous 100-row cap with a 200-row keyset. There is no SQL `OFFSET`.
+
+## Detail jobs and campaign leads (PHASE 30)
+
+Campaign, post, and monitoring rule pages paginate their job lists with the same keyset. Campaign leads paginate independently (`leads`) from campaign jobs (`after`). Monitoring events (`after`) and jobs (`jobs`) stay independent. Detail pages load leads and social accounts by id instead of the whole workspace CRM. Retry still lives on the Jobs queue and does not rewrite `LeadStatus` or `do_not_contact`.
+
+## Lead pickers (PHASE 31)
+
+Campaign compose, inbox attach, and lead merge no longer call unbounded `listLeads`. They search the newest 200 matching leads (`searchPickerLeads` / `listLeadsPage`). Selected campaign leads stay checked across searches. Inbox `leadQ` and merge `mergeQ` are GET searches that keep the other page cursors. The picker never creates people and does not rewrite `do_not_contact`.
+
+## Index status filters (PHASE 32)
+
+Campaigns, Posts, and Monitoring index pages filter by their own status machines. Monitoring can also filter by stored rule platform (identity, not a business-logic switch). Filter GET forms omit `after` so a new filter starts from the newest keyset page. Filters do not rewrite `LeadStatus` or `do_not_contact`.
+
+## Social account index (PHASE 33)
+
+The Social Accounts page paginates connected-account cards with the same `created_at` keyset and filters by stored platform identity and `SocialAccountStatus`. Group create still uses unbounded `listSocialAccounts` so operators can assign any account. Tokens stay server-side. Filtering does not rewrite `LeadStatus` or `do_not_contact`.
+
+## Detail job status filters (PHASE 34)
+
+Campaign, post, and monitoring rule pages filter their paginated job lists by `JobStatus`. Filter GET forms omit the jobs cursor (`after` on campaign/post, `jobs` on monitoring) so a new filter starts from the newest keyset page. Independent cursors (campaign leads, monitoring events) stay in hidden fields. Filtering does not rewrite `LeadStatus` or `do_not_contact`. Retry still lives on the Jobs queue.
+
+## Social account pickers (PHASE 35)
+
+Campaign, post, group, monitoring, inbox, jobs, activity, and lead-relationship account pickers search the newest 200 matching accounts (`searchPickerAccounts` / `listSocialAccountsPage`). Selected compose accounts stay checked across searches. Jobs/activity/inbox `accountQ` is a GET search; a selected account id still loads by id if it is outside the current page. Unbounded `listSocialAccounts` remains for workspace-wide inbox poll and account health. The picker never sends tokens to the client and does not rewrite `LeadStatus` or `do_not_contact`.
+
+## VK community history offset (PHASE 36)
+
+After the first 50-message window (`history:1`), each later inbox poll calls official `messages.getHistory` with `offset = page * 50` for the same 1:1 user peers. A full 50-item page advances `history:2`, `history:3`, and so on. A short page stores `history:done` and later polls only keep Direct Message ids after the messages watermark. Chat peers stay skipped. User OAuth inbox is still wall comments only. Unique `(workspace, account, external_id)` still dedups.
+
+## Workspace members pagination (PHASE 37)
+
+The Settings members table uses the same `created_at` keyset as other operator lists (newest first, 200 per page). Unbounded `listWorkspaceMembers` remains for programmatic use. Membership changes do not rewrite `LeadStatus` or `do_not_contact`.
+
+## Detail membership pagination (PHASE 38)
+
+Campaign accounts (`accounts`) and post targets (`targets`) paginate independently from jobs (`after`) and campaign leads (`leads`) with the same `created_at` keyset. JobStatus filter forms keep the other cursors in hidden fields and omit the jobs cursor. Unbounded `listCampaignAccountIds` and `listPostTargets` remain for enqueue. Paginating membership lists does not rewrite `LeadStatus`, `PostTargetStatus`, or `do_not_contact`.
+
+## VK community conversation offset (PHASE 39)
+
+After the first 20-conversation window (`conversations:1`), each later inbox poll calls official `messages.getConversations` with `offset = page * 20`. A full 20-item raw page (including chats) advances `conversations:2`, `conversations:3`, and so on. A short page stores `conversations:done` and later polls only list the latest 20 conversations. Newly discovered older 1:1 peers still get `messages.getHistory` (latest 50 plus the current history offset window). Their inbound Direct Messages are not dropped by the messages watermark on first sight. Chat peers stay skipped. User OAuth inbox is still wall comments only. This is still not a full archive in one poll: each poll walks one extra 20-conversation page, and history remains 50-message windows.
+
+## VK wall offset (PHASE 40)
+
+After the first 10-post window (`wall:1`), each later inbox poll calls official `wall.get` with `offset = page * 10` (`filter=owner`, count 10). A full 10-item page advances `wall:2`, `wall:3`, and so on. A short page stores `wall:done` and later polls only read the latest 10 posts. Newly discovered older posts still get `wall.getComments`. Their comments are not dropped by the unix comments watermark on first sight. User OAuth and community accounts share this wall walker.
+
+## VK wall comment offset (PHASE 41)
+
+After the first 50-comment window (`wallcomments:1`), each later inbox poll calls official `wall.getComments` with `offset = page * 50` (`sort=desc`, count 50) for the current wall posts (latest 10 plus the current wall offset page). A full 50-item raw page on any of those posts advances `wallcomments:2`, `wallcomments:3`, and so on. A short page stores `wallcomments:done` and later polls only read the latest 50 comments per post. Older comment pages are not dropped by the unix comments watermark. Offset is omitted when it is `0`. This is still not a full wall archive in one poll.
+
+## Graph conversation paging (PHASE 42)
+
+Facebook Messenger and Instagram Direct Message collectors follow official Graph `paging.cursors.after` (or `after` on `paging.next`) for `/conversations`. The first page stays `limit=15` with `messages.limit(20)`. If a next `after` exists, the next poll requests that page once. The opaque `after` value is stored base64url-encoded in `threads` so named cursors cannot split on `:` or `|`. A short page stores `threads:done` and later polls only read the latest conversations page. Older-page Direct Messages are not dropped by the `messages` timestamp watermark on first sight. Nested first message pages seed the `threadmsgs` walker in PHASE 45. Collectors do not fetch `paging.next` URLs, so Graph tokens never ride an untrusted next link.
+
+## Graph feed and media paging (PHASE 43)
+
+Facebook Page `/{page-id}/feed` and Instagram `/{ig-user-id}/media` follow the same official Graph `after` walker as conversations. Each poll still reads the latest 10 posts/media items. If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `posts`. A short page stores `posts:done`. Comments on newly discovered older posts are not dropped by the `comments` timestamp watermark on first sight. Nested first comment pages still seed the `replies` walker in PHASE 44. Collectors still do not fetch `paging.next` URLs.
+
+## Graph nested comment paging (PHASE 44)
+
+Facebook `/{post-id}/comments` and Instagram `/{media-id}/comments` follow official Graph `after` for extra nested comment pages. Graph `after` is per object id, so the named `replies` cursor stores a small `{ objectId: after }` map (base64url JSON, at most 20 ids). The first collect reads nested `comments.paging.cursors.after` from the current feed/media pages. Later polls request `GET /{object-id}/comments?after=` with official fields and `limit=50` for stored ids. The next map is fetched pages that still have `after`, plus newly discovered post/media ids that were not already stored. Stored ids are not reset from the nested first-page `after` (Graph would keep returning that cursor). An empty map stores `replies:done` and later polls stay done. Extra comment-page messages are not dropped by the `comments` timestamp watermark. Collectors still do not fetch `paging.next` URLs.
+
+## Graph nested conversation messages (PHASE 45)
+
+Facebook `/{conversation-id}/messages` and Instagram `/{conversation-id}/messages` follow the same per-object Graph `after` walker as nested comments. The named `threadmsgs` cursor stores `{ conversationId: after }` (base64url JSON, at most 20 ids). The first collect reads nested `messages.paging.cursors.after` from the current conversations pages. Later polls request `GET /{conversation-id}/messages?after=` with official fields and `limit=20`. Extra thread messages are not dropped by the `messages` timestamp watermark. An empty map stores `threadmsgs:done`. Collectors still do not fetch `paging.next` URLs.
+
+## X mention and DM pagination (PHASE 46)
+
+X mentions (`GET /2/users/:id/mentions`) and Direct Messages (`GET /2/dm_events`) follow official `meta.next_token` as `pagination_token`. Each poll still reads the latest page (`max_results=10` mentions, `max_results=50` DMs). Mentions still send `since_id` on the latest page. If a next token exists, the next poll requests that page once on the same constructed endpoint. Opaque tokens are stored base64url-encoded in `mentionpages` and `dmpages` so named cursors cannot split on `:` or `|`. A short page stores `mentionpages:done` / `dmpages:done`. Extra DM pages are not dropped by the `dms` event-id watermark on first sight. Collectors set `pagination_token=` on the official path and do not treat `next_token` as a fetch URL.
+
+## VK newsfeed.search paging (PHASE 47)
+
+VK `newsfeed.search` follows official `next_from` as `start_from`. Each poll still reads the latest 30 posts with `extended=1`. `start_time` still comes from the unix `time` watermark (legacy 10-digit cursors stay the time watermark). If `next_from` exists, the next poll requests that page once. Opaque `start_from` values are stored base64url-encoded in `pages`. A short page stores `pages:done`. Extra-page posts are not dropped by the `time` watermark on first sight. `start_from` is omitted when it is not set.
+
+## X recent search paging (PHASE 48)
+
+X monitoring (`GET /2/tweets/search/recent`) follows official `meta.next_token` as `pagination_token`. Each poll still reads the latest page (`max_results=10`). `since_id` still comes from the `tweets` watermark (legacy numeric cursors stay the tweets watermark). If a next token exists, the next poll requests that page once on the same constructed endpoint. Opaque tokens are stored base64url-encoded in `pages`. A short page stores `pages:done`. Extra-page tweets are not dropped by the `tweets` watermark on first sight. Collectors set `pagination_token=` and do not treat `next_token` as a fetch URL.
+
+## Graph comment-to-comment replies (PHASE 49)
+
+Facebook `/{comment-id}/comments` and Instagram `/{comment-id}/replies` follow official Graph `after` for extra nested replies to comments (not paging of comments on a post — that remains `replies` in PHASE 44). The named `creplies` cursor stores `{ commentId: after }` (base64url JSON, at most 20 ids). Feed/media first pages request nested Facebook `comments.limit(25)` and Instagram `replies`. Extra PHASE 44 post/media comment pages also request those nested edges so newly discovered comments can seed `creplies`. Later polls request `GET /{comment-id}/comments?after=` (Facebook, `limit=25`) or `GET /{comment-id}/replies?after=` (Instagram, `limit=25`) with official fields. Extra nested-reply pages are not dropped by the `comments` timestamp watermark. Stored ids are not reset from the nested first-page `after`. An empty map stores `creplies:done` and later polls stay done. Collectors still do not fetch `paging.next` URLs.
+
+## Graph tagged mentions (PHASE 50)
+
+Facebook `GET /{page-id}/tagged` and Instagram `GET /{ig-user-id}/tags` collect posts/media where the connected Page or professional account was tagged. Each poll still reads the latest 10 tagged items. If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `tagged`. A short page stores `tagged:done`. Extra tagged pages are not dropped by the independent `mentions` timestamp watermark. Photo-only tagged posts without text are skipped as mentions; comments on those posts are still collected in PHASE 56. This is photo/Page tagging, not Instagram @mention webhooks. Outbound mention replies use official `POST /{post-id}/comments` (Facebook) and `POST /{ig-media-id}/comments` (Instagram). Existing Facebook accounts must reconnect to grant `pages_read_user_content`. Collectors still do not fetch `paging.next` URLs.
+
+## VK wall mentions (PHASE 51)
+
+User OAuth inbox calls official `newsfeed.getMentions` (count 20). `start_time` and `end_time` are omitted so VK returns the mention archive rather than the 24-hour default window. After `mentionpages:1`, each later poll requests `offset = page * 20`. A full 20-item page advances `mentionpages:2`. A short page stores `mentionpages:done`. Extra mention pages are not dropped by the independent unix `mentions` watermark. Mention events store `owner:post` ids and `replyKind=mention`. Replies use `wall.createComment` on that post without `reply_to_comment`. Community tokens skip this method (user newsfeed). No new VK OAuth scope.
+
+## VK photo comments (PHASE 52)
+
+User OAuth inbox calls official `photos.getAllComments` (count 50) for comments across albums in one request. `album_id` and `owner_id` are omitted so VK uses all albums of the current user. Offset is omitted when `0`. After `photocomments:1`, each later poll requests `offset = page * 50`. A full 50-item page advances `photocomments:2`. A short page stores `photocomments:done`. Extra photo-comment pages are not dropped by the independent unix `photos` watermark. Events store `photo:{pid}:{commentId}` ids, `replyKind=comment`, and `url=null` (owner id is not in this payload). Replies use official `photos.createComment` with `photo_id` and `reply_to_comment`; `owner_id` is omitted so the comment lands on the current user's photo. Community tokens collect this method in PHASE 67. No new VK OAuth scope.
+
+## VK video comments (PHASE 53)
+
+User OAuth inbox calls official `video.get` (count 10, Added album) then `video.getComments` (count 50, `sort=desc`) for those videos. `owner_id` and `album_id` are omitted on `video.get` so VK uses the current user. Offset is omitted when `0`. After `videos:1`, each later poll requests `video.get` `offset = page * 10`. After `videocomments:1`, each later poll requests `video.getComments` `offset = page * 50` for the current videos. A full page advances `videos:2` / `videocomments:2`. A short page stores `done`. Extra video and comment pages are not dropped by the independent unix `video` watermark. Events store `video:{ownerId}:{videoId}:{commentId}` and `replyKind=comment`. Replies use official `video.createComment` with `owner_id`, `video_id`, and `reply_to_comment`. Community tokens collect these methods in PHASE 68. No new VK OAuth scope (`video` is already granted for publishing).
+
+## VK wall comment threads (PHASE 54)
+
+`wall.getComments` requests official `thread_items_count=10` so each top-level comment includes its first nested replies. Nested replies use the same `{owner}:{post}:{comment}` ids and `wall.createComment` reply path as top-level comments. If `thread.count` is greater than the nested items returned, the next poll requests `wall.getComments` with `comment_id` of that parent (`count=10`, `sort=desc`, `offset = page * 10`). Opaque parent keys are stored base64url-encoded in `wallthreads` (at most 20). A short extra thread page drops that parent. An empty map stores `wallthreads:done` and later polls stay done. Extra thread pages are not dropped by the unix comments watermark. User OAuth and community wall collectors share this walker. Collectors still do not invent a separate thread API.
+
+## VK video comment threads (PHASE 55)
+
+`video.getComments` requests official `thread_items_count=10` so each top-level video comment includes its first nested replies. Nested replies use the same `video:{owner}:{videoId}:{comment}` ids and `video.createComment` reply path. If `thread.count` is greater than the nested items returned, the next poll requests `video.getComments` with `comment_id` of that parent (`count=10`, `sort=desc`, `offset = page * 10`). Parent keys are stored base64url-encoded in `videothreads` (at most 20). An empty map stores `videothreads:done` and later polls stay done. Extra video thread pages are not dropped by the unix `video` watermark. Community tokens walk the same helper in PHASE 68. No new VK OAuth scope.
+
+## Graph comments on tagged posts (PHASE 56)
+
+Facebook `/tagged` and Instagram `/tags` request nested `comments.limit(50)` on the current tagged page. Comments use `replyKind=comment` and the existing Facebook `POST /{comment-id}/comments` / Instagram `POST /{comment-id}/replies` paths. The named `taggedreplies` cursor stores `{ taggedObjectId: after }` (base64url JSON, at most 20 ids) independently of feed/media `replies`. Later polls request `GET /{tagged-id}/comments?after=` (`limit=50`) with official fields. Extra tagged-comment pages are not dropped by the `comments` timestamp watermark. Photo-only tagged posts without caption text still contribute their comments. An empty map stores `taggedreplies:done` and later polls stay done. Nested replies on those tagged comments seed `creplies` in PHASE 57. Collectors still do not fetch `paging.next` URLs.
+
+## Graph nested replies on tagged comments (PHASE 57)
+
+Tagged Facebook comments request nested `comments.limit(25)` and tagged Instagram comments request nested `replies`, the same edges as feed/media in PHASE 49. Extra PHASE 56 tagged-comment pages also request those nested edges so newly discovered tagged comments can seed `creplies`. Later polls still request `GET /{comment-id}/comments?after=` (Facebook, `limit=25`) or `GET /{comment-id}/replies?after=` (Instagram, `limit=25`). Extra nested-reply pages are not dropped by the `comments` timestamp watermark. This reuses the existing `creplies` map rather than a second cursor. Collectors still do not fetch `paging.next` URLs.
+
+## Graph Page ratings (PHASE 58)
+
+Facebook `GET /{page-id}/ratings` collects Page recommendations. Each poll still reads the latest 10 ratings. Reviews without `open_graph_story.id`, a reviewer id, or `review_text` are skipped (no invented ids). Extra rating pages follow official Graph `after`, stored base64url-encoded in `ratings`, independently of the `reviews` timestamp watermark. A short page stores `ratings:done`. Replies use official `POST /{open_graph_story.id}/comments`, the same path as other Facebook comment replies. `pages_read_user_content` is already granted. Instagram has no ratings edge. Comments on those rating stories are collected in PHASE 59. Collectors still do not fetch `paging.next` URLs.
+
+## Graph comments on rating stories (PHASE 59)
+
+Facebook ratings request nested `open_graph_story{id,comments.limit(50){…}}` on the current ratings page. Comments on rating stories use `replyKind=comment` and the existing `POST /{comment-id}/comments` path. The named `ratingreplies` cursor stores `{ storyId: after }` independently of feed `replies` and tagged `taggedreplies`. Later polls request `GET /{story-id}/comments?after=` (`limit=50`). Extra rating-comment pages are not dropped by the `comments` timestamp watermark. Ratings without review text still contribute comments when a story id is present. An empty map stores `ratingreplies:done`. Nested replies on those rating comments seed `creplies` in PHASE 60. Collectors still do not fetch `paging.next` URLs.
+
+## Graph nested replies on rating-story comments (PHASE 60)
+
+Facebook rating-story comments request nested `comments.limit(25)`, the same edge as feed and tagged comments in PHASE 49 and PHASE 57. Extra PHASE 59 rating-comment pages already request that nested edge so newly discovered rating comments can seed `creplies` while that cursor is still open. Later polls still request `GET /{comment-id}/comments?after=` (`limit=25`). Extra nested-reply pages are not dropped by the `comments` timestamp watermark. This reuses the existing `creplies` map rather than a second cursor. A stored `creplies:done` stays done. Instagram has no ratings edge. Collectors still do not fetch `paging.next` URLs.
+
+## VK tagged photo mentions (PHASE 61)
+
+User OAuth inbox calls official `photos.getUserPhotos` (count 20, the documented default). `user_id` is omitted so VK uses the current user. Offset is omitted when `0`. After `userphotos:1`, each later poll requests `offset = page * 20`. A full 20-item page advances `userphotos:2`. A short page stores `userphotos:done`. Extra tagged-photo pages are not dropped by the independent unix `phototags` watermark. Events store `phototag:{ownerId}:{photoId}` ids, `replyKind=mention`, and `https://vk.com/photo{owner}_{id}` URLs. Photo-only tags without text are skipped as mentions (no invented mention body); comments on those photos are collected in PHASE 62. Replies use official `photos.createComment` with `owner_id` and `photo_id` and without `reply_to_comment`. Community tokens skip this method. No new VK OAuth scope (`photos` is already granted).
+
+## VK tagged photo comments (PHASE 62)
+
+User OAuth inbox calls official `photos.getComments` (count 50, `sort=desc`) for the current `photos.getUserPhotos` page. Offset is omitted when `0`. After `userphotocomments:1`, each later poll requests `offset = page * 50` for those tagged photos. Extra comment pages are not dropped by the independent unix `userphoto` watermark. Events store `phototag:{ownerId}:{photoId}:{commentId}` and `replyKind=comment`. Photo-only tags without caption text still contribute their comments. Replies use official `photos.createComment` with `owner_id`, `photo_id`, and `reply_to_comment`. `photos.getComments` has no documented `comment_id` / `thread_items_count` nested-thread fields, so nested photo-comment threads are not walked. Community tokens skip this method. No new VK OAuth scope.
+
+## Graph Facebook Other-folder conversations (PHASE 63)
+
+Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSENGER&folder=other` in addition to the default inbox folder (which still omits `folder=`). Each poll still reads the latest Other-folder page (`limit=15`, `messages.limit(20)`). If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `otherthreads`, independently of inbox `threads`. Extra Other-folder pages are not dropped by the `messages` timestamp watermark. A short page stores `otherthreads:done`. Nested first message pages still seed the existing `threadmsgs` walker. Instagram has no Other folder. Collectors still do not fetch `paging.next` URLs. No new OAuth scope (`pages_messaging` is already granted).
+
+## Graph Facebook Done-folder conversations (PHASE 64)
+
+Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSENGER&folder=page_done` for threads marked Done in Page Inbox. Each poll still reads the latest Done-folder page (`limit=15`, `messages.limit(20)`). If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `donethreads`, independently of inbox `threads` and Other-folder `otherthreads`. Extra Done-folder pages are not dropped by the `messages` timestamp watermark. A short page stores `donethreads:done`. Nested first message pages still seed the existing `threadmsgs` walker. Instagram has no Done folder. Collectors still do not fetch `paging.next` URLs. No new OAuth scope.
+
+## Graph Facebook Pending-folder conversations (PHASE 65)
+
+Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSENGER&folder=pending` for threads in the Page Inbox pending folder. Each poll still reads the latest Pending-folder page (`limit=15`, `messages.limit(20)`). If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `pendingthreads`, independently of inbox `threads`, Other-folder `otherthreads`, and Done-folder `donethreads`. Extra Pending-folder pages are not dropped by the `messages` timestamp watermark. A short page stores `pendingthreads:done`. Nested first message pages still seed the existing `threadmsgs` walker. Instagram has no Pending folder. The default inbox request still omits `folder=`. Collectors still do not fetch `paging.next` URLs. No new OAuth scope (`pages_messaging` is already granted).
+
+## Graph Facebook Spam-folder conversations (PHASE 66)
+
+Facebook Page inbox calls official `GET /{page-id}/conversations?platform=MESSENGER&folder=spam` for threads in the Page Inbox spam folder. Each poll still reads the latest Spam-folder page (`limit=15`, `messages.limit(20)`). If a next `after` exists, the next poll requests that page once and stores it base64url-encoded in `spamthreads`, independently of inbox `threads`, Other-folder `otherthreads`, Done-folder `donethreads`, and Pending-folder `pendingthreads`. Extra Spam-folder pages are not dropped by the `messages` timestamp watermark. A short page stores `spamthreads:done`. Nested first message pages still seed the existing `threadmsgs` walker. Instagram has no Spam folder. The default inbox request still omits `folder=`. Collectors still do not fetch `paging.next` URLs. No new OAuth scope (`pages_messaging` is already granted).
+
+## Isolated VK community photo comments (PHASE 67)
+
+Community inbox calls official `photos.getAllComments` (count 50) with `owner_id=-groupId`. Offset is omitted when `0`. After `photocomments:1`, later polls request `offset = page * 50`. Extra photo-comment pages are not dropped by the independent unix `photos` watermark. Events store `photo:{pid}:{commentId}` and `replyKind=comment`. Community replies use `photos.createComment` with `owner_id`, `photo_id`, and `reply_to_comment`. User OAuth still omits `owner_id`. If VK returns error **7** (permission) or **27** (method unavailable with group auth), that photo collector is skipped and wall comments plus community Direct Messages still collect; `photocomments` / `photos` keys are omitted so a later token with photos permission can retry. Errors **5**, **15**, and **17** still fail the collect as authentication. No new SQL.
+
+## Isolated VK community video comments (PHASE 68)
+
+Community inbox calls official `video.get` (count 10) then `video.getComments` (count 50, `sort=desc`, `thread_items_count=10`) with `owner_id=-groupId`. `album_id` is omitted. Offset is omitted when `0`. After `videos:1`, later polls request `video.get` `offset = page * 10`. After `videocomments:1`, later polls request `video.getComments` `offset = page * 50` for the current community videos. Extra video-comment pages are not dropped by the independent unix `video` watermark. Events store `video:{ownerId}:{videoId}:{commentId}` (negative community owner) and `replyKind=comment`. Nested first-page replies reuse the PHASE 55 `videothreads` walker. User OAuth still omits `owner_id` / `album_id` on `video.get`. If VK returns error **7** or **27** on `video.get`, that video collector is skipped and wall comments, community Direct Messages, and isolated photo comments still collect; `video` / `videocomments` / `videos` / `videothreads` keys are omitted so a later token with video permission can retry. If `video.get` succeeds but `video.getComments` returns 7/27 for a video, that video's comments are skipped without failing the collect. Errors **5**, **15**, and **17** still fail the collect as authentication. Replies reuse `video.createComment` with `owner_id` from the stored id. No new SQL.
+
+## Isolated VK community board comments (PHASE 69)
+
+Community inbox calls official `board.getTopics` (count 10) then `board.getComments` (count 50, `sort=desc`) with positive `group_id`. Offset is omitted when `0`. After `boardtopics:1`, later polls request `board.getTopics` `offset = page * 10`. After `boardcomments:1`, later polls request `board.getComments` `offset = page * 50` for the current topics. Extra board-comment pages are not dropped by the independent unix `board` watermark. Events store `board:{groupId}:{topicId}:{commentId}` and `replyKind=comment`, with `https://vk.com/topic-{groupId}_{topicId}?post={commentId}` URLs. Community comments from the group (`from_id=-groupId`) are skipped. User OAuth inbox does not call board methods. If VK returns error **7** or **27** on `board.getTopics`, that board collector is skipped and wall comments, community Direct Messages, photos, and video still collect; `board` / `boardcomments` / `boardtopics` keys are omitted so a later token with board permission can retry. If `board.getTopics` succeeds but `board.getComments` returns 7/27 for a topic, that topic's comments are skipped without failing the collect. Errors **5**, **15**, and **17** still fail the collect as authentication. Replies use official `board.createComment` with `group_id`, `topic_id`, `message`, and `from_group=1`. `board.getComments` has no documented nested-thread walker, so board comment threads are not walked. No new SQL.
+
+## Isolated VK community market comments (PHASE 70)
+
+Community inbox calls official `market.get` (count 10) then `market.getComments` (count 50, `sort=desc`) with `owner_id=-groupId`. `album_id` is omitted so the community catalog is listed as a whole. Offset is omitted when `0`. After `marketitems:1`, later polls request `market.get` `offset = page * 10`. After `marketcomments:1`, later polls request `market.getComments` `offset = page * 50` for the current items. Extra market-comment pages are not dropped by the independent unix `market` watermark. Events store `market:{ownerId}:{itemId}:{commentId}` (negative community owner) and `replyKind=comment`, with `https://vk.com/market{owner}_{item}?reply={commentId}` URLs. Community comments from the group (`from_id=-groupId`) are skipped. User OAuth inbox does not call market methods, and `market` is not added to `VK_SCOPES` (that user scope is exceptional). If VK returns error **7** or **27** on `market.get`, that market collector is skipped and wall comments, community Direct Messages, photos, video, and board still collect; `market` / `marketcomments` / `marketitems` keys are omitted so a later token with market permission can retry. If `market.get` succeeds but `market.getComments` returns 7/27 for an item, that item's comments are skipped without failing the collect. Errors **5**, **15**, and **17** still fail the collect as authentication. Replies use official `market.createComment` with `owner_id`, `item_id`, `reply_to_comment`, `message`, and `from_group=1` for community tokens. No new SQL.
+
+## Graph Facebook Page videos comments (PHASE 71)
+
+Facebook Page inbox calls official `GET /{page-id}/videos` (`limit=10`) with nested `comments.limit(50)` and nested reply `comments.limit(25)`. The Page's own video captions are not stored as inbox mentions. Extra video pages follow official Graph `after`, stored base64url-encoded in `videos`, independently of feed `posts`. Extra comments on those videos follow `GET /{video-id}/comments?after=` (`limit=50`) using the named `videoreplies` map, independently of feed `replies` and tagged `taggedreplies`. Extra video pages and extra video-comment pages are not dropped by the comments watermark. Nested first-page replies seed the existing `creplies` walker. A short videos page stores `videos:done`. An empty map stores `videoreplies:done`. A stored `videoreplies:done` stays done. Collectors still do not fetch `paging.next` URLs. Replies reuse official `POST /{comment-id}/comments`. Instagram is unchanged (`/{ig-user-id}/media` already includes video and Reel comments). No new OAuth scope (`pages_read_engagement` is already granted). No new SQL.
+
+## Graph Facebook Page uploaded photos comments (PHASE 72)
+
+Facebook Page inbox calls official `GET /{page-id}/photos?type=uploaded` (`limit=10`) with nested `comments.limit(50)` and nested reply `comments.limit(25)`. The default photos edge (profile pictures) is not used. The Page's own photo captions are not stored as inbox mentions. Extra uploaded-photo pages follow official Graph `after`, stored base64url-encoded in `photos`, independently of feed `posts` and Page `videos`. Extra comments on those photos follow `GET /{photo-id}/comments?after=` (`limit=50`) using the named `photoreplies` map, independently of feed `replies`, tagged `taggedreplies`, and video `videoreplies`. Extra photo pages and extra photo-comment pages are not dropped by the comments watermark. Nested first-page replies seed the existing `creplies` walker. A short photos page stores `photos:done`. An empty map stores `photoreplies:done`. A stored `photoreplies:done` stays done. Collectors still do not fetch `paging.next` URLs. Replies reuse official `POST /{comment-id}/comments`. Instagram is unchanged (`/{ig-user-id}/media` already includes photo comments). No new OAuth scope (`pages_read_engagement` is already granted). No new SQL.
+
+## Graph Facebook Page live videos comments (PHASE 73)
+
+Facebook Page inbox calls official `GET /{page-id}/live_videos` (`limit=10`) with nested `comments.limit(50)` and nested reply `comments.limit(25)`. The Page's own live-video titles and descriptions are not stored as inbox mentions. Extra live-video pages follow official Graph `after`, stored base64url-encoded in `livevideos`, independently of uploaded `videos`. Extra comments on those live videos follow `GET /{live-video-id}/comments?after=` (`limit=50`) using the named `livereplies` map, independently of feed `replies`, tagged `taggedreplies`, video `videoreplies`, and photo `photoreplies`. Extra live-video pages and extra live-video comment pages are not dropped by the comments watermark. Nested first-page replies seed the existing `creplies` walker. A short live-videos page stores `livevideos:done`. An empty map stores `livereplies:done`. A stored `livereplies:done` stays done. Collectors still do not fetch `paging.next` URLs. Replies reuse official `POST /{comment-id}/comments`. Instagram is unchanged. No new OAuth scope (`pages_read_engagement` is already granted). No new SQL.
+
+## Graph Facebook Page video reels comments (PHASE 74)
+
+Facebook Page inbox calls official `GET /{page-id}/video_reels` (`limit=10`) with nested `comments.limit(50)` and nested reply `comments.limit(25)`. This is the Reels Publishing list edge, not `/{page-id}/videos`. Reel descriptions are not stored as inbox mentions. Extra reel pages follow official Graph `after`, stored base64url-encoded in `reels`, independently of uploaded `videos` and live `livevideos`. Extra comments on those reels follow `GET /{video-id}/comments?after=` (`limit=50`) using the named `reelreplies` map. Extra reel pages and extra reel-comment pages are not dropped by the comments watermark. Nested first-page replies seed the existing `creplies` walker. A short reels page stores `reels:done`. An empty map stores `reelreplies:done`. A stored `reelreplies:done` stays done. Collectors still do not fetch `paging.next` URLs. Replies reuse official `POST /{comment-id}/comments`. Duplicate comment ids already collected from `/{page-id}/videos` are dropped by inbox uniqueness. Instagram is unchanged (`/{ig-user-id}/media` already includes Reels). No new OAuth scope (`pages_read_engagement` and `pages_show_list` are already granted). No new SQL.
+
+## Graph Facebook Page albums comments (PHASE 75)
+
+Facebook Page inbox calls official `GET /{page-id}/albums` (`limit=10`) with nested `comments.limit(50)` and nested reply `comments.limit(25)`. The Graph auto-generated Page albums Reading page is incomplete; the Page object still lists `albums` as a readable edge, Album Comments documents `GET /{album-id}/comments`, and Object Comments lists Album. Album names and descriptions are not stored as inbox mentions. Extra album pages follow official Graph `after`, stored base64url-encoded in `albums`, independently of uploaded `photos`. Extra comments on those albums follow `GET /{album-id}/comments?after=` (`limit=50`) using the named `albumreplies` map, independently of feed `replies` and photo `photoreplies`. Extra album pages and extra album-comment pages are not dropped by the comments watermark. Nested first-page replies seed the existing `creplies` walker. A short albums page stores `albums:done`. An empty map stores `albumreplies:done`. A stored `albumreplies:done` stays done. Collectors still do not fetch `paging.next` URLs. Replies reuse official `POST /{comment-id}/comments` (Album Comments Creating is not available). Duplicate comment ids already collected from `/{page-id}/photos?type=uploaded` are dropped by inbox uniqueness. Instagram is unchanged (no Page albums edge). No new OAuth scope (`pages_read_engagement` and `pages_read_user_content` are already granted). No new SQL.
+
+## Official X quote tweets (PHASE 76)
+
+X inbox lists the connected user's recent posts with official `GET /2/users/:id/tweets` (`max_results=10`, `exclude=retweets`) and then `GET /2/tweets/:id/quote_tweets` (`max_results=10`) for those posts. The user's own posts are not stored as inbox mentions. Extra user-tweet pages follow official `meta.next_token` as `pagination_token`, stored base64url-encoded in `tweetpages`. Extra quote pages follow `pagination_token` in the named `quotepages` map (`{ tweetId: token }`, at most 20 ids). Extra tweet pages and extra quote pages are not dropped by the independent digit `quotes` watermark. Latest-page quotes still skip ids at or below that watermark. A short tweets page stores `tweetpages:done`. An empty map stores `quotepages:done`. A stored `quotepages:done` or `tweetpages:done` stays done. Collectors do not treat `next_token` as a fetch URL. Replies reuse official `POST /2/tweets` with `reply.in_reply_to_tweet_id`. Duplicate quote ids already collected as mentions are dropped by inbox uniqueness. No new OAuth scope (`tweet.read` and `tweet.write` are already granted). No new SQL.
+
+## VK wall reposts (PHASE 77)
+
+User OAuth and community inbox call official `wall.getReposts` (count 20) for the current `wall.get` posts (latest 10 plus the current wall offset page). Offset is omitted when `0`. After `repostpages:1`, each later poll requests `offset = page * 20`. A full 20-item raw page on any of those posts advances `repostpages:2`. A short page stores `repostpages:done` and later polls only read the latest 20 reposts per post. Extra repost pages are not dropped by the independent unix `reposts` watermark. Events store `repost:{ownerId}:{postId}` of the repost wall post, `replyKind=mention`, and `https://vk.com/wall{owner}_{id}` URLs. Silent shares without text are skipped (no invented mention body). Reposts from the original wall owner are skipped. Replies use official `wall.createComment` on the repost without `reply_to_comment`. No new VK OAuth scope (`wall` is already granted). No new SQL.
+
+## Official X conversation replies (PHASE 78)
+
+X inbox reuses the PHASE 76 user-tweet list and then calls official `GET /2/tweets/search/recent` (`max_results=10`) with `query=conversation_id:{tweetId} is:reply` for those posts. There is no dedicated `/{tweet-id}/replies` edge; Recent Search documents `conversation_id` as the thread operator. The user's own replies are not stored as inbox mentions. Extra reply pages follow official `meta.next_token` as `pagination_token` in the named `replypages` map (`{ tweetId: token }`, at most 20 ids), independently of `quotepages`. Extra tweet pages and extra reply pages are not dropped by the independent digit `replies` watermark. Latest-page replies still skip ids at or below that watermark. An empty map stores `replypages:done`. A stored `replypages:done` stays done. Collectors do not treat `next_token` as a fetch URL. Replies reuse official `POST /2/tweets` with `reply.in_reply_to_tweet_id`. Duplicate reply ids already collected as mentions or quote tweets are dropped by inbox uniqueness. No new OAuth scope (`tweet.read` and `tweet.write` are already granted). No new SQL.
+
+## Official X retweets (PHASE 82)
+
+X inbox calls official `GET /2/tweets/search/recent` (`max_results=10`) with `query=retweets_of:{userId}` for the connected user from `/2/users/me`. `retweets_of:` is a documented Core standalone operator and accepts a numeric user id. There is no inbox-ready `/{tweet-id}/retweets` edge; `GET /2/tweets/:id/retweeted_by` returns users, not posts. The user's own posts are not stored as inbox mentions. Extra retweet pages follow official `meta.next_token` as `pagination_token`, stored base64url-encoded in `retweetpages`, independently of conversation-reply `replypages`. Extra retweet pages are not dropped by the independent digit `retweets` watermark. Latest-page retweets still send `since_id` from that watermark. A short retweets page stores `retweetpages:done`. A stored `retweetpages:done` stays done. Collectors do not treat `next_token` as a fetch URL. Recent Search only covers about seven days. Replies reuse official `POST /2/tweets` with `reply.in_reply_to_tweet_id`. Duplicate retweet ids already collected as mentions, quote tweets, or conversation replies are dropped by inbox uniqueness. No new OAuth scope (`tweet.read` and `tweet.write` are already granted). No new SQL.
+
+## Official X replies to the connected user (PHASE 83)
+
+X inbox calls official `GET /2/tweets/search/recent` (`max_results=10`) with `query=to:{userId}` for the connected user from `/2/users/me`. `to:` is a documented Core standalone operator and matches Posts that reply to that user (username or numeric id). This covers replies to tweets outside the latest-10 user-tweet page that PHASE 78 walks with `conversation_id:{id} is:reply`. The user's own replies are not stored as inbox mentions. Extra pages follow official `meta.next_token` as `pagination_token`, stored base64url-encoded in `replytopages`, independently of conversation-reply `replypages` and retweet `retweetpages`. Extra pages are not dropped by the independent digit `replyto` watermark. Latest-page replies still send `since_id` from that watermark. A short page stores `replytopages:done`. A stored `replytopages:done` stays done. Collectors do not treat `next_token` as a fetch URL. Recent Search only covers about seven days. Replies reuse official `POST /2/tweets` with `reply.in_reply_to_tweet_id`. Duplicate ids already collected as mentions, quote tweets, conversation replies, or retweets are dropped by inbox uniqueness. No new OAuth scope (`tweet.read` and `tweet.write` are already granted). No new SQL.
+
+## VK wall posts by others (PHASE 84)
+
+User OAuth and community inbox call official `wall.get` with `filter=others` (count 10) independently of owner-wall `filter=owner`. Offset is omitted when `0`. After `otherwall:1`, each later poll requests `offset = page * 10`. A full 10-item page advances `otherwall:2`. A short page stores `otherwall:done` and later polls only keep new visitor posts after the unix `others` watermark. Extra visitor-wall pages are not dropped by that watermark. Events store `otherwall:{ownerId}:{postId}`, `replyKind=mention`, and `https://vk.com/wall{owner}_{id}` URLs. Posts without text and posts whose `from_id` is the wall owner are skipped (no invented mention body). Replies use official `wall.createComment` on the visitor post without `reply_to_comment`. No new VK OAuth scope (`wall` is already granted). Comments on those visitor posts are collected in PHASE 85. No new SQL.
+
+## VK comments on wall posts by others (PHASE 85)
+
+User OAuth and community inbox call official `wall.getComments` (count 50, `sort=desc`) for the current `wall.get` `filter=others` page. Offset is omitted when `0`. After `otherwallcomments:1`, each later poll requests `offset = page * 50` for those visitor posts. Extra comment pages are not dropped by the independent unix `othercomments` watermark. Events store `otherwall:{ownerId}:{postId}:{commentId}` and `replyKind=comment`. Visitor posts without text still contribute their comments. Comments whose `from_id` is the wall owner are skipped. Replies use official `wall.createComment` with `owner_id`, `post_id`, and `reply_to_comment`. Nested threads on those comments use `otherwallthreads` in PHASE 86. `otherwall:` comment dispatch runs before unprefixed `{owner}:{post}:{comment}` wall comments. No new VK OAuth scope (`wall` is already granted). No new SQL.
+
+## VK nested comments on wall posts by others (PHASE 86)
+
+`wall.getComments` on visitor posts from `wall.get` `filter=others` requests official `thread_items_count=10` so each top-level other-wall comment includes its first nested replies. Nested replies use the same `otherwall:{owner}:{post}:{comment}` ids and `wall.createComment` with `reply_to_comment` as top-level other-wall comments. If `thread.count` is greater than the nested items returned, the next poll requests `wall.getComments` with `comment_id` of that parent (`count=10`, `sort=desc`, `offset = page * 10`). Parent keys are stored base64url-encoded in `otherwallthreads` (at most 20), independently of owner-wall `wallthreads`. An empty map stores `otherwallthreads:done` and later polls stay done. Extra other-wall thread pages are not dropped by the unix `othercomments` watermark. User OAuth and community collectors share this walker. No new VK OAuth scope.
+
+## VK suggested community wall posts (PHASE 87)
+
+Community inbox calls official `wall.get` with `filter=suggests` (count 10) independently of owner-wall `filter=owner` and visitor-wall `filter=others`. Suggested posts are a community-wall feature; user OAuth does not call this filter and does not store `suggests` / `suggestwall`. Offset is omitted when `0`. After `suggestwall:1`, each later poll requests `offset = page * 10`. A full 10-item page advances `suggestwall:2`. A short page stores `suggestwall:done` and later polls only keep new suggested posts after the unix `suggests` watermark. Extra suggested-post pages are not dropped by that watermark. Events store `suggest:{ownerId}:{postId}`, `replyKind=mention`, and `https://vk.com/wall{owner}_{id}` URLs. Posts without text and posts whose `from_id` is the wall owner are skipped (no invented mention body). Replies use official `wall.createComment` on the suggested post without `reply_to_comment`. `filter=postponed` is not collected (those are the community's own scheduled posts). Comments and nested threads on suggested posts are not collected in this phase. No new VK OAuth scope (`wall` is already granted). No new SQL.
+
+## VK tagged video mentions (PHASE 79)
+
+User OAuth inbox calls official `video.getUserVideos` (count 20, the documented default). `user_id` is omitted so VK uses the current user. Offset is omitted when `0`. After `uservideos:1`, each later poll requests `offset = page * 20`. A full 20-item page advances `uservideos:2`. A short page stores `uservideos:done`. Extra tagged-video pages are not dropped by the independent unix `videotags` watermark. Events store `videotag:{ownerId}:{videoId}` ids, `replyKind=mention`, and `https://vk.com/video{owner}_{id}` URLs. Video-only tags without text are skipped as mentions (no invented mention body); comments on those videos are collected in PHASE 80. Replies use official `video.createComment` with `owner_id` and `video_id` and without `reply_to_comment`. Community tokens skip this method. No new VK OAuth scope (`video` is already granted). `videotag:` must be checked before `video:` on comment replies because `videotag:`.startsWith(`video:`) is true. No new SQL.
+
+## VK tagged video comments (PHASE 80)
+
+User OAuth inbox calls official `video.getComments` (count 50, `sort=desc`) for the current `video.getUserVideos` page. Offset is omitted when `0`. After `uservideocomments:1`, each later poll requests `offset = page * 50` for those tagged videos. Extra comment pages are not dropped by the independent unix `uservideo` watermark. Events store `videotag:{ownerId}:{videoId}:{commentId}` and `replyKind=comment`. Video-only tags without caption text still contribute their comments. Replies use official `video.createComment` with `owner_id`, `video_id`, and `reply_to_comment`. Nested video-comment threads on tagged videos use `uservideothreads` in PHASE 81; own-video threads still use `videothreads`. Community tokens skip this method. No new VK OAuth scope.
+
+## VK tagged video comment threads (PHASE 81)
+
+`video.getComments` on tagged videos from `video.getUserVideos` requests official `thread_items_count=10` so each top-level tagged-video comment includes its first nested replies. Nested replies use the same `videotag:{owner}:{videoId}:{comment}` ids and `video.createComment` with `reply_to_comment` as top-level tagged-video comments. If `thread.count` is greater than the nested items returned, the next poll requests `video.getComments` with `comment_id` of that parent (`count=10`, `sort=desc`, `offset = page * 10`). Parent keys are stored base64url-encoded in `uservideothreads` (at most 20), independently of own-video `videothreads`. An empty map stores `uservideothreads:done` and later polls stay done. Extra tagged-video thread pages are not dropped by the unix `uservideo` watermark. Community tokens skip `video.getUserVideos` and do not store `uservideothreads`. No new VK OAuth scope.
+
+## Social adapters (PHASE 2)
+
+`getSocialAdapter(platform)` is the only place that maps a platform to an implementation. Services must not branch on `platform === "telegram"` (or any other platform).
+
+Encrypted access and refresh tokens are omitted from authenticated `SELECT` on `social_accounts`. Operators, owners, and admins read them through `read_social_account_secrets`.
+

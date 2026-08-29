@@ -1,0 +1,107 @@
+import { describe, expect, it } from "vitest";
+import { AuthenticationError } from "@/lib/errors";
+import { deriveTokenStatus, isAccountOperable } from "@/lib/social/account-health";
+import { filterSocialAccounts } from "@/lib/social/filter-accounts";
+import { createOAuthState, createPkcePair } from "@/lib/social/pkce";
+import { assertNoTokenLeak, toPublicSocialAccount } from "@/services/social-accounts/mapper";
+import type { SocialAccountPublic } from "@/types/social-account";
+
+function account(overrides: Partial<SocialAccountPublic> = {}): SocialAccountPublic {
+  return {
+    id: "acc-1",
+    workspaceId: "ws-1",
+    platform: "telegram",
+    externalAccountId: "42",
+    username: "@hub_bot",
+    displayName: "Hub",
+    avatarUrl: null,
+    status: "CONNECTED",
+    scopes: ["bot"],
+    tokenExpiresAt: null,
+    lastSyncAt: null,
+    lastError: null,
+    lastErrorAt: null,
+    createdAt: "2026-08-21T00:00:00.000Z",
+    updatedAt: "2026-08-21T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("PKCE", () => {
+  it("creates a state of at least 32 characters and an S256 challenge", () => {
+    const state = createOAuthState();
+    const pkce = createPkcePair();
+    expect(state.length).toBeGreaterThanOrEqual(32);
+    expect(pkce.verifier.length).toBeGreaterThanOrEqual(32);
+    expect(pkce.challenge).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(pkce.challenge).not.toBe(pkce.verifier);
+  });
+});
+
+describe("account health", () => {
+  it("treats only CONNECTED accounts with a live token as operable", () => {
+    expect(isAccountOperable("CONNECTED")).toBe(true);
+    expect(isAccountOperable("DISCONNECTED")).toBe(false);
+    expect(isAccountOperable("REAUTH_REQUIRED")).toBe(false);
+    expect(deriveTokenStatus({ status: "CONNECTED", tokenExpiresAt: null })).toBe("CONNECTED");
+    expect(
+      deriveTokenStatus({
+        status: "CONNECTED",
+        tokenExpiresAt: "2020-01-01T00:00:00.000Z",
+        now: new Date("2026-08-21T00:00:00.000Z"),
+      }),
+    ).toBe("EXPIRED");
+    expect(deriveTokenStatus({ status: "DISCONNECTED", tokenExpiresAt: null })).toBe("MISSING");
+  });
+});
+
+describe("account selector filters", () => {
+  it("filters by platform, status, group, and search query", () => {
+    const accounts = [
+      account(),
+      account({
+        id: "acc-2",
+        platform: "vk",
+        username: "brand",
+        externalAccountId: "99",
+        status: "ERROR",
+      }),
+    ];
+
+    expect(filterSocialAccounts(accounts, { platforms: ["telegram"] })).toHaveLength(1);
+    expect(filterSocialAccounts(accounts, { statuses: ["ERROR"] })[0]?.id).toBe("acc-2");
+    expect(filterSocialAccounts(accounts, { groupAccountIds: ["acc-2"] })).toHaveLength(1);
+    expect(filterSocialAccounts(accounts, { query: "brand" })[0]?.platform).toBe("vk");
+  });
+});
+
+describe("public social account mapper", () => {
+  it("never includes encrypted token columns", () => {
+    const mapped = toPublicSocialAccount({
+      id: "acc-1",
+      workspace_id: "ws-1",
+      platform: "telegram",
+      external_account_id: "42",
+      username: "@hub_bot",
+      display_name: "Hub",
+      avatar_url: null,
+      status: "CONNECTED",
+      scopes: ["bot"],
+      token_expires_at: null,
+      last_sync_at: null,
+      last_error: null,
+      last_error_at: null,
+      created_at: "2026-08-21T00:00:00.000Z",
+      updated_at: "2026-08-21T00:00:00.000Z",
+    });
+
+    expect(mapped).not.toHaveProperty("access_token_encrypted");
+    expect(mapped).not.toHaveProperty("refresh_token_encrypted");
+    expect(() =>
+      assertNoTokenLeak({
+        id: "acc-1",
+        access_token_encrypted: "secret",
+      }),
+    ).toThrow(AuthenticationError);
+  });
+});

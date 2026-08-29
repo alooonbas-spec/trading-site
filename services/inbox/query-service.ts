@@ -1,0 +1,236 @@
+import { createClient } from "@/lib/supabase/server";
+import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
+import { ValidationError } from "@/lib/errors";
+import { parseInboxMatchFilter } from "@/lib/inbox/filters";
+import {
+  DEFAULT_PAGE_SIZE,
+  keysetOrFilter,
+  nextKeysetCursor,
+  parseKeysetCursor,
+  splitKeysetRows,
+  type KeysetPage,
+} from "@/lib/pagination/keyset";
+import { SOCIAL_ACCOUNT_PUBLIC_COLUMNS } from "@/types/social-account";
+import { LEAD_PUBLIC_COLUMNS } from "@/types/crm";
+import {
+  INBOX_EVENT_PUBLIC_COLUMNS,
+  type InboxEvent,
+  type InboxEventListItem,
+  type InboxMatchFilter,
+} from "@/types/inbox";
+import type { InboxReplyKind } from "@/social/core/adapter";
+import type { SocialPlatform } from "@/types/social";
+import { toInboxEvent, type InboxEventRow } from "@/services/inbox/mapper";
+import { resolveInboxReplyKind } from "@/lib/inbox/reply-kind";
+
+const INBOX_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+
+export { parseInboxMatchFilter };
+
+export async function listInboxEvents(input: {
+  workspaceId: string;
+  match?: InboxMatchFilter;
+  query?: string;
+  socialAccountId?: string;
+  platform?: SocialPlatform;
+  replyKind?: InboxReplyKind;
+  after?: string;
+}): Promise<KeysetPage<InboxEventListItem>> {
+  await requireWorkspaceContext(input.workspaceId);
+  const supabase = await createClient();
+  const accountIds = await resolveInboxAccountIds(input.workspaceId, input.socialAccountId, input.platform);
+  if (accountIds && accountIds.length === 0) {
+    return { items: [], nextCursor: null };
+  }
+
+  const cursor = parseKeysetCursor(input.after);
+  let request = supabase
+    .from("inbox_events")
+    .select(INBOX_EVENT_PUBLIC_COLUMNS)
+    .eq("workspace_id", input.workspaceId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(INBOX_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+
+  if (accountIds) {
+    request = request.in("social_account_id", accountIds);
+  }
+  if (input.match === "unmatched") {
+    request = request.eq("matched", false);
+  } else if (input.match === "matched") {
+    request = request.eq("matched", true);
+  }
+  if (input.replyKind) {
+    request = request.eq("reply_kind", input.replyKind);
+  }
+
+  const query = sanitizeIlike(input.query);
+  if (query) {
+    request = request.or(`username.ilike.%${query}%,body.ilike.%${query}%,external_profile_id.ilike.%${query}%`);
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  const rows = (data ?? []) as InboxEventRow[];
+  const { page, hasMore } = splitKeysetRows(rows, INBOX_PAGE_SIZE);
+  const items = await hydrateInboxEvents(input.workspaceId, page);
+  return {
+    items,
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
+}
+
+export async function listInboxEventsForLead(
+  workspaceId: string,
+  leadId: string,
+  after?: string,
+): Promise<KeysetPage<InboxEventListItem>> {
+  await requireWorkspaceContext(workspaceId);
+  const supabase = await createClient();
+  const cursor = parseKeysetCursor(after);
+  let request = supabase
+    .from("inbox_events")
+    .select(INBOX_EVENT_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(INBOX_PAGE_SIZE + 1);
+  if (cursor) {
+    request = request.or(keysetOrFilter(cursor));
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+
+  const rows = (data ?? []) as InboxEventRow[];
+  const { page, hasMore } = splitKeysetRows(rows, INBOX_PAGE_SIZE);
+  const items = await hydrateInboxEvents(workspaceId, page);
+  return {
+    items,
+    nextCursor: nextKeysetCursor(page, hasMore),
+  };
+}
+
+export async function getInboxEvent(workspaceId: string, inboxEventId: string): Promise<InboxEvent> {
+  await requireWorkspaceContext(workspaceId);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inbox_events")
+    .select(INBOX_EVENT_PUBLIC_COLUMNS)
+    .eq("workspace_id", workspaceId)
+    .eq("id", inboxEventId)
+    .maybeSingle();
+
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+  if (!data) {
+    throw new ValidationError("Inbox event not found");
+  }
+
+  return toInboxEvent(data as InboxEventRow);
+}
+
+async function hydrateInboxEvents(
+  workspaceId: string,
+  rows: InboxEventRow[],
+): Promise<InboxEventListItem[]> {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const accountIds = [...new Set(rows.map((row) => row.social_account_id))];
+  const leadIds = [...new Set(rows.map((row) => row.lead_id).filter((id): id is string => id !== null))];
+
+  const [{ data: accounts, error: accountError }, { data: leads, error: leadError }] = await Promise.all([
+    supabase
+      .from("social_accounts")
+      .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
+      .eq("workspace_id", workspaceId)
+      .in("id", accountIds),
+    leadIds.length > 0
+      ? supabase
+          .from("leads")
+          .select(LEAD_PUBLIC_COLUMNS)
+          .eq("workspace_id", workspaceId)
+          .in("id", leadIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (accountError) {
+    throw new ValidationError(accountError.message);
+  }
+  if (leadError) {
+    throw new ValidationError(leadError.message);
+  }
+
+  const accountsById = new Map(
+    (accounts ?? []).map((account) => [
+      account.id,
+      {
+        platform: account.platform as SocialPlatform,
+        username: account.username,
+        displayName: account.display_name,
+      },
+    ]),
+  );
+  const leadsById = new Map((leads ?? []).map((lead) => [lead.id, lead.display_name]));
+
+  return rows.map((row) => {
+    const account = accountsById.get(row.social_account_id);
+    if (!account) {
+      throw new ValidationError("Inbox event is missing its social account");
+    }
+    return {
+      ...toInboxEvent(row),
+      platform: account.platform,
+      accountUsername: account.username,
+      accountDisplayName: account.displayName,
+      leadDisplayName: row.lead_id ? (leadsById.get(row.lead_id) ?? null) : null,
+      resolvedReplyKind: resolveInboxReplyKind({
+        stored: row.reply_kind,
+        platform: account.platform,
+        url: row.url,
+      }),
+    };
+  });
+}
+
+async function resolveInboxAccountIds(
+  workspaceId: string,
+  socialAccountId: string | undefined,
+  platform: SocialPlatform | undefined,
+): Promise<string[] | undefined> {
+  if (!socialAccountId && !platform) {
+    return undefined;
+  }
+
+  const supabase = await createClient();
+  let request = supabase.from("social_accounts").select("id").eq("workspace_id", workspaceId);
+  if (socialAccountId) {
+    request = request.eq("id", socialAccountId);
+  }
+  if (platform) {
+    request = request.eq("platform", platform);
+  }
+
+  const { data, error } = await request;
+  if (error) {
+    throw new ValidationError(error.message);
+  }
+  return (data ?? []).map((row) => row.id);
+}
+
+function sanitizeIlike(value: string | undefined): string {
+  return (value ?? "").replace(/[%_,()\\]/g, " ").trim();
+}

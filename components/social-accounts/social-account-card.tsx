@@ -1,0 +1,141 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { disconnectAccountAction, refreshAccountAction, startInboxPollingAction } from "@/app/actions/social-accounts";
+import { PublishDestinationForm } from "@/components/social-accounts/publish-destination-form";
+import { SOCIAL_PLATFORM_LABELS } from "@/types/social";
+import type { SocialAccountHealth } from "@/types/social-account";
+
+export function SocialAccountCard({
+  health,
+  workspaceId,
+  canManage,
+}: {
+  health: SocialAccountHealth;
+  workspaceId: string;
+  canManage: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const account = health.account;
+  const label = account.username ?? account.displayName ?? account.externalAccountId;
+
+  function run(action: () => Promise<{ error: string | null; success?: string | null }>) {
+    setError(null);
+    setSuccess(null);
+    startTransition(async () => {
+      const result = await action();
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      if (result.success) {
+        setSuccess(result.success);
+      }
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>
+          {SOCIAL_PLATFORM_LABELS[account.platform]} {label}
+        </CardDescription>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          {account.status}
+          <Badge variant="secondary">{health.tokenStatus}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p>Last sync: {account.lastSyncAt ? new Date(account.lastSyncAt).toLocaleString() : "Never"}</p>
+        <p>Last action: {health.lastAction ?? "None"}</p>
+        <p>Queue: {health.queueCount}</p>
+        <p>Errors: {account.lastError ?? "0"}</p>
+        {canManage && account.platform === "facebook" ? (
+          <PublishDestinationForm
+            workspaceId={workspaceId}
+            accountId={account.id}
+            field="pageId"
+            label="Facebook Page ID"
+            placeholder="Page id from /me/accounts"
+            hint="Required when the user manages more than one Page. Reconnect to grant pages_manage_posts, pages_manage_metadata, and pages_messaging."
+          />
+        ) : null}
+        {canManage && account.platform === "vk" ? (
+          <PublishDestinationForm
+            workspaceId={workspaceId}
+            accountId={account.id}
+            field="publishOwnerId"
+            label="VK wall owner (optional)"
+            placeholder="-communityId or user id"
+            hint="Leave empty to post on the user wall. Negative ids post to a community. Community tokens set this automatically. Reconnect to grant wall, photos, and video."
+          />
+        ) : null}
+        {account.platform === "vk" ? (
+          <p className="text-xs text-muted-foreground">
+            User OAuth cannot send Direct Messages. A community token with the messages right can
+            collect and reply to community DMs. Recipients must allow community messages. INVITE
+            stays unavailable.
+          </p>
+        ) : null}
+        {account.platform === "x" ? (
+          <p className="text-xs text-muted-foreground">
+            Mentions and Direct Messages need dm.read. Outbound campaign MESSAGE needs dm.write.
+            Reconnect if this account was connected before those scopes.
+          </p>
+        ) : null}
+        {account.platform === "instagram" ? (
+          <p className="text-xs text-muted-foreground">
+            Media comments and Direct Messages need instagram_business_manage_messages. Outbound
+            MESSAGE only reaches people who already messaged this professional account (24-hour
+            window). Reconnect if this account was connected before that scope.
+          </p>
+        ) : null}
+        {canManage && account.platform === "telegram" ? (
+          <PublishDestinationForm
+            workspaceId={workspaceId}
+            accountId={account.id}
+            field="publishChatId"
+            label="Telegram publish chat"
+            placeholder="@channel or chat id"
+            hint="Channel or group the bot can post to."
+          />
+        ) : null}
+        {error ? <p className="text-destructive">{error}</p> : null}
+        {success ? <p>{success}</p> : null}
+        {canManage ? (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              onClick={() => run(() => refreshAccountAction(workspaceId, account.id))}
+            >
+              Refresh health
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pending || account.status === "DISCONNECTED"}
+              onClick={() => run(() => startInboxPollingAction(workspaceId, account.id))}
+            >
+              Poll inbox
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={pending || account.status === "DISCONNECTED"}
+              onClick={() => run(() => disconnectAccountAction(workspaceId, account.id))}
+            >
+              Disconnect
+            </Button>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
